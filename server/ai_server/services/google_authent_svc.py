@@ -1,6 +1,6 @@
 import datetime
 from multiprocessing import AuthenticationError
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.base_service import BaseService
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -20,7 +20,7 @@ class GoogleAuthentSvc(BaseService):
     def __init__(self):
         super().__init__()
         self.user_admin_svc = UserAdminService()
-        self.app_logger = AppLogger()
+        self.app_logger = BotFactoryLogger()
 
     def verify_google_token(self, credential):
         try:

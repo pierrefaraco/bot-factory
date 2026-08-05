@@ -1,8 +1,8 @@
 from http import HTTPStatus
 from werkzeug.security import generate_password_hash, check_password_hash
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
-from ai_server.log.app_logger import AppLogger
-from ai_server.log.op_logger import OpLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.dao.database import Bot, User, db
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.exceptions.api_error import ApiError
@@ -15,8 +15,8 @@ from ai_server.decorators.singleton import singleton
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.bot_svc import BotService
 
-op_logger = OpLogger()
-logger = AppLogger()
+
+logger = BotFactoryLogger()
 
 
 @singleton

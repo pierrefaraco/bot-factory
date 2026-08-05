@@ -9,7 +9,7 @@ from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.services.bot_parameters_svc import BotParametersService
 from ai_server.config.constant import USER_ROLE, ADMIN_ROLE, GUEST_ROLE
 from ai_server.decorators.role_required import role_required
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 CONTROLLER_NAME = "bot-parameters"
 CONTROLLER_PATH = "/bot-parameters"
@@ -46,7 +46,7 @@ class BotParametersPatchSchema(Schema):
 
 # Services initialization
 bot_parameters_svc = BotParametersService()
-logger = AppLogger()
+logger = BotFactoryLogger()
 bot_parameters_schema = BotParametersSchema()
 bot_parameters_patch_schema = BotParametersPatchSchema()
 

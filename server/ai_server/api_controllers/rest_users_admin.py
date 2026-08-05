@@ -5,9 +5,8 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
 from marshmallow import Schema, fields, ValidationError
-from ai_server.log.categories import LogCategory
 from ai_server.exceptions.api_error import ApiError
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 from ai_server.services.user_admin_svc import UserAdminService
 from ai_server.dao.database import db, User, Bot
@@ -74,8 +73,8 @@ class PatchBotSchema(Schema):
 
 
 # Services initialization
-app_logger = AppLogger()
-logger = AppLogger()
+app_logger = BotFactoryLogger()
+logger = BotFactoryLogger()
 user_admin_svc = UserAdminService()
 user_registration_schema = UserRegistrationSchema()
 user_update_schema = UserUpdateSchema()

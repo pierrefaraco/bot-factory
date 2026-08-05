@@ -4,9 +4,9 @@ import os
 import json
 from logging import _nameToLevel
 
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
-logger = AppLogger()
+logger = BotFactoryLogger()
 
 API_URL_PREFIX = "/api"
 

@@ -3,7 +3,7 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.token_tracking_svc import TokenTrackingService
 from ai_server.decorators.role_required import role_required
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
@@ -15,7 +15,7 @@ CONTROLLER_PATH = "/token-stats"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 # Services initialization
-logger = AppLogger()
+logger = BotFactoryLogger()
 token_tracking_svc = TokenTrackingService()
 
 

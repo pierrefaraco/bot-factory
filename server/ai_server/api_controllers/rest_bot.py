@@ -8,7 +8,7 @@ from ai_server.config.constant import USER_ROLE, ADMIN_ROLE, GUEST_ROLE
 from ai_server.dao.database import User, db
 from ai_server.decorators.role_required import role_required
 from ai_server.dto.bot_dto import BotDto
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_svc import BotService
 from ai_server.services.message_svc import MessageService
 
@@ -34,7 +34,7 @@ class BotSchema(Schema):
 bot_svc = BotService()
 bot_schema = BotSchema()
 message_svc = MessageService()
-logger = AppLogger()
+logger = BotFactoryLogger()
 
 
 @bp.route(CONTROLLER_PATH, methods=["POST"])

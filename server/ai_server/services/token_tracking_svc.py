@@ -2,11 +2,11 @@ from typing import Optional, Dict, List
 from datetime import datetime, timezone, timedelta
 from ai_server.dao.database import TokenUsage, db
 from ai_server.decorators.singleton import singleton
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
-logger = AppLogger()
+logger = BotFactoryLogger()
 
 
 @singleton

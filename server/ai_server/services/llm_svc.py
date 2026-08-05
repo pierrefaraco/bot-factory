@@ -8,7 +8,7 @@ from ai_server.decorators.singleton import singleton
 from langchain_core.callbacks.base import BaseCallbackHandler
 from typing import Any, Optional, Dict
 from ai_server.services.token_tracking_svc import TokenTrackingService
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 import json
 
 
@@ -29,7 +29,7 @@ class TokenCountingCallback(BaseCallbackHandler):
         self.total_tokens = 0
         self.model_name = None
         self.user_svc = UserAdminService()
-        self.logger = AppLogger()
+        self.logger = BotFactoryLogger()
 
     def on_llm_end(self, response: Any, **kwargs) -> None:
         """Appelé à la fin d'un appel LLM"""
@@ -113,7 +113,7 @@ class TokenCountingCallback(BaseCallbackHandler):
 @singleton
 class LlmService:
     def __init__(self):    
-        self.logger = AppLogger()
+        self.logger = BotFactoryLogger()
         # assuming you have Ollama installed and have llama3 model pulled with `ollama pull llama3 `
         # embeddings = MistralAIEmbeddings(model="mistral-embed", mistral_api_key=api_key)
         self.llm = ChatMistralAI(mistral_api_key=flask_config.MISTRAL_API_KEY, model_name=flask_config.MISTRAL_MODEL)

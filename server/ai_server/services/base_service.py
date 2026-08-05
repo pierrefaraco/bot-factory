@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any, TypeVar, Generic, Callable
 from sqlalchemy.exc import SQLAlchemyError
 from ai_server.dao.database import db
 from ai_server.exceptions.api_error import ApiError
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 T = TypeVar("T")
 R = TypeVar("R")
@@ -16,8 +16,8 @@ class ServiceError(Exception):
 
 
 class BaseService(ABC, Generic[T]):
-    def __init__(self, logger: Optional[AppLogger] = None):
-        self.logger = logger or AppLogger()
+    def __init__(self, logger: Optional[BotFactoryLogger] = None):
+        self.logger = logger or BotFactoryLogger()
 
     def _handle_error(self, operation_name: str, error: Exception) -> None:
         if isinstance(error, SQLAlchemyError):

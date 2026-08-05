@@ -14,7 +14,7 @@ from langchain_text_splitters import (
 from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain_core.vectorstores import VectorStoreRetriever
 from chromadb.config import Settings
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.config.config import flask_config
 from ai_server.dto.document_dto import DocumentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
@@ -24,7 +24,7 @@ from typing import List, Optional, Dict, Any
 import chromadb
 import os
 
-logger = AppLogger()
+logger = BotFactoryLogger()
 
 
 @singleton

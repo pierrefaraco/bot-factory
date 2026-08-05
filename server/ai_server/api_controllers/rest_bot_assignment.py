@@ -10,7 +10,7 @@ from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.config.constant import USER_ROLE, ADMIN_ROLE, GUEST_ROLE
 from ai_server.decorators.role_required import role_required
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 CONTROLLER_NAME = "bot-guest-assignment"
 CONTROLLER_PATH = "/bot-guest-assignment"
@@ -34,7 +34,7 @@ class BotGuestAssignmentUpdateSchema(Schema):
 
 # Services initialization
 bot_assignment_svc = BotAssignmentService()
-logger = AppLogger()
+logger = BotFactoryLogger()
 assignment_schema = BotGuestAssignmentSchema()
 assignment_update_schema = BotGuestAssignmentUpdateSchema()
 

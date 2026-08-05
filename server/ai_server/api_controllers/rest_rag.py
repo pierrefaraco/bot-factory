@@ -11,8 +11,7 @@ import json
 
 from ai_server.services.message_svc import MessageService
 from ai_server.exceptions.api_error import ApiError
-from ai_server.log.app_logger import AppLogger
-from ai_server.log.op_logger import LogCategory, OpLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.decorators.role_required import role_required
 from ai_server.services.rag_svc import RagService, message_service
 from ai_server.api_controllers.rest_bot_parameters import bot_parameters_svc
@@ -45,8 +44,7 @@ class StreamChatSchema(Schema):
 
 
 # Services initialization
-op_logger = OpLogger()
-logger = AppLogger()
+logger = BotFactoryLogger()
 rag_svc = RagService()
 knowledge_svc = KnowledgeSvc(rag_svc)
 bot_assignment_svc = BotAssignmentService()

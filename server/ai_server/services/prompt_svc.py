@@ -11,7 +11,7 @@ from langchain_core.prompts import (
 
 from ai_server.dto.bot_dto import BotDto
 from ai_server.decorators.singleton import singleton
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.config.prompt_constants import (
     LABEL,
     DESCRIPTION,
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 class PromptService:
     def __init__(self):
         self._bot_service = None
-        self.logger = AppLogger()
+        self.logger = BotFactoryLogger()
         self.build_prompt()
 
     @property

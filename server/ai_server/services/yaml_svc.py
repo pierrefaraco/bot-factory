@@ -1,6 +1,6 @@
 import yaml
 from ai_server.decorators.singleton import singleton
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 
 YAML_DIRECTORY = "config"
@@ -14,7 +14,7 @@ PROMPTS = f"{YAML_DIRECTORY}/prompts_fr.yaml"
 @singleton
 class YamlSvc:
     def __init__(self):
-        self.logger = AppLogger()
+        self.logger = BotFactoryLogger()
         self.answer_dict = self.load_yaml_to_dict(ANSWER_YAML)
         self.behaviour_dict = self.load_yaml_to_dict(BEHAVIOUR_YAML)
         self.qualities_defauts_dict = self.load_yaml_to_dict(QUALITIES_DEFAUTS)

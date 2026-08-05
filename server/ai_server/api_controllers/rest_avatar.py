@@ -10,7 +10,7 @@ from ai_server.dao.database import User
 from ai_server.decorators.role_required import role_required
 from ai_server.dto.avatar_dto import AvatarDto
 from ai_server.services.avatar_svc import AvatarService
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 CONTROLLER_NAME = "avatar"
 CONTROLLER_PATH = "/avatar"
@@ -41,7 +41,7 @@ class AvatarSchema(Schema):
 
 # Services initialization
 avatar_service = AvatarService()
-logger = AppLogger()
+logger = BotFactoryLogger()
 avatar_schema = AvatarSchema()
 avatar_random_schema = AvatarRandomSchema()
 

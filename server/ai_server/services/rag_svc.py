@@ -1,8 +1,8 @@
 from ai_server.services.llm_svc import LlmService
 from ai_server.services.chroma_db_svc import ChromaDbService
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.config.config import flask_config
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.prompt_svc import PromptService
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
@@ -39,7 +39,7 @@ langchain.debug = False
 
 
 # ===== LOGGERS INIT =====
-logger = AppLogger()
+logger = BotFactoryLogger()
 message_service = MessageService()
 
 

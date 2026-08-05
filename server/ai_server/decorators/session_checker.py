@@ -2,7 +2,7 @@ from functools import wraps
 
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.exceptions.api_error import ApiError
 from ai_server.services.authent_svc import AuthenticationService
 
@@ -15,7 +15,7 @@ def session_checker(function):
 
     """
 
-    logger = AppLogger()
+    logger = BotFactoryLogger()
     auth_svc = AuthenticationService()
 
     error_msg = "Session check error!"

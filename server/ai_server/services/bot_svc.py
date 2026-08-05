@@ -13,7 +13,7 @@ from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.template_svc import TemplateSvc
 
 # Lazy import to avoid circular dependency
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 if TYPE_CHECKING:
     from ai_server.services.knowledge_svc import KnowledgeSvc
@@ -30,7 +30,7 @@ class BotService(BaseService[BotDto]):
         self.bot_parameters_svc = BotParametersService()
         self.template_svc = TemplateSvc()
         self._context_svc = None
-        self.logger = AppLogger()
+        self.logger = BotFactoryLogger()
 
     @property
     def context_svc(self):

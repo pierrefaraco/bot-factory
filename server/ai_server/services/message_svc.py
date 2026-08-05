@@ -4,10 +4,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import and_
 from ai_server.dto.message_dto import MessageDto
 from ai_server.decorators.singleton import singleton
-from ai_server.log.app_logger import AppLogger
-from ai_server.log.op_logger import OpLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
-logger = AppLogger()
+logger = BotFactoryLogger()
 
 
 @singleton

@@ -6,7 +6,7 @@ from http import HTTPStatus
 from marshmallow import Schema, fields, ValidationError
 
 from ai_server.exceptions.api_error import ApiError
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.authent_svc import AuthenticationService
 from ai_server.dao.database import db, User
 from ai_server.services.google_authent_svc import GoogleAuthentSvc
@@ -31,7 +31,7 @@ class LoginSchema(Schema):
 
 
 # Services initialization
-app_logger = AppLogger()
+app_logger = BotFactoryLogger()
 auth_svc = AuthenticationService()
 google_auth_svc = GoogleAuthentSvc()
 google_auth_schema = GoogleOAuthSchema()

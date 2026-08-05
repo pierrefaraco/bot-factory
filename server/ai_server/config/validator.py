@@ -3,9 +3,9 @@ Validator pour la configuration de l'application
 Vérifie que toutes les variables d'environnement critiques sont configurées
 """
 
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
-logger = AppLogger()
+logger = BotFactoryLogger()
 
 
 class ConfigValidator:

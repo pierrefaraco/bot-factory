@@ -89,6 +89,10 @@ services:
     container_name: botfactory-web
     depends_on:
       - api
+    environment:
+      # "api" targets the Docker-Compose backend; set to "host.docker.internal"
+      # to reach a backend run locally via server/z-run.sh instead.
+      API_HOST: ${API_HOST:-api}
     ports:
       - "4200:80"
     networks:

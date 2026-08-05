@@ -9,8 +9,7 @@ from werkzeug.security import check_password_hash
 
 from ai_server.dao.database import Bot, IFrame, User, db
 from ai_server.exceptions.service_exceptions import AuthenticationError, NotFoundError
-from ai_server.log.app_logger import AppLogger
-from ai_server.log.op_logger import OpLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.base_service import BaseService
 from ai_server.services.jwt_svc import JWTTools
 from ai_server.decorators.singleton import singleton
@@ -25,7 +24,7 @@ class AuthenticationService(BaseService):
 
     def __init__(self):
         super().__init__()
-        self.op_logger = OpLogger()
+        self.logger = BotFactoryLogger()
 
     def login(self, mail: str, password: str) -> Optional[str]:
         """

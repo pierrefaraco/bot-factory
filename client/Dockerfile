@@ -17,8 +17,13 @@ RUN npm run build -- --configuration=production
 # Production stage - Nginx
 FROM nginx:alpine
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/nginx.conf
+# Template is rendered with envsubst on container start (see docker-entrypoint.d),
+# substituting ${API_HOST} so the backend target can be switched without a rebuild.
+ENV NGINX_ENVSUBST_TEMPLATE_DIR=/etc/nginx/templates
+ENV NGINX_ENVSUBST_OUTPUT_DIR=/etc/nginx
+ENV API_HOST=api
+
+COPY nginx.conf.template /etc/nginx/templates/nginx.conf.template
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist/alfred_react/browser /usr/share/nginx/html

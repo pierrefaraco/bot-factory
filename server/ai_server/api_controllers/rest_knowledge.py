@@ -7,7 +7,7 @@ from http import HTTPStatus
 from marshmallow import Schema, fields, ValidationError
 
 from ai_server.exceptions.api_error import ApiError
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.knowledge_svc import KnowledgeSvc
 from ai_server.services.template_svc import TemplateSvc
 from ai_server.dao.database import db, User, ROOT_CHAPTER_ID
@@ -50,7 +50,7 @@ class ImportedChaptersSchema(Schema):
 
 
 # Services initialization
-logger = AppLogger()
+logger = BotFactoryLogger()
 template_svc = TemplateSvc()
 knowledge_schema = KnowledgeSchema()
 imported_knowledges_schema = ImportedChaptersSchema()

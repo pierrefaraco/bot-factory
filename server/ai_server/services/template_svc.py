@@ -3,7 +3,7 @@ from ai_server.dto.knowledge_dto import KnowledgeDto
 from ai_server.services.knowledge_svc import KnowledgeSvc
 from datetime import datetime, timezone
 from ai_server.decorators.singleton import singleton
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 import re
 
@@ -18,7 +18,7 @@ FRENCH_TEMPLATE = "start.txt"
 class TemplateSvc:
     def __init__(self):
         self.knowledge_svc = KnowledgeSvc(None)
-        self.logger = AppLogger()
+        self.logger = BotFactoryLogger()
 
     def importTemplateInDB(self, bot_id, template_name):
 

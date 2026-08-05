@@ -5,7 +5,7 @@ from abc import ABCMeta
 from ai_server.services.rag_svc import RagService
 from ai_server.dao.database import Knowledge, User, db, ROOT_CHAPTER_ID
 from ai_server.dto.knowledge_dto import KnowledgeDto
-from ai_server.log.app_logger import AppLogger
+from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.decorators.singleton import singleton
@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 import os
 
-logger = AppLogger()
+logger = BotFactoryLogger()
 
 ENUMERATIONS = {"CHAPTER_DAD_ID": -1, "CHILDREN_REF_ID": uuid.uuid4(), "INDICE": 0}
 
