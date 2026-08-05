@@ -1,0 +1,182 @@
+--- Chapter ID: 36 --- Name: Aspects Pratiques --- Dad ID: this_is_a_root_chapter --- Indice: 1 --- Children Ref Id: 68a36761-d00e-40f6-adb0-8f2bac72fd3c ---
+Utilisation des appareils électroménagers
+
+--- Chapter ID: 37 --- Name: Wi-Fi --- Dad ID: 68a36761-d00e-40f6-adb0-8f2bac72fd3c --- Indice: 1 --- Children Ref Id: 698d0163-a407-44cd-bfe6-a2fb0e569394 ---
+Fournir les identifiants Wi-Fi et les instructions pour se connecter au réseau.
+
+--- Chapter ID: 38 --- Name: Télévision --- Dad ID: 68a36761-d00e-40f6-adb0-8f2bac72fd3c --- Indice: 2 --- Children Ref Id: feeeec4c-e322-4501-9b01-0a96055515e2 ---
+Expliquer comment utiliser la télévision, y compris la sélection des chaînes et les services de streaming.
+
+--- Chapter ID: 39 --- Name: Appareils de Cuisine --- Dad ID: 68a36761-d00e-40f6-adb0-8f2bac72fd3c --- Indice: 3 --- Children Ref Id: 2273ef94-ba5d-4a8f-946b-7f6b1fd9f22d ---
+Démontrer l'utilisation des appareils de cuisine tels que le four, le micro-ondes, la cafetière et le lave-vaisselle.
+
+--- Chapter ID: 40 --- Name: Lessive --- Dad ID: 68a36761-d00e-40f6-adb0-8f2bac72fd3c --- Indice: 4 --- Children Ref Id: 96f5c4fc-aa91-49d9-b11b-ccfc6c4c1254 ---
+Montrer aux invités comment utiliser la machine à laver et le sèche-linge.
+
+--- Chapter ID: 41 --- Name: Climatisation/Chauffage --- Dad ID: 68a36761-d00e-40f6-adb0-8f2bac72fd3c --- Indice: 5 --- Children Ref Id: e3799dc8-e242-48cc-bbb2-0bd4570c2d66 ---
+Expliquer comment régler le thermostat pour un confort optimal.
+
+--- Chapter ID: 42 --- Name: Guide Pièce par Pièce --- Dad ID: this_is_a_root_chapter --- Indice: 2 --- Children Ref Id: 25a68599-52ad-4be4-a54b-b7c7f48d5cb1 ---
+
+
+--- Chapter ID: 43 --- Name: Salon --- Dad ID: 25a68599-52ad-4be4-a54b-b7c7f48d5cb1 --- Indice: 1 --- Children Ref Id: 27ed0b40-2466-4694-903f-905bfe5d9e80 ---
+
+
+--- Chapter ID: 44 --- Name: Espace de Détente --- Dad ID: 27ed0b40-2466-4694-903f-905bfe5d9e80 --- Indice: 1 --- Children Ref Id: 95b76ffb-197b-4d61-99c2-c54f4b9e728e ---
+Canapés et fauteuils confortables pour la relaxation.
+
+--- Chapter ID: 45 --- Name: Divertissement --- Dad ID: 27ed0b40-2466-4694-903f-905bfe5d9e80 --- Indice: 2 --- Children Ref Id: e67ee6e0-5468-4ac5-8959-84a4e26d3e30 ---
+Télévision avec services de streaming, système audio et une sélection de livres et de jeux de société.
+
+--- Chapter ID: 46 --- Name: Cuisine --- Dad ID: 25a68599-52ad-4be4-a54b-b7c7f48d5cb1 --- Indice: 2 --- Children Ref Id: 8ca6aeb8-78a0-4a9b-be9b-b0f41f7b0882 ---
+
+
+--- Chapter ID: 47 --- Name: Appareils --- Dad ID: 8ca6aeb8-78a0-4a9b-be9b-b0f41f7b0882 --- Indice: 1 --- Children Ref Id: 7bbbc391-362d-4a80-b5d7-29ad0a491506 ---
+Four, micro-ondes, cafetière, lave-vaisselle et réfrigérateur.
+
+--- Chapter ID: 48 --- Name: Espace Repas --- Dad ID: 8ca6aeb8-78a0-4a9b-be9b-b0f41f7b0882 --- Indice: 2 --- Children Ref Id: 24130049-32f0-4e54-8e59-8ef92716ccd0 ---
+Table et chaises pour les repas.
+
+--- Chapter ID: 50 --- Name: Ustensiles de Cuisine --- Dad ID: 8ca6aeb8-78a0-4a9b-be9b-b0f41f7b0882 --- Indice: 3 --- Children Ref Id: 01f7f46c-75d0-4de2-806a-a4290c288af0 ---
+Entièrement équipé avec casseroles, poêles, vaisselle et ustensiles.
+
+--- Chapter ID: 51 --- Name: Chambres --- Dad ID: 25a68599-52ad-4be4-a54b-b7c7f48d5cb1 --- Indice: 3 --- Children Ref Id: 547a03bd-d362-4078-9ae1-e61fa2aa521d ---
+
+
+--- Chapter ID: 52 --- Name: Chambre Principale --- Dad ID: 547a03bd-d362-4078-9ae1-e61fa2aa521d --- Indice: 1 --- Children Ref Id: c2ec0661-0cf6-4445-90c0-bb133c51e625 ---
+Lit king-size, salle de bain attenante et dressing.
+
+--- Chapter ID: 53 --- Name: Chambres d'Amis --- Dad ID: 547a03bd-d362-4078-9ae1-e61fa2aa521d --- Indice: 2 --- Children Ref Id: c9bc1e42-fc37-4eee-b7bf-445e6b93a460 ---
+Lits queen-size, placards et salles de bain partagées.
+
+--- Chapter ID: 54 --- Name: Commodités --- Dad ID: 547a03bd-d362-4078-9ae1-e61fa2aa521d --- Indice: 3 --- Children Ref Id: ce16f23f-4b7e-4776-b3c7-5216810f173b ---
+Draps frais, serviettes et articles de toilette.
+
+--- Chapter ID: 55 --- Name: Salles de Bain --- Dad ID: 25a68599-52ad-4be4-a54b-b7c7f48d5cb1 --- Indice: 4 --- Children Ref Id: 9cd97b15-264b-471b-8b89-7af118ef853d ---
+
+
+--- Chapter ID: 56 --- Name: Salle de Bain Attenante --- Dad ID: 9cd97b15-264b-471b-8b89-7af118ef853d --- Indice: 1 --- Children Ref Id: d4ced0b9-ca0b-4585-8903-8c3ab4b23f35 ---
+Douche, baignoire, toilettes et lavabo.
+
+--- Chapter ID: 57 --- Name: Salles de Bain Partagées --- Dad ID: 9cd97b15-264b-471b-8b89-7af118ef853d --- Indice: 2 --- Children Ref Id: 55fe6b78-352e-4cce-813b-cf7ec6b8e3cb ---
+Douche, toilettes et lavabo.
+
+--- Chapter ID: 58 --- Name: Commodités --- Dad ID: 9cd97b15-264b-471b-8b89-7af118ef853d --- Indice: 3 --- Children Ref Id: 4302afe0-6cb0-4ef8-b859-2fc7023efff9 ---
+Serviettes, articles de toilette et sèche-cheveux.
+
+--- Chapter ID: 59 --- Name: Espaces Extérieurs --- Dad ID: 25a68599-52ad-4be4-a54b-b7c7f48d5cb1 --- Indice: 5 --- Children Ref Id: 1a845282-4e23-424a-8c5c-8e0fe2d312ba ---
+
+
+--- Chapter ID: 60 --- Name: Espaces Extérieurs --- Dad ID: 1a845282-4e23-424a-8c5c-8e0fe2d312ba --- Indice: 1 --- Children Ref Id: 36aee88a-3d44-4e5a-bb7c-be7567060aff ---
+Jardin magnifiquement aménagé avec des zones de détente.
+
+--- Chapter ID: 61 --- Name: Piscine et Jacuzzi --- Dad ID: 1a845282-4e23-424a-8c5c-8e0fe2d312ba --- Indice: 2 --- Children Ref Id: c6555f2c-d56c-42c1-b653-c3dab1551f29 ---
+Informations sur les horaires et les règles d'utilisation.
+
+--- Chapter ID: 62 --- Name: Espace Barbecue --- Dad ID: 1a845282-4e23-424a-8c5c-8e0fe2d312ba --- Indice: 3 --- Children Ref Id: add6df88-bf09-49e6-90cd-d056005e6122 ---
+Gril et table à manger extérieure.
+
+--- Chapter ID: 64 --- Name: Activités et Loisirs --- Dad ID: b25e5602-56a4-4d37-8afc-319c72255a13 --- Indice: 3 --- Children Ref Id: 681c656f-6c63-4888-8c29-2a8eece63ff2 ---
+
+
+--- Chapter ID: 65 --- Name: Activités Locales --- Dad ID: 681c656f-6c63-4888-8c29-2a8eece63ff2 --- Indice: 1 --- Children Ref Id: d523cb90-f9c3-4dad-a46d-9e3aa49fe41b ---
+Recommander des activités locales telles que la visite de sites touristiques, la randonnée, les plages, les musées, etc.
+
+--- Chapter ID: 66 --- Name: Restaurants et Bars --- Dad ID: 681c656f-6c63-4888-8c29-2a8eece63ff2 --- Indice: 2 --- Children Ref Id: 85231b93-588d-498c-a5e8-99469d6c965f ---
+Suggérer des restaurants et bars locaux offrant une cuisine délicieuse et une atmosphère agréable.
+
+--- Chapter ID: 67 --- Name: Événements --- Dad ID: 681c656f-6c63-4888-8c29-2a8eece63ff2 --- Indice: 3 --- Children Ref Id: f2034c86-aa69-4154-9b6f-fe715d6c7868 ---
+Informer les invités des événements locaux ayant lieu pendant leur séjour.
+
+--- Chapter ID: 68 --- Name: Conseils pour un Séjour Agréable --- Dad ID: this_is_a_root_chapter --- Indice: 3 --- Children Ref Id: b25e5602-56a4-4d37-8afc-319c72255a13 ---
+
+
+--- Chapter ID: 69 --- Name: Relaxation et Bien-être --- Dad ID: b25e5602-56a4-4d37-8afc-319c72255a13 --- Indice: 4 --- Children Ref Id: df8c907e-0527-4e2f-b15b-c06e4344990a ---
+
+
+--- Chapter ID: 70 --- Name: Spas et Massages --- Dad ID: df8c907e-0527-4e2f-b15b-c06e4344990a --- Indice: 1 --- Children Ref Id: 5014ad8b-64e4-4f7d-b90c-b43e4eff82be ---
+Recommander des services de spa et de massage locaux.
+
+--- Chapter ID: 71 --- Name: Yoga et Méditation --- Dad ID: df8c907e-0527-4e2f-b15b-c06e4344990a --- Indice: 2 --- Children Ref Id: 50af8c00-f544-4f3e-8b24-6ce0802c7dde ---
+Suggérer des cours de yoga ou des sessions de méditation pour une relaxation optimale.
+
+--- Chapter ID: 72 --- Name: Piscine et Jacuzzi --- Dad ID: df8c907e-0527-4e2f-b15b-c06e4344990a --- Indice: 3 --- Children Ref Id: 38f2bbef-95cf-4873-baf3-cfa2f825dd54 ---
+Fournir des informations sur les horaires et les règles d'utilisation de la piscine et du jacuzzi.
+
+--- Chapter ID: 73 --- Name: Nature et Environnement --- Dad ID: b25e5602-56a4-4d37-8afc-319c72255a13 --- Indice: 5 --- Children Ref Id: 8657a0b6-afcb-4369-bc15-3652a6ebe35b ---
+
+
+--- Chapter ID: 74 --- Name: Promenades et Randonnées --- Dad ID: 8657a0b6-afcb-4369-bc15-3652a6ebe35b --- Indice: 1 --- Children Ref Id: d6e71e5e-573e-4b0b-8442-1006f2d0e2eb ---
+Suggérer des sentiers de randonnée et de marche pour explorer la beauté naturelle de la région.
+
+--- Chapter ID: 75 --- Name: Observation de la faune et de la flore --- Dad ID: 8657a0b6-afcb-4369-bc15-3652a6ebe35b --- Indice: 2 --- Children Ref Id: e25c2251-915d-44c1-85cc-35e5ae226af7 ---
+Informer les invités sur les meilleurs endroits pour observer la faune et la flore locales.
+
+--- Chapter ID: 76 --- Name: Pique-niques --- Dad ID: 8657a0b6-afcb-4369-bc15-3652a6ebe35b --- Indice: 3 --- Children Ref Id: 1df5a96f-33b6-4794-b208-f013808c92d0 ---
+Suggérer des lieux pittoresques pour pique-niquer.
+
+--- Chapter ID: 77 --- Name: Informations pratiques --- Dad ID: this_is_a_root_chapter --- Indice: 4 --- Children Ref Id: d6f43012-b2e5-4eaf-b69a-bd3a2f855f11 ---
+
+
+--- Chapter ID: 78 --- Name: Transport --- Dad ID: d6f43012-b2e5-4eaf-b69a-bd3a2f855f11 --- Indice: 1 --- Children Ref Id: de237cb3-dcb1-48b1-bcb5-6e525d483609 ---
+
+
+--- Chapter ID: 79 --- Name: Shopping --- Dad ID: d6f43012-b2e5-4eaf-b69a-bd3a2f855f11 --- Indice: 2 --- Children Ref Id: 611b3445-9f1e-405d-aaf9-170c808a6d76 ---
+
+
+--- Chapter ID: 80 --- Name: Services médicaux --- Dad ID: d6f43012-b2e5-4eaf-b69a-bd3a2f855f11 --- Indice: 3 --- Children Ref Id: 5f6950a4-f313-4ef2-b80b-f74ca4926242 ---
+
+
+--- Chapter ID: 81 --- Name: Transports en commun --- Dad ID: de237cb3-dcb1-48b1-bcb5-6e525d483609 --- Indice: 1 --- Children Ref Id: fe742f2e-fc0a-415b-acc1-e1534592feb5 ---
+Fournir des informations sur les horaires et les itinéraires des bus, trains ou tramways locaux.
+
+--- Chapter ID: 82 --- Name: Taxis et covoiturage --- Dad ID: de237cb3-dcb1-48b1-bcb5-6e525d483609 --- Indice: 2 --- Children Ref Id: b2a3af3a-a056-456c-93ab-97047eb286f4 ---
+Offrir les coordonnées des services de taxi locaux et des applications de covoiturage.
+
+--- Chapter ID: 83 --- Name: Location de vélos --- Dad ID: de237cb3-dcb1-48b1-bcb5-6e525d483609 --- Indice: 3 --- Children Ref Id: 68dd336e-1d83-44a6-beb2-906606f68d9b ---
+Suggérer des endroits pour louer des vélos afin d'explorer la région.
+
+--- Chapter ID: 84 --- Name: Marchés locaux --- Dad ID: 611b3445-9f1e-405d-aaf9-170c808a6d76 --- Indice: 1 --- Children Ref Id: d35ebc4b-4343-4bab-a083-eff2e6e42f6a ---
+Recommander des marchés locaux pour des produits frais et des trouvailles uniques.
+
+--- Chapter ID: 85 --- Name: Supermarchés --- Dad ID: 611b3445-9f1e-405d-aaf9-170c808a6d76 --- Indice: 2 --- Children Ref Id: e9c9f76a-8812-42e8-8925-f84fe8a84f46 ---
+Fournir des informations sur les supermarchés à proximité pour faire les courses.
+
+--- Chapter ID: 86 --- Name: Boutiques de souvenirs --- Dad ID: 611b3445-9f1e-405d-aaf9-170c808a6d76 --- Indice: 3 --- Children Ref Id: 5bb7d851-0ea8-4ed2-bb86-3936d7ddab40 ---
+Suggérer des boutiques pour acheter des souvenirs locaux.
+
+--- Chapter ID: 87 --- Name: Pharmacies --- Dad ID: 5f6950a4-f313-4ef2-b80b-f74ca4926242 --- Indice: 1 --- Children Ref Id: f674b703-ee61-49e9-83df-e5dae9312b4e ---
+Fournir des informations sur les pharmacies les plus proches.
+
+--- Chapter ID: 88 --- Name: Hôpitaux et cliniques --- Dad ID: 5f6950a4-f313-4ef2-b80b-f74ca4926242 --- Indice: 2 --- Children Ref Id: 66eb87da-8bcb-4ce4-a095-5113d1763a94 ---
+Offrir les coordonnées des hôpitaux et cliniques locaux.
+
+--- Chapter ID: 89 --- Name: Urgence --- Dad ID: d6f43012-b2e5-4eaf-b69a-bd3a2f855f11 --- Indice: 4 --- Children Ref Id: 37115fe5-64fc-429f-8ac1-c6352afad207 ---
+
+
+--- Chapter ID: 90 --- Name: Plombier --- Dad ID: 37115fe5-64fc-429f-8ac1-c6352afad207 --- Indice: 1 --- Children Ref Id: e86f3b5e-e606-4280-ac82-6e4229d6384f ---
+Donner ici le numéro de téléphone du plombier.
+
+--- Chapter ID: 91 --- Name: Police --- Dad ID: 37115fe5-64fc-429f-8ac1-c6352afad207 --- Indice: 2 --- Children Ref Id: fe2c8ac8-8c68-4c4d-bb8c-f7f2e1b6dcf5 ---
+Donner ici le numéro de téléphone de la police.
+
+--- Chapter ID: 92 --- Name: Samu --- Dad ID: 37115fe5-64fc-429f-8ac1-c6352afad207 --- Indice: 3 --- Children Ref Id: 0aea85e0-1bed-45c1-a998-0be85588efb2 ---
+Donner ici le numéro de téléphone du SAMU.
+
+--- Chapter ID: 93 --- Name: Pompiers --- Dad ID: 37115fe5-64fc-429f-8ac1-c6352afad207 --- Indice: 4 --- Children Ref Id: acb2c1ea-703f-4d34-b17f-bb7e3ea0857f ---
+Donner ici le numéro de téléphone des pompiers.
+
+--- Chapter ID: 94 --- Name: Problème d'électricité --- Dad ID: 37115fe5-64fc-429f-8ac1-c6352afad207 --- Indice: 5 --- Children Ref Id: 7bc4b80b-4414-4bcc-8c5a-efb573fe7fdd ---
+Donner ici un numéro en cas de problème d'électricité.
+
+--- Chapter ID: 95 --- Name: Départ des invités --- Dad ID: this_is_a_root_chapter --- Indice: 5 --- Children Ref Id: 0b779d68-7f84-4f6f-83b0-2f8b850b9f71 ---
+
+
+--- Chapter ID: 96 --- Name: Départ --- Dad ID: 0b779d68-7f84-4f6f-83b0-2f8b850b9f71 --- Indice: 1 --- Children Ref Id: 169311ee-a507-4a57-accb-97490c7ee5ad ---
+Assister les invités lors de leur départ, en s'assurant qu'ils n'oublient rien et en leur souhaitant un bon voyage de retour.
+
+--- Chapter ID: 97 --- Name: Commentaires --- Dad ID: 0b779d68-7f84-4f6f-83b0-2f8b850b9f71 --- Indice: 2 --- Children Ref Id: 90f6e0c2-6053-4e14-b38b-228e879bd7f9 ---
+Encourager les invités à laisser des commentaires sur leur séjour pour nous aider à améliorer nos services.
+
+--- Chapter ID: 99 --- Name: Contacts --- Dad ID: d6f43012-b2e5-4eaf-b69a-bd3a2f855f11 --- Indice: 5 --- Children Ref Id: 800d0d09-c9c5-4cda-9067-14d5a6512211 ---
+Donner les informations pour vous joindre.

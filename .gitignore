@@ -1,0 +1,104 @@
+# Environment variables
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.venv/
+v-ai-server/
+server/instance/
+
+# Node/Angular
+node_modules/
+dist/
+.angular/
+coverage/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.iml
+.sublime-workspace
+.sublime-project
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+chroma_db_2/
+mysql_data/
+
+# Logs
+logs/
+*.log
+operational_log_*.log
+ai-server-*.log
+screenlog.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker (local overrides only - Dockerfile/.dockerignore are kept in version control)
+docker-compose.override.yml
+
+# Build artifacts
+*.tar
+*.tar.gz
+*.zip
+
+# Temporary files
+*.tmp
+*.bak
+.tmp/
+temp/
+
+# Cache
+.cache/
+.sass-cache/
+
+# Secrets/certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Lock files (optional - include for production consistency)
+# package-lock.json
+# poetry.lock

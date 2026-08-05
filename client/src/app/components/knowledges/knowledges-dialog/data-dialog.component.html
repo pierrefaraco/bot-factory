@@ -1,0 +1,29 @@
+<app-custom-dialog [fullHeight]="true" [title]="isEditMode ? 'Edit Chapter' : 'Create Chapter'"
+  [action]="isEditMode ? 'Cancel' : 'Close'" [isInValid]="chapterForm.invalid" (submit)="onSubmitFromChild()"
+  [dialogRef]="dialogRef">
+  <form [formGroup]="chapterForm">
+
+
+    <!-- <div *ngIf=false class="content-view">
+                <p class="content-text">{{ data.chapter.content }}</p>
+            </div> -->
+
+    <app-form-field [control]="chapterNameCtrl" [name]="'chapter_name'" [label]="'Chapter Name'"
+      errorMessage="'Can't be empty'"> </app-form-field>
+
+    <app-form-field [control]="chapterContentCtrl" [name]="'chapter_content'" [label]="'Chapter Content'"
+      errorMessage="'Can't be empty'" [type]="'big-field'"> </app-form-field>
+
+
+<div class="add-pdf-button-container">
+    <app-button [icon]="'file_download'" [label]="'Add pdf'" (buttonClickedEvent)="fileInput.click()"
+      [color]="'var(--text-primary)'" [color]="'var(--text-primary)'" [backgroundColor]="'var(--btn-color3)'"
+      [disabled]="false" class="top-buttons" [type]="'custom-button'" [size]="'small'">
+    </app-button>
+    </div>
+    <app-form-field [control]="pdfFileCtrl" [name]="'pdf_file'" [label]="'PDF Name'" errorMessage="'Invallid PDF'" [type]="'disabled'">
+    </app-form-field>
+    <input type="file" accept="application/pdf" style="display:none" #fileInput (change)="onFileSelected($event)">
+
+  </form>
+</app-custom-dialog>

@@ -1,0 +1,183 @@
+@use 'sass:map';
+@use '@angular/material' as mat;
+@use './utils' as utils;
+
+// Couleurs principales du thème sombre
+$color-primary: #6366f1;    // Indigo moderne
+$color-accent: #10b981;     // Vert émeraude
+$color-warning: #f59e0b;    // Orange
+$color-danger: #ef4444;     // Rouge
+
+// Couleurs de fond
+$background-primary: #0f172a;      // Slate 900
+$background-secondary: #1e293b;    // Slate 800
+$background-tertiary: #334155;     // Slate 700
+$background-elevated: #1e293b;
+
+// Couleurs de texte
+$text-primary: #f1f5f9;      // Slate 100
+$text-secondary: #cbd5e1;    // Slate 300
+$text-tertiary: #c2c2c2;   // Slate 400
+$text-muted: #94a3b8;        // Slate 400
+
+// Classe du thème sombre
+.dark-theme {
+  // Variables CSS personnalisées
+  --bg-primary: #{$background-primary};
+  --bg-secondary: #{$background-secondary};
+  --bg-tertiary: #{$background-tertiary};
+  --bg-elevated: #{$background-elevated};
+  --bg-hover: rgba(99, 102, 241, 0.1);
+  --bg-accent: rgba(99, 102, 241, 0.15);
+
+  // Couleurs de texte
+  --text-primary: #{$text-primary};
+  --text-secondary: #{$text-secondary};
+  --text-tertiary: #{$text-tertiary};
+  --text-muted: #{$text-muted};
+  --text-accent: #{$color-accent};
+  --text-warning: #{$color-warning};
+  --text-danger: #{$color-danger};
+
+  // Couleurs interactives
+  --interactive-normal: #{$text-secondary};
+  --interactive-hover: #{$text-primary};
+  --interactive-active: #{$color-primary};
+
+  // Boutons
+  --btn-primary-bg: #{$color-primary};
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #4f46e5;
+  --btn-secondary-bg: #{$background-tertiary};
+  --btn-secondary-text: #{$text-primary};
+  --btn-secondary-hover: #475569;
+
+  // Couleurs de bordure
+  --border-primary: #{$background-tertiary};
+  --border-secondary: rgba(148, 163, 184, 0.2);
+  --border-accent: #{$color-primary};
+
+  // Ombres
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+
+  // États
+  --success-color: #{$color-accent};
+  --warning-color: #{$color-warning};
+  --error-color: #{$color-danger};
+  --info-color: #{$color-primary};
+
+  // Inputs
+  --input-bg: #{$background-secondary};
+  --input-border: #{$background-tertiary};
+  --input-focus-border: #{$color-primary};
+  --input-text: #{$text-primary};
+  --input-placeholder: #{$text-muted};
+
+  // Cards
+  --card-bg: #{$background-secondary};
+  --card-border: #{$background-tertiary};
+  --card-shadow: var(--shadow-md);
+
+  // Navigation
+  --nav-bg: #{$background-secondary};
+  --nav-text: #{$text-secondary};
+  --nav-hover: #{$background-tertiary};
+  --nav-active: #{$color-primary};
+
+  // Chat
+  --chat-user-bg: #{$color-primary};
+  --chat-user-text: #ffffff;
+  --chat-bot-bg: #{$background-tertiary};
+  --chat-bot-text: #{$text-primary};
+
+  // Transitions
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// Palettes Material Design
+$dark-primary: mat.m2-define-palette(utils.create-custom-palette($color-primary));
+$dark-accent: mat.m2-define-palette(utils.create-custom-palette($color-accent), A200, A100, A400);
+$dark-warn: mat.m2-define-palette(utils.create-custom-palette($color-danger));
+
+// Couleurs de fond Material
+$dark-background: (
+  status-bar: $background-primary,
+  app-bar: $background-secondary,
+  background: $background-primary,
+  hover: rgba(255, 255, 255, 0.04),
+  card: $background-secondary,
+  dialog: $background-elevated,
+  disabled-button: rgba(255, 255, 255, 0.12),
+  raised-button: $background-tertiary,
+  focused-button: rgba(255, 255, 255, 0.12),
+  selected-button: $background-tertiary,
+  selected-disabled-button: $background-secondary,
+  disabled-button-toggle: $background-primary,
+  unselected-chip: $background-tertiary,
+  disabled-list-option: rgba(255, 255, 255, 0.12),
+);
+
+// Couleurs de premier plan Material
+$dark-foreground: (
+  base: $text-primary,
+  divider: rgba(255, 255, 255, 0.12),
+  dividers: rgba(255, 255, 255, 0.12),
+  disabled: rgba(255, 255, 255, 0.5),
+  disabled-button: rgba(255, 255, 255, 0.3),
+  disabled-text: rgba(255, 255, 255, 0.5),
+  elevation: black,
+  hint-text: rgba(255, 255, 255, 0.5),
+  secondary-text: $text-secondary,
+  icon: $text-primary,
+  icons: $text-primary,
+  text: $text-primary,
+  slider-min: $text-primary,
+  slider-off: rgba(255, 255, 255, 0.3),
+  slider-off-active: rgba(255, 255, 255, 0.3),
+);
+
+// Typographie
+$custom-typography: mat.m2-define-typography-config(
+  $font-family: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+);
+
+// Thème complet Material
+$mat-dark-theme: mat.m2-define-dark-theme((
+  color: (
+    primary: $dark-primary,
+    accent: $dark-accent,
+    warn: $dark-warn,
+  ),
+  foreground: $dark-foreground,
+  background: $dark-background,
+  typography: $custom-typography,
+));
+
+// Application du thème Material
+.dark-theme {
+  @include mat.all-component-colors($mat-dark-theme);
+
+  // Scrollbar personnalisée
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+
+    &:hover {
+      background: var(--border-primary);
+    }
+  }
+}

@@ -1,0 +1,21 @@
+
+<!-- <app-custom-dialog [title]="'draw bot'" [action]=""
+ (submit)="onSubmit()"    [dialogRef]="dialogRef"> -->
+  <div class="main_area ">
+
+     <div class="left-side "> 
+
+        <app-svg-avatar #draw_avatar [avatar]="avatar" ></app-svg-avatar>
+
+      </div>
+
+    <div class="controls">
+        <app-color class="palete" [imgAddress]="imgHat" (colorChange)="setHatColor($event)" (previousItem)="previousHat()" (nextItem)="nextHat()" [navPos]=avatar.hat [maxNavPos]=15 [colors]="colors"></app-color>
+        <app-color class="palete" [imgAddress]="imgEyes" (colorChange)="setEyesColor($event)" (previousItem)="previousEyes()" (nextItem)="nextEyes()" [navPos]=avatar.eyes [maxNavPos]=7 [colors]="colors"></app-color>
+        <app-color class="palete" [imgAddress]="imgMouth" (colorChange)="setMouthColor($event)" (previousItem)="previousMouth()" (nextItem)="nextMouth()" [navPos]=avatar.mouth [maxNavPos]=7 [colors]="colors"></app-color>
+        <app-color class="palete" [imgAddress]="imgBot" (colorChange)="setBodyColor($event)" (previousItem)="previousBot()" (nextItem)="nextBot()" [navPos]=avatar.body [maxNavPos]=3 [colors]="colors"></app-color>
+    </div>
+     <!-- <button type="button " class="reset-btn" (click)="resetColors()">Reset Colors</button>  -->
+  </div>
+
+<!-- </app-custom-dialog> -->

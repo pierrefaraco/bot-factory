@@ -1,0 +1,453 @@
+<div class="dashboard">
+  <!-- Header -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="header-top">
+        <h1>G�n�rateur de Widget Chat</h1>
+      </div>
+      <p class="subtitle">Cr�ez et personnalisez votre widget de chat pour l'int�grer sur votre site web</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-container">
+    <nav class="tabs-nav">
+      <button
+        class="tab-button"
+        [class.active]="activeTab === 'configure'"
+        (click)="setActiveTab('configure')">
+        <span class="material-icons">settings</span>
+        <span>Configuration</span>
+      </button>
+      <button
+        class="tab-button"
+        [class.active]="activeTab === 'style'"
+        (click)="setActiveTab('style')">
+        <span class="material-icons">palette</span>
+        <span>Style</span>
+      </button>
+      <button
+        class="tab-button"
+        [class.active]="activeTab === 'preview'"
+        (click)="setActiveTab('preview')">
+        <span class="material-icons">visibility</span>
+        <span>Aper�u</span>
+      </button>
+      <button
+        class="tab-button"
+        [class.active]="activeTab === 'code'"
+        (click)="setActiveTab('code')">
+        <span class="material-icons">code</span>
+        <span>Code</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Content -->
+  <div class="tab-content">
+
+    <!-- Configuration Tab -->
+    <div class="tab-pane" [class.active]="activeTab === 'configure'">
+      <div class="section">
+        <h2 class="section-title">Configuration de base</h2>
+
+        <!-- Bot Selection -->
+        <div class="form-group">
+          <label class="form-label" for="bot-select">S�lectionner un bot</label>
+          <select
+            id="bot-select"
+            class="form-select"
+            [(ngModel)]="config.botId"
+            (ngModelChange)="onConfigChange()"
+            [disabled]="loadingBots">
+            <option value="" disabled>
+              {{ loadingBots ? 'Chargement des bots...' : 'Choisissez un bot' }}
+            </option>
+            <option *ngFor="let bot of bots" [value]="bot.id">
+              {{ bot.bot_parameters?.bot_name || 'Bot #' + bot.id }}
+            </option>
+          </select>
+          <p *ngIf="bots.length === 0 && !loadingBots" style="color: #999; margin-top: 8px; font-size: 0.9rem;">
+            Aucun bot disponible. Veuillez d'abord cr�er un bot.
+          </p>
+        </div>
+
+        <!-- Dimensions -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="width">Largeur (px)</label>
+            <input
+              type="number"
+              id="width"
+              class="form-input"
+              [(ngModel)]="config.width"
+              (ngModelChange)="onConfigChange()"
+              min="300"
+              max="800"
+              [disabled]="config.position === 'fullwidth'">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="height">Hauteur (px)</label>
+            <input
+              type="number"
+              id="height"
+              class="form-input"
+              [(ngModel)]="config.height"
+              (ngModelChange)="onConfigChange()"
+              min="400"
+              max="900">
+          </div>
+        </div>
+
+        <!-- Position -->
+        <div class="form-group">
+          <label class="form-label">Position du widget</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="position"
+                value="floating"
+                [(ngModel)]="config.position"
+                (ngModelChange)="onConfigChange()">
+              <span class="radio-label">
+                <i class="icon-corner"></i>
+                <span>
+                  <strong>Flottant (coin)</strong> - Widget fixe en bas � droite
+                </span>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="position"
+                value="centered"
+                [(ngModel)]="config.position"
+                (ngModelChange)="onConfigChange()">
+              <span class="radio-label">
+                <i class="icon-center"></i>
+                <span>
+                  <strong>Centr�</strong> - Widget centr� dans son conteneur
+                </span>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="position"
+                value="fullwidth"
+                [(ngModel)]="config.position"
+                (ngModelChange)="onConfigChange()">
+              <span class="radio-label">
+                <i class="icon-width"></i>
+                <span>
+                  <strong>Pleine largeur</strong> - Widget adapt� � 100% de la largeur
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="form-group">
+          <label class="form-label" for="welcome">Message de bienvenue</label>
+          <textarea
+            id="welcome"
+            class="form-textarea"
+            [(ngModel)]="config.welcomeMessage"
+            (ngModelChange)="onConfigChange()"
+            placeholder="Message affich� au d�marrage du chat"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="placeholder">Texte du champ de saisie</label>
+          <input
+            type="text"
+            id="placeholder"
+            class="form-input"
+            [(ngModel)]="config.placeholderText"
+            (ngModelChange)="onConfigChange()"
+            placeholder="Ex: �crivez votre message...">
+        </div>
+
+        <!-- Display Options -->
+        <div class="form-group">
+          <label class="checkbox-option">
+            <input
+              type="checkbox"
+              [(ngModel)]="config.showHeader"
+              (ngModelChange)="onConfigChange()">
+            <span class="checkbox-label">
+              <i class="icon-bot"></i>
+              Afficher l'en-t�te du chatbot
+            </span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-option">
+            <input
+              type="checkbox"
+              [(ngModel)]="config.showAvatar"
+              (ngModelChange)="onConfigChange()">
+            <span class="checkbox-label">
+              <i class="icon-bot"></i>
+              Afficher l'avatar du bot
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Style Tab -->
+    <div class="tab-pane" [class.active]="activeTab === 'style'">
+      <div class="section">
+        <h2 class="section-title">Personnalisation du style</h2>
+
+        <!-- Theme -->
+        <div class="form-group">
+          <label class="form-label">Th�me</label>
+          <div class="radio-group">
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="theme"
+                value="light"
+                [(ngModel)]="config.theme"
+                (ngModelChange)="onConfigChange()">
+              <span class="radio-label">
+                <span><strong>Clair</strong> - Fond blanc et texte sombre</span>
+              </span>
+            </label>
+
+            <label class="radio-option">
+              <input
+                type="radio"
+                name="theme"
+                value="dark"
+                [(ngModel)]="config.theme"
+                (ngModelChange)="onConfigChange()">
+              <span class="radio-label">
+                <span><strong>Sombre</strong> - Fond sombre et texte clair</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Colors -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="primary-color">Couleur primaire</label>
+            <div class="color-input-group">
+              <input
+                type="color"
+                id="primary-color"
+                class="form-color"
+                [(ngModel)]="config.primaryColor"
+                (ngModelChange)="onConfigChange()">
+              <input
+                type="text"
+                class="form-input color-text"
+                [(ngModel)]="config.primaryColor"
+                (ngModelChange)="onConfigChange()"
+                placeholder="#667eea">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="secondary-color">Couleur secondaire</label>
+            <div class="color-input-group">
+              <input
+                type="color"
+                id="secondary-color"
+                class="form-color"
+                [(ngModel)]="config.secondaryColor"
+                (ngModelChange)="onConfigChange()">
+              <input
+                type="text"
+                class="form-input color-text"
+                [(ngModel)]="config.secondaryColor"
+                (ngModelChange)="onConfigChange()"
+                placeholder="#764ba2">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="text-color">Couleur du texte</label>
+            <div class="color-input-group">
+              <input
+                type="color"
+                id="text-color"
+                class="form-color"
+                [(ngModel)]="config.textColor"
+                (ngModelChange)="onConfigChange()">
+              <input
+                type="text"
+                class="form-input color-text"
+                [(ngModel)]="config.textColor"
+                (ngModelChange)="onConfigChange()"
+                placeholder="#333333">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="bg-color">Couleur de fond</label>
+            <div class="color-input-group">
+              <input
+                type="color"
+                id="bg-color"
+                class="form-color"
+                [(ngModel)]="config.backgroundColor"
+                (ngModelChange)="onConfigChange()">
+              <input
+                type="text"
+                class="form-input color-text"
+                [(ngModel)]="config.backgroundColor"
+                (ngModelChange)="onConfigChange()"
+                placeholder="#ffffff">
+            </div>
+          </div>
+        </div>
+
+        <!-- Typography & Spacing -->
+        <div class="form-group">
+          <label class="form-label" for="font-size">
+            Taille de la police: {{ config.fontSize }}px
+          </label>
+          <input
+            type="range"
+            id="font-size"
+            class="form-range"
+            [(ngModel)]="config.fontSize"
+            (ngModelChange)="onConfigChange()"
+            min="12"
+            max="18"
+            step="1">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="border-radius">
+            Arrondi des coins: {{ config.borderRadius }}px
+          </label>
+          <input
+            type="range"
+            id="border-radius"
+            class="form-range"
+            [(ngModel)]="config.borderRadius"
+            (ngModelChange)="onConfigChange()"
+            min="0"
+            max="30"
+            step="5">
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Tab -->
+    <div class="tab-pane" [class.active]="activeTab === 'preview'">
+      <div class="section">
+        <h2 class="section-title">Aper�u du widget</h2>
+
+        <div class="preview-container">
+          <div class="preview-wrapper" [ngClass]="'position-' + config.position">
+            <div class="chatbot-preview" [ngStyle]="getPreviewStyles()">
+
+              <!-- Header -->
+              <div *ngIf="config.showHeader" class="chatbot-header" [ngStyle]="getHeaderStyles()">
+                <div class="bot-info">
+                  <div *ngIf="config.showAvatar" class="bot-avatar">
+                    <i class="icon-bot"></i>
+                  </div>
+                  <div class="bot-details">
+                    <h3>{{ getSelectedBot()?.bot_parameters?.bot_name || 'Assistant' }}</h3>
+                    <span class="bot-status">En ligne</span>
+                  </div>
+                </div>
+                <button class="minimize-btn">
+                  <i class="icon-minimize"></i>
+                </button>
+              </div>
+
+              <!-- Messages -->
+              <div class="messages-container">
+                <div
+                  *ngFor="let message of previewMessages"
+                  class="message"
+                  [ngClass]="'message-' + message.type">
+                  <div
+                    class="message-content"
+                    [ngStyle]="message.type === 'user' ? getUserMessageStyles() : {}">
+                    {{ message.content }}
+                  </div>
+                  <span class="message-time">{{ message.time }}</span>
+                </div>
+              </div>
+
+              <!-- Input -->
+              <div class="input-container">
+                <input
+                  type="text"
+                  class="message-input"
+                  [placeholder]="config.placeholderText"
+                  disabled>
+                <button class="send-button" [ngStyle]="getSendButtonStyles()" disabled>
+                  <i class="icon-send"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="preview-actions">
+          <button class="btn btn-primary" (click)="setActiveTab('code')">
+            <i class="icon-code"></i>
+            G�n�rer le code
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code Tab -->
+    <div class="tab-pane" [class.active]="activeTab === 'code'">
+      <div class="section">
+        <h2 class="section-title">Code d'int�gration</h2>
+
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-title">HTML</span>
+            <button class="btn btn-secondary copy-btn" (click)="copyCode()">
+              <i class="icon-copy"></i>
+              Copier
+            </button>
+          </div>
+          <pre class="code-block"><code>{{ generatedCode }}</code></pre>
+        </div>
+
+        <div class="instructions">
+          <h3 class="instructions-title">Instructions d'int�gration</h3>
+          <ol class="instructions-list">
+            <li>Copiez le code HTML ci-dessus</li>
+            <li>Collez-le dans votre page web, juste avant la balise <code>&lt;/body&gt;</code></li>
+            <li>Le widget de chat appara�tra selon la position que vous avez configur�e</li>
+            <li>Assurez-vous que votre bot est actif et accessible publiquement</li>
+          </ol>
+
+          <div class="tips">
+            <h4 class="tips-title">Conseils</h4>
+            <ul class="tips-list">
+              <li>Pour un widget flottant, il appara�tra toujours en bas � droite de l'�cran</li>
+              <li>Pour un widget centr�, placez-le dans un conteneur de la largeur souhait�e</li>
+              <li>Pour un widget pleine largeur, il s'adaptera automatiquement � son conteneur</li>
+              <li>Vous pouvez ajuster les styles apr�s l'int�gration en modifiant les param�tres CSS inline</li>
+              <li>Le widget n�cessite une connexion Internet pour fonctionner</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,17 @@
+<mat-dialog-title class="dialog-header">
+    {{ title }}
+</mat-dialog-title>
+<mat-dialog-content class="dialog-body">
+    <ng-content></ng-content>
+</mat-dialog-content>
+<mat-dialog-actions align="end" class="buttons-container">
+    <!-- [disabled]="isFormInvalid()" -->
+    <app-button [icon]="'cancel'" [label]="'Cancel'" (buttonClickedEvent)="onCancel()" [color]="'var(--text-secondary)'"
+        [type]="'custom-button'" [backgroundColor]="'var(--text-danger)'" [disabled]="false">
+    </app-button>
+
+    <app-button [icon]="'play_arrow'" [label]="'ok'" (buttonClickedEvent)="onSubmit()" [color]="'var(--text-accent)'"
+        [type]="'custom-button'" [backgroundColor]="'var(--fg-secondary)'" [disabled]="isFormInvalid()" [submit]="true">
+    </app-button>
+
+</mat-dialog-actions>

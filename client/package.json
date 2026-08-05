@@ -1,0 +1,50 @@
+{
+  "name": "alfred-react",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --host 0.0.0.0 --port 443 --poll 2000",
+    "build": "ng build",
+    "build:prod": "ng build --configuration production && node optimize-build.js",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "^21.2.19",
+    "@angular/common": "^21.2.19",
+    "@angular/compiler": "^21.2.19",
+    "@angular/core": "^21.2.19",
+    "@angular/forms": "^21.2.19",
+    "@angular/platform-browser": "^21.2.19",
+    "@angular/platform-browser-dynamic": "^21.2.19",
+    "@angular/router": "^21.2.19",
+    "@popperjs/core": "^2.11.8",
+    "@types/event-source-polyfill": "^1.0.5",
+    "bootstrap": "^5.3.3",
+    "crypto-js": "^4.2.0",
+    "event-source-polyfill": "^1.0.31",
+    "jwt-decode": "^4.0.0",
+    "material-design-icons-iconfont": "^6.7.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "uuid": "^11.1.0",
+    "zone.js": "~0.15.1"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^21.2.19",
+    "@angular/cdk": "^21.2.14",
+    "@angular/cli": "^21.2.19",
+    "@angular/compiler-cli": "^21.2.19",
+    "@angular/material": "^21.2.14",
+    "@types/google.accounts": "^0.0.18",
+    "@types/jasmine": "~5.1.0",
+    "jasmine-core": "~5.2.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "typescript": "~5.9.3"
+  }
+}

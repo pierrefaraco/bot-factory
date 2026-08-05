@@ -1,0 +1,27 @@
+<ul class="dropdown-menu" [class.show]="isOpen" aria-labelledby="navbarDropdown">
+
+
+  <li *ngFor="let item of filterUpItems">
+    <hr *ngIf="item.divider" class="dropdown-divider" [style.border-color]="item.color">
+    <a *ngIf="!item.divider" class="dropdown-item" [routerLink]="item.link" (click)="item.action(params)">
+      <mat-icon [style.color]="item.color">{{ item.icon }}</mat-icon>
+      <div class="item-label" [style.color]="item.color">{{ item.label }}</div>
+    </a>
+  </li>
+
+  <ng-content>
+
+  </ng-content>
+
+  <li *ngFor="let item of filterDownItems">
+    <hr *ngIf="item.divider" class="dropdown-divider" [style.border-color]="item.color">
+    <a *ngIf="!item.divider" class="dropdown-item" [routerLink]="item.link" (click)="item.action(params)">
+      <mat-icon [style.color]="item.color">{{ item.icon }}</mat-icon>
+      <div class="item-label" [style.color]="item.color">{{ item.label }}</div>
+    </a>
+  </li>
+
+
+
+
+</ul>

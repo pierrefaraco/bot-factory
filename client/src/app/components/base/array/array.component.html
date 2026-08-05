@@ -1,0 +1,29 @@
+<div class="custom-common">
+<table class="custom-table">
+    <thead>
+      <tr  >
+        <th class="header " *ngFor="let column of columns_names">{{column}}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <ng-content>
+
+      </ng-content>
+    </tbody>
+  </table>
+
+  <div class="pagination-controls">
+
+    <app-button  class="pagination-item" [icon]="'chevron_left'" [label]="'previous'" [color]="'var(--text-primary)'"
+      [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color3)'"
+      [disabled]="false" (buttonClickedEvent)="previousPage()" >
+    </app-button>
+    <span class="pagination-item">
+       {{currentPage}} / {{totalPages}}
+    </span>
+    <app-button  class="pagination-item" [icon]="'chevron_right'" [label]="'next'" [color]="'var(--text-primary)'"
+      [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color3)'"
+      [disabled]="false" (buttonClickedEvent)="nextPage()" >
+    </app-button>
+  </div>
+</div>

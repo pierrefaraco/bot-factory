@@ -1,0 +1,26 @@
+/* Custom Dropdown Menu Styles */
+
+.custom-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  min-width: 200px;
+  z-index: 1000;
+  animation: slideInDown 0.2s ease-out;
+}
+
+.dropdown-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  background: transparent;
+}

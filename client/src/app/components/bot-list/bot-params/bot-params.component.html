@@ -1,0 +1,96 @@
+<div class="form-container">
+    <form [formGroup]="botForm" *ngIf="bot" class="bot-form">
+
+        <!-- Navigation par onglets -->
+        <mat-tab-group [scrollDistance]="50" [(selectedIndex)]="selectedTabIndex">
+            <!-- ONGLET 1: Informations de base -->
+            <!-- Exemple de modifications pour le premier onglet (faites de même pour les autres) -->
+
+            <!-- ONGLET 1: Informations de base -->
+            <mat-tab label="Basic Info">
+
+                <div class="custom-tabs">
+
+                    <app-form-field [control]="namectrl" [name]="'bot_name'" [label]="'bot name'"
+                        errorMessage="'Can't be empty'" (my_change)="onPatchBot('bot_name')"> </app-form-field>
+
+
+
+                    <app-form-field [control]="botTypeCtrl" [name]="'bot_type'" [label]="'The bot is'"
+                        errorMessage="'Can't be empty'" (my_change)="onPatchBot('bot_type')"> </app-form-field>
+
+
+
+                    <app-form-field [control]="localisationCtrl" [name]="'localisation'"
+                        [label]="'Where the bot is located'" errorMessage="'Can't be empty'" (my_change)="onPatchBot('localisation')"></app-form-field>
+
+                    <!-- <div  class="dropdown-divider" >    </div> -->
+
+                    <app-form-field [control]="interlocutorTypeCtrl" [name]="'interlocutor_type'"
+                        [label]="'The interlocutors is'" errorMessage="'Can't be empty'" (my_change)="onPatchBot('interlocutor_type')"></app-form-field>
+
+                    <app-combo [control]="interlocutorIdentityCtrl" [name]="'interlocutor_identity'"
+                        [label]="'Interlocutor identity'" [options]="options_combo?.interlocutor_identity" (my_change)="onPatchBot('interlocutor_identity')"></app-combo>
+
+
+                </div>
+
+            </mat-tab>
+
+            <!-- ONGLET 2: Comportement - Voici un exemple pour cet onglet -->
+            <mat-tab label="Personnality and behavior">
+                <div class="custom-tabs">
+
+         
+                                        <app-combo [control]="answerLengthCtrl" [name]="'answer_length'" [label]="'Answer length'"
+                        [options]="options_combo?.answer_length" (my_change)="onPatchBot('answer_length')"></app-combo>
+
+                    <app-combo [control]="answerStyleCtrl" [name]="'answer_style'"
+                        [label]="'What is the bot writing style'" [options]="options_combo?.answer_style" (my_change)="onPatchBot('answer_style')"></app-combo>
+
+
+
+                    <app-combo [control]="behaviourWhenIgnoreCtrl" [name]="'behaviour_when_ignore'"
+                        [label]="'What bot does when he doesn know'"
+                        [options]="options_combo?.behaviour_when_ignore" (my_change)="onPatchBot('behaviour_when_ignore')"></app-combo>
+
+
+                    <app-combo [control]="behaviourWithLanguageCtrl" [name]="'behaviour_with_language'"
+                        [label]="'What language does the bot use?'"
+                        [options]="options_combo?.behaviour_with_language" [autoComplete]=true (my_change)="onPatchBot('behaviour_with_language')"></app-combo>
+                    
+                        <app-combo [control]="goalCtrl" [name]="'goal'" [label]="'Purpose of a discussion'"
+                        [options]="options_combo?.goal" (my_change)="onPatchBot('goal')"></app-combo>
+
+                    <app-combo [control]="personalityTrait1Ctrl" [name]="'main_personality_trait_1'"
+                        [label]="'Main personality trait 1'" [options]="personalityTraits"
+                        [autoComplete]=true (my_change)="onPatchBot('main_personality_trait_1')"></app-combo>
+
+                    <app-combo [control]="personalityTrait2Ctrl" [name]="'main_personality_trait_2'"
+                        [label]="'Main personality trait 2'" [options]="personalityTraits"
+                        [autoComplete]=true (my_change)="onPatchBot('main_personality_trait_2')"></app-combo>
+
+                    <app-combo [control]="personalityTrait3Ctrl" [name]="'main_personality_trait_3'"
+                        [label]="'Main personality trait 3'" [options]="personalityTraits"
+                        [autoComplete]=true (my_change)="onPatchBot('main_personality_trait_3')"></app-combo>
+
+                </div>
+            </mat-tab>
+
+            <mat-tab label="Context Data">
+                <div class="custom-tabs">
+                    
+                    <app-combo [control]="usedSourcesCtrl" [name]="'used_sources'" [label]="'Used sources to answer'"
+                        [options]="options_combo?.used_sources" (my_change)="onPatchBot('used_sources')"></app-combo>
+
+
+                    <app-form-field *ngIf="usedSourcesCtrl.value!='only outside context'" [name]="'context_type'" [control]="contextTypeCtrl" [name]="'context_type'"
+                        [label]="'Nature of the context'" errorMessage="'Can't be empty'"(my_change)="onPatchBot('context_type')"> </app-form-field>
+
+                    <!-- <app-knowledges *ngIf="usedSourcesCtrl.value!='only outside context'"></app-knowledges> -->
+                </div>
+            </mat-tab>
+        </mat-tab-group>
+
+    </form>
+</div>

@@ -1,0 +1,25 @@
+<div class="multi-select-container">
+  <label *ngIf="label" class="multi-select-label">{{ label }}</label>
+  
+  <div class="multi-select-dropdown">
+    <div class="multi-select-trigger" 
+         [class.disabled]="disabled"
+         (click)="triggerTouched()">
+      <span class="selected-text">{{ getSelectedLabels() }}</span>
+      <span class="dropdown-arrow">▼</span>
+    </div>
+    
+    <div class="multi-select-options">
+      <div class="option-item" 
+           *ngFor="let option of options"
+           [class.disabled]="option.disabled || disabled">
+        <mat-checkbox 
+          [checked]="isSelected(option.value)"
+          [disabled]="option.disabled || disabled"
+          (change)="onCheckboxChange($event, option.value)">
+          {{ option.label }}
+        </mat-checkbox>
+      </div>
+    </div>
+  </div>
+</div>

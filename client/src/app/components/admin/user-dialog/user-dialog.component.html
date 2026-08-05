@@ -1,0 +1,34 @@
+<!-- Dans user-dialog.component.html -->
+
+<app-custom-dialog [title]="data.isEditing ? 'Edit Account' : 'Create Account'"
+  [action]="data.isEditing ? 'Update' : 'Create'" [isInValid]="userForm.invalid" (submit)="onSubmitFromChild()"
+  [dialogRef]="dialogRef">
+
+  <form [formGroup]="userForm">
+
+    <app-form-field [control]="userNameCtrl" [name]="'name'" [label]="'User name'" errorMessage="'Can't be empty'">
+    </app-form-field>
+
+    <app-form-field [control]="emailCtrl" [name]="'user_email'" [label]="'Email'" errorMessage="'Can't be empty'">
+    </app-form-field>
+    @if (!isEdit) {
+    <!-- <app-multi-select 
+        [options]="botOptions"
+        [label]="'Assigned Bots'"
+        [placeholder]="'Select one or more bots...'"
+        formControlName="assigned_bot_ids">
+      </app-multi-select> -->
+
+
+    <app-form-field [control]="passwordCtrl" [name]="'password'" [label]="'Password'" [type]="'password'"
+      errorMessage="'Can't be empty'"> </app-form-field>
+
+    <app-form-field [control]="confirmPasswordCtrl" [name]="'confirm_password'" [label]="'Confirm Password'"
+      [type]="'password'"
+      [errorMessage]="confirmPasswordCtrl.hasError('passwordMismatch') ? 'Passwords don\'t match' : 'Can\'t be empty'">
+    </app-form-field>
+
+    }
+  </form>
+
+</app-custom-dialog>

@@ -1,0 +1,67 @@
+// Je surchage dialog-container de dialog css pour ne pas avoir un truc de la taille de l'ecran
+
+:root{
+background-color: blueviolet;
+}
+
+
+.main_area {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  margin: 0px;
+  background-color: var(--bg-primary);
+  background-color: transparent;
+}
+
+
+.left-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0px;
+  border-style: solid;
+  border-radius: 10px;
+  border-width: 2px;
+  width: 160px;
+  height: 192px;
+  flex-shrink: 0;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  margin: 0px;
+  padding: 10px;
+  border-style: solid;
+  border-radius: 10px;
+  border-width: 2px;
+  width: 512px;
+  height: 192px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+}
+
+
+
+
+
+
+
+.palete {
+  width: 100%;
+  height: 40px;
+  max-height: 40px;
+  margin: 0px;
+  ;
+  display: flex;
+  border-width: 1px;
+  border-color: var(--bg-tertiary);
+}

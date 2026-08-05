@@ -1,0 +1,153 @@
+:host {
+    height: 100%;
+    width: 100%;
+}
+
+.custom-tabs {
+    padding: 25px;
+
+    // Assurer que les form-fields et combos ont la bonne structure
+    ::ng-deep app-form-field,
+    ::ng-deep app-combo {
+        display: block;
+
+        .mat-mdc-form-field {
+            display: block;
+            width: 100%;
+            min-height: 56px; // Ensure consistent height for proper button centering
+        }
+
+        // Centrage vertical des boutons clear avec dimensions explicites
+        .clear-button,
+        .toggle-password-button,
+        .clear-button-password {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-right: 20px;
+            height: 40px; // Explicit height for centering calculations
+            width: 40px;  // Explicit width for centering calculations
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            // Forcer le centrage des icônes Material
+            ::ng-deep .material-icons {
+                line-height: 1 !important;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            // Centrage du bouton mat-icon-button
+            ::ng-deep button {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                line-height: 1 !important;
+            }
+        }
+    }
+}
+
+
+.top-button {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+.container {
+    padding: 0px;
+    overflow: hidden;
+}
+
+.avatar-container {
+
+    position: relative;
+    bottom: -3px;
+    max-height: 12vh;
+    max-width: 12vh;
+    min-width: 12vh;
+    overflow: hidden; // Limite le débordement de l'avatar
+    border-radius: 10px;
+
+    &:hover {
+        cursor: pointer;
+        //  transform: scale(1.05);
+        transition: all 0.2s ease;
+        filter: brightness(1.50);
+    }
+}
+
+
+.bot-container {
+
+    position: relative;
+    margin-top: 10px;
+    min-height: 13vh;
+    max-height: 13vh;
+    max-width: 13vh;
+    min-width: 13vh;
+    margin: 10px;
+    border-radius: 10px;
+    border-style: solid;
+    border-width: 3px;
+    border-color: var(--text-primary);
+    // z-index: 1!important;
+    overflow: visible !important;
+    padding: 0px;
+
+    // Créer un wrapper pour l'effet de scale
+
+
+
+}
+
+
+
+
+
+.selected {
+    background-color: var(--text-warning);
+
+}
+
+.not-selected {
+    background-color: var(--btn-color4);
+
+
+}
+
+
+.action-overlay {
+    position: absolute; // Changé de absolute à relative
+    top: -14px;
+    right: -15px;
+    color: var(--text-warning);
+    border-bottom-right-radius: 10px;
+    border-top-left-radius: 3px;
+    overflow: visible;
+    z-index: 1050 !important;
+}
+
+
+
+.name-overlay {
+    position: absolute;
+    top: -2px;
+    right: 0px;
+    font-size: 14px;
+    background-color: var(--text-primary); //var(--btn-color4);
+
+    color: var(--bg-floating);
+    border-bottom-left-radius: 10px;
+    border-top-right-radius: 5px;
+    padding-left: 10px;
+    padding-right: 20px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    overflow: visible;
+    z-index: 0 !important;
+}

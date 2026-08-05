@@ -1,0 +1,180 @@
+<div class="auth-form-container">
+  <div class="auth-form-card" [@fadeIn]>
+    <!-- Header avec titre et description -->
+    <div class="auth-header">
+      <h1 class="auth-title">{{ isLoginMode ? 'Bienvenue' : 'Créer un compte' }}</h1>
+      <p class="auth-subtitle">
+        {{ isLoginMode ? 'Connectez-vous pour continuer' : 'Rejoignez-nous dès aujourd\'hui' }}
+      </p>
+    </div>
+
+    <!-- Toggle buttons pour switcher entre Login et Signup -->
+    <div class="mode-toggle">
+      <button
+        type="button"
+        class="mode-button"
+        [class.active]="isLoginMode"
+        (click)="isLoginMode ? null : toggleMode()">
+        Connexion
+      </button>
+      <button
+        type="button"
+        class="mode-button"
+        [class.active]="!isLoginMode"
+        (click)="!isLoginMode ? null : toggleMode()">
+        Inscription
+      </button>
+      <div class="mode-indicator" [class.signup-mode]="!isLoginMode"></div>
+    </div>
+
+    <!-- Formulaires avec animation -->
+    <div class="form-content" [@slideAnimation]="isLoginMode ? 'login' : 'signup'">
+
+      <!-- Formulaire de connexion -->
+      <form *ngIf="isLoginMode" [formGroup]="loginForm" (ngSubmit)="onLoginSubmit()" class="auth-form">
+        <div class="form-group">
+          <app-form-field
+            [control]="loginEmail"
+            name="email"
+            label="Email"
+            type="email"
+            [errorMessage]="getErrorMessage('email', 'login')">
+          </app-form-field>
+        </div>
+
+        <div class="form-group">
+          <app-form-field [control]="loginEmail" [name]="'user_email'" [label]="'Email'"  [type]="'text'"
+                            errorMessage="'Can't be empty'"> </app-form-field>
+          <app-form-field
+            [control]="loginPassword"
+            name="password"
+            label="Mot de passe"
+            type="password"
+            [errorMessage]="getErrorMessage('password', 'login')">
+          </app-form-field>
+        </div>
+
+        <div class="form-actions">
+          <a href="#" class="forgot-password">Mot de passe oublié ?</a>
+        </div>
+
+        <div class="submit-button-wrapper">
+          <app-button
+            type="custom-button"
+            label="{{ loginSubmitting ? 'Connexion...' : 'Se connecter' }}"
+            [disabled]="loginSubmitting"
+            [backgroundColor]="'var(--btn-primary-bg)'"
+            [color]="'var(--btn-primary-text)'"
+            [submit]="true"
+            size="large"
+            (buttonClickedEvent)="onLoginSubmit()">
+          </app-button>
+        </div>
+
+        <div class="form-footer">
+          <p class="footer-text">
+            Pas encore de compte ?
+            <button type="button" class="link-action" (click)="toggleMode()">
+              Inscrivez-vous
+            </button>
+          </p>
+        </div>
+      </form>
+
+      <!-- Formulaire d'inscription -->
+      <form *ngIf="!isLoginMode" [formGroup]="signupForm" (ngSubmit)="onSignupSubmit()" class="auth-form">
+        <div class="form-row">
+          <div class="form-group">
+            <app-form-field
+              [control]="signupName"
+              name="name"
+              label="Name"
+              type="text"
+              [errorMessage]="getErrorMessage('name', 'signup')">
+            </app-form-field>
+          </div>
+
+          <div class="form-group">
+            <app-form-field
+              [control]="signupEmail"
+              name="email"
+              label="Email"
+              type="text"
+              [errorMessage]="getErrorMessage('email', 'signup')">
+            </app-form-field>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <app-form-field
+            [control]="signupEmail"
+            name="email"
+            label="Email"
+            type="email"
+            [errorMessage]="getErrorMessage('email', 'signup')">
+          </app-form-field>
+        </div>
+
+        <div class="form-group">
+          <app-form-field
+            [control]="signupPassword"
+            name="password"
+            label="Mot de passe"
+            type="password"
+            [errorMessage]="getErrorMessage('password', 'signup')">
+          </app-form-field>
+        </div>
+
+        <div class="form-group">
+          <app-form-field
+            [control]="signupConfirmPassword"
+            name="confirmPassword"
+            label="Confirmer le mot de passe"
+            type="password"
+            [errorMessage]="getErrorMessage('confirmPassword', 'signup')">
+          </app-form-field>
+        </div>
+
+        <div class="submit-button-wrapper">
+          <app-button
+            type="custom-button"
+            label="{{ signupSubmitting ? 'Inscription...' : 'S\'inscrire' }}"
+            [disabled]="signupSubmitting"
+            [backgroundColor]="'var(--btn-primary-bg)'"
+            [color]="'var(--btn-primary-text)'"
+            [submit]="true"
+            size="large"
+            (buttonClickedEvent)="onSignupSubmit()">
+          </app-button>
+        </div>
+
+        <div class="form-footer">
+          <p class="footer-text">
+            Déjà un compte ?
+            <button type="button" class="link-action" (click)="toggleMode()">
+              Connectez-vous
+            </button>
+          </p>
+        </div>
+      </form>
+    </div>
+
+    <!-- Divider avec texte "ou" -->
+    <div class="divider">
+      <span class="divider-text">ou</span>
+    </div>
+    <!-- Boutons de connexion sociale (optionnel) -->
+    <div class="social-auth">
+      <button type="button" class="social-button google-button" (click)="loginWithGoogle()">
+        <svg class="social-icon" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        Continuer avec Google
+      </button>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,32 @@
+<div class="" *ngIf="isAdmin || isUser || isGuest">
+  <!-- <app-button [icon]="'add_circle'" [label]="'Add'" (buttonClickedEvent)="onCreateBotClick()"
+    [color]="'var(--text-primary)'" [type]="'custom-button'" [backgroundColor]="'var(--fg-secondary)'"
+    [disabled]="false">
+  </app-button>
+    <app-button [icon]="'add_circle'" [label]="'Draw'" (buttonClickedEvent)="openDrawDialog(selected_bot)"
+    [color]="'var(--text-primary)'" [type]="'custom-button'" [backgroundColor]="'var(--fg-secondary)'"
+    [disabled]="false" *ngIf="selected_bot"> 
+  </app-button> -->
+    <!-- <app-button [icon]="'add_circle'" [label]="'Delete'" (buttonClickedEvent)="deleteBot(selected_bot.id) " 
+    [color]="'var(--text-primary)'" [type]="'custom-button'" [backgroundColor]="'var(--fg-secondary)'"
+    [disabled]="false"  *ngIf="selected_bot">
+  </app-button></div> -->
+
+
+
+
+<div class="container" [ngClass]="'layout-' + layout">
+
+  <div *ngFor="let bot of botsList" [ngClass]="selected_bot?.id === bot.id? 'selected':'not-selected'">
+    <div class="avatar-container"
+         (click)="onSelectBot(bot.id)"
+         (keydown.enter)="onSelectBot(bot.id)"
+         (keydown.space)="onSelectBot(bot.id); $event.preventDefault()"
+         tabindex="0"
+         role="button"
+         [attr.aria-label]="'Select bot ' + bot.id">
+      <app-svg-avatar *ngIf="bot.avatar" [avatar]="bot.avatar" ></app-svg-avatar>
+    </div>
+
+  </div>
+</div>

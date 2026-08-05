@@ -1,0 +1,27 @@
+<form [formGroup]="knowledgeForm" *ngIf="selectedKnowledge">
+
+
+    <!-- <div *ngIf=false class="content-view">
+                <p class="content-text">{{ data.chapter.content }}</p>
+            </div> -->
+
+    <app-form-field [control]="knowledgeNameCtrl" [name]="'knowledge_title'" [label]="'Knowledge Name'"
+        errorMessage="'Can't be empty'" (my_change)="onPatchKnowledge('knowledge_title')"> </app-form-field>
+
+    <app-form-field [control]="knowledgeContentCtrl" [name]="'knowledge_content'" [label]="'Knowledge Content'"
+        errorMessage="'Can't be empty'" [type]="'big-field'" (my_change)="onPatchKnowledge('knowledge_content')">
+    </app-form-field>
+
+
+    <div class="add-pdf-button-container">
+        <app-button [icon]="'file_download'" [label]="'Add pdf'" (buttonClickedEvent)="fileInput.click()"
+            [color]="'var(--text-primary)'" [color]="'var(--text-primary)'" [backgroundColor]="'var(--btn-color3)'"
+            [disabled]="false" class="top-buttons" [type]="'custom-button'" [size]="'small'">
+        </app-button>
+    </div>
+    <app-form-field [control]="pdfFileCtrl" [name]="'pdf_file'" [label]="'PDF Name'" errorMessage="'Invallid PDF'"
+        [type]="'disabled'">
+    </app-form-field>
+    <input type="file" accept="application/pdf" style="display:none" #fileInput (change)="onFileSelected($event)">
+
+</form>

@@ -1,0 +1,132 @@
+// Button Component Styles
+
+:host {
+  display: inline-block;
+}
+
+
+.custom-button,
+.link-button,
+.icon-button,
+.small-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.5;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  .material-icons {
+    font-size: 1.25rem;
+  }
+}
+.custom-icon-button {
+  padding: 0.5rem;
+  font-size: 1rem;
+  width: auto;
+  .material-icons {
+    font-size: 1.25rem;
+  }
+}
+
+.custom-button {
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+.link-button {
+  background: transparent;
+  padding: 0.5rem 1rem;
+
+  &:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    box-shadow: none;
+  }
+}
+
+.icon-button {
+  padding: 0.75rem 1rem;
+  min-width: 48px;
+
+  .material-icons {
+    font-size: 1.5rem;
+  }
+}
+
+.small-icon-button {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+
+  .material-icons {
+    font-size: 1.125rem;
+  }
+}
+
+// Size variations
+.size-small {
+  padding: 0.375rem 0.875rem;
+  font-size: 0.875rem;
+
+  .material-icons {
+    font-size: 1rem;
+  }
+}
+
+.size-medium {
+  padding: 0.625rem 1.25rem;
+  font-size: 0.9375rem;
+}
+
+.size-large {
+  padding: 0.875rem 1.5rem;
+  font-size: 1.0625rem;
+
+  .material-icons {
+    font-size: 1.5rem;
+  }
+}
+
+// Icon size variations
+.small-icon {
+  font-size: 1.125rem !important;
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.medium-icon {
+  font-size: 1.5rem !important;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.big-icon {
+  font-size: 2rem !important;
+   width: 2rem;
+  height: 2rem;
+}

@@ -1,0 +1,70 @@
+// Combo Component Styles - Harmonized with FormFieldComponent
+
+:host {
+  display: block;
+  width: 100%;
+
+}
+
+
+
+// Style harmonisé avec FormFieldComponent
+.custom-background {
+
+
+  ::ng-deep .mat-mdc-form-field-infix {
+    padding-right: 0 !important;
+    min-height: 56px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+
+
+
+
+}
+
+// Style pour le bouton clear (autocomplete)
+.clear-button {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast);
+  margin-right: 20px;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+
+  .material-icons {
+    font-size: 1.25rem;
+  }
+}
+
+// Style des options
+::ng-deep .option {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+
+  &:hover {
+    background-color: var(--bg-hover);
+  }
+}
+
+// Style du panel autocomplete
+::ng-deep .mat-mdc-autocomplete-panel {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-lg);
+}

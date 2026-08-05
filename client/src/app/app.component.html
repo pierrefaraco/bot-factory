@@ -1,0 +1,55 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark" *ngIf="showNavbar">
+  <div class="container-fluid">
+    <a class="navbar-brand d-flex align-items-center" >
+      <div class="logo-container">
+        <img src="assets/img/bot/botcraft7.png" alt="Alfred Logo" class="navbar-logo">
+      </div>
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <i class="material-icons menu">table_rows</i>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item" >
+          <a class="nav-link" routerLink="/workspace" routerLinkActive="active">Bot Craft</a>
+        </li>
+
+        <li class="nav-item" *ngIf="isLoggedIn && (isAdmin || isUser)">
+          <a class="nav-link" routerLink="/admin" routerLinkActive="active">Administration</a>
+        </li>
+
+      </ul>
+      <ul class="navbar-nav ms-auto">
+
+        <li class="nav-item dropdown" *ngIf="isLoggedIn">
+          <a class="nav-link" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown"
+            aria-expanded="false">
+            {{ mail }}
+          </a>
+          <app-custom-dropdown-menu [items]="parameterItemList" aria-labelledby="navbarDropdown" class="user-menu">
+            <li>
+              <div class="dropdown-item theme-toggle" (click)="$event.stopPropagation()">
+                <div class="theme-toggle-wrapper">
+                  <mat-icon class="is-darkmode-icon">{{ isDarkMode ? 'dark_mode' : 'light_mode' }}</mat-icon>
+                  <span>Theme</span>
+                  <div class="toggle-switch" (click)="toggleTheme()">
+                    <div class="toggle-slider" [class.active]="isDarkMode">
+                      <div class="toggle-circle"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </app-custom-dropdown-menu>
+        </li>
+
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="main-section">
+  <router-outlet>
+
+  </router-outlet>
+</div>

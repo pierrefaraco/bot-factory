@@ -1,0 +1,13 @@
+<div class="help-container">
+  <h1>Centre d'aide</h1>
+  
+  <div class="sections">
+    <div class="section" *ngFor="let section of sections">
+      <div class="section-icon">
+        <i [class]="section.icon"></i>
+      </div>
+      <h2>{{ section.titre }}</h2>
+      <p [innerHTML]="section.contenu"></p>
+    </div>
+  </div>
+</div>

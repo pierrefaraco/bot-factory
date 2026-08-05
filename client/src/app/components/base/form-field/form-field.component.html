@@ -1,0 +1,93 @@
+<div class="custom_input_field custom-common" [ngSwitch]="type">
+
+  <mat-form-field *ngSwitchCase="'text'" appearance="outline" class="custom-background" style="width: 100%; flex: 1;">
+    <mat-label class="custom-label"> {{ label }}</mat-label>
+    <input class="input-size" matInput [type]="'text'" [formControl]="control" [name]="name" required 
+      [disabled]="disabled"  (blur)="onMychange($event)">
+    <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+      [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button"
+      [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'" [size]="'big'"
+      [disabled]="!control?.value">
+    </app-button>
+    <mat-error *ngIf="hasError()">
+      {{ errorMessage }}
+    </mat-error>
+  </mat-form-field>
+
+
+
+
+  <mat-form-field *ngSwitchCase="'big-field'" appearance="outline" class="custom-background">
+    <mat-label class="custom-label"> {{ label }}</mat-label>
+    <textarea matInput [type]="'text'" [formControl]="control" [name]="name" required (input)="onInputChange()"
+      [disabled]="disabled" cdkTextareaAutosize #autosize="cdkTextareaAutosize" [cdkAutosizeMinRows]="2"
+      [cdkAutosizeMaxRows]="2" (blur)="onMychange($event)"></textarea>
+
+
+    <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+      [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button"
+      [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'"
+      [disabled]="control?.value === null"  [size]="'big'">
+    </app-button>
+    <mat-error *ngIf="hasError()">
+      {{ errorMessage }}
+    </mat-error>
+  </mat-form-field>
+
+  <mat-form-field *ngSwitchCase="'password'" appearance="outline" class="custom-background password-field">
+    <mat-label class="custom-label"> {{ label }}</mat-label>
+    <input class="input-size" matInput [type]="showPassword ? 'text' : 'password'" [formControl]="control" [name]="name" required
+      (input)="onInputChange()" [disabled]="disabled" (blur)="onMychange($event)">
+
+    <div matSuffix class="password-suffix-buttons">
+      <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+        [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button-password"
+        [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'" [size]="'small'"
+        [disabled]="control?.value === null" [size]="'big'">
+      </app-button>
+      <app-button [icon]="showPassword ? 'visibility' : 'visibility_off'" [label]="'Toggle password visibility'"
+        [focusOnTab]="false" [onlyOnMouseClick]="true" (buttonClickedEvent)="togglePasswordVisibility()"
+        [color]="'var(--text-accent)'" class="toggle-password-button" [type]="'icon-button'" [size]="'small'"
+        [backgroundColor]="'transparent'" [disabled]="control?.value === null" [size]="'big'">
+      </app-button>
+    </div>
+
+    <mat-error *ngIf="hasError()">
+      {{ errorMessage }}
+    </mat-error>
+ </mat-form-field>
+
+  <mat-form-field *ngSwitchCase="'text-with-button'" appearance="outline" class="custom-background"
+    style="width: 100%; flex: 1;">
+    <mat-label class="custom-label"> {{ label }}</mat-label>
+    <input class="input-size" matInput [type]="'text'" [formControl]="control" [name]="name" required (input)="onInputChange()"
+      [disabled]="disabled" (blur)="onMychange($event)">
+    <div matSuffix class="suffix-buttons">
+      <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+        [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button-inline" [size]="'small'"
+        [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'"
+        [disabled]="control?.value === null || control?.value === ''">
+      </app-button>
+
+      <app-button *ngIf="buttonIcon" [icon]="buttonIcon" [label]="buttonLabel" (buttonClickedEvent)="onButtonClick()"
+        [focusOnTab]="false" [onlyOnMouseClick]="true" class="se-button-inline"
+        [color]="'var(--text-seconday)'" [type]="'field-button'" [backgroundColor]="buttonBackgroundColor"
+        [disabled]="disabled" [size]="'big'" >
+      </app-button>
+    </div>
+
+  </mat-form-field>
+
+
+
+  <mat-form-field *ngSwitchCase="'disabled'" appearance="outline" class="custom-background" style="width: 100%; flex: 1;">
+    <mat-label class="custom-label"> {{ label }}</mat-label>
+    <input class="input-size" matInput tabindex="-1" [type]="'text'" [formControl]="control" [name]="name" required (input)="onInputChange()"
+      [disabled]="true" readonly (blur)="onMychange($event)">
+ 
+    <mat-error *ngIf="hasError()">
+      {{ errorMessage }}
+    </mat-error>
+  </mat-form-field>
+
+</div>

@@ -1,0 +1,222 @@
+<div class="chapters-mat-card ">
+
+
+            <div class="top-buttons">
+
+
+
+                <input type="file" accept=".txt" style="display:none" #fileInput (change)="importChapters($event)">
+
+                <app-button [icon]="'add'" [label]="'add'" (buttonClickedEvent)="createRootChapter()"
+                    [color]="'var(--text-primary)'" [color]="'var(--text-primary)'" [type]="'icon-button'"
+                    [backgroundColor]="'var(--btn-color1)'" [disabled]="false" class="top-buttons" [size]="'big'">
+                </app-button>
+
+
+                <app-button [icon]="'file_upload'" [label]="'export'" (buttonClickedEvent)="exportChapters()"
+                    [color]="'var(--text-primary)'" [color]="'var(--text-primary)'" [type]="'icon-button'"
+                    [backgroundColor]="'var(--btn-color2)'" [disabled]="false" class="top-buttons" [size]="'big'">
+                </app-button>
+
+                <app-button [icon]="'file_download'" [label]="'import'" (buttonClickedEvent)="fileInput.click()"
+                    [color]="'var(--text-primary)'" [color]="'var(--text-primary)'" [type]="'icon-button'"
+                    [backgroundColor]="'var(--btn-color3)'" [disabled]="false" class="top-buttons" [size]="'big'">
+                </app-button>
+            </div>
+
+    <div class="tree-wrapper">
+        <mat-tree
+            [dataSource]="dataSource"
+            [treeControl]="treeControl"
+            class="custom_input_field"
+            (keydown)="onTreeKeyDown($event)"
+            role="tree"
+            aria-label="Arbre des connaissances">
+
+            <!-- Nœud feuille (sans enfants) -->
+            <mat-tree-node
+                *matTreeNodeDef="let node"
+                matTreeNodePadding
+                [attr.aria-level]="node.level"
+                [attr.aria-expanded]="false"
+                role="treeitem">
+
+                <div
+                    class="node-container"
+                    (mouseenter)="mouseEneterKnowledge(node.id)"
+                    (mouseleave)="knowledgeMouseEnterId = null"
+                    (click)="selectKnowledge(node.id)"
+                    [ngClass]="selectedKnowledgeId === node.id ? 'selected-node-content' : 'node-content'"
+                    [attr.tabindex]="selectedKnowledgeId === node.id ? 0 : -1">
+
+                    <!-- Icône du type de nœud -->
+                    <span class="node-icon material-icons" aria-hidden="true">description</span>
+
+                    <!-- Contenu du nœud -->
+                    <div class="node-info">
+                        <span class="node-text label" [title]="node.name">
+                            {{ node.name }}
+                        </span>
+                    </div>
+
+                    <!-- Actions du nœud -->
+                    <div
+                        class="node-actions"
+                        *ngIf="knowledgeMouseEnterId === node.id || selectedKnowledgeId === node.id"
+                        [@slideIn]>
+
+                        <app-button
+                            [icon]="'arrow_upward'"
+                            [label]="'Monter'"
+                            [color]="'var(--text-primary)'"
+                            class="action-btn"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="moveChapter(node.id, 'up')"
+                            title="Déplacer vers le haut">
+                        </app-button>
+
+                        <app-button
+                            [icon]="'arrow_downward'"
+                            [label]="'Descendre'"
+                            [color]="'var(--text-primary)'"
+                            class="action-btn"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="moveChapter(node.id, 'down')"
+                            title="Déplacer vers le bas">
+                        </app-button>
+
+                        <div class="action-divider"></div>
+
+                        <app-button
+                            [icon]="'add'"
+                            [label]="'Ajouter'"
+                            [color]="'var(--text-primary)'"
+                            class="action-btn"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="createSubChapter(node)"
+                            title="Ajouter un sous-élément">
+                        </app-button>
+
+                        <app-button
+                            [icon]="'delete'"
+                            [label]="'Supprimer'"
+                            [color]="'var(--text-warning)'"
+                            class="action-btn action-btn-danger"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="deleteChapter(node.id)"
+                            title="Supprimer">
+                        </app-button>
+                    </div>
+                </div>
+            </mat-tree-node>
+
+            <!-- Nœud parent (avec enfants) -->
+            <mat-tree-node
+                *matTreeNodeDef="let node; when: hasChild"
+                matTreeNodePadding
+                [attr.aria-level]="node.level"
+                [attr.aria-expanded]="treeControl.isExpanded(node)"
+                role="treeitem">
+
+                <div
+                    class="node-container"
+                    (mouseenter)="mouseEneterKnowledge(node.id)"
+                    (mouseleave)="knowledgeMouseEnterId = null"
+                    (click)="selectKnowledge(node.id)"
+                    [ngClass]="selectedKnowledgeId === node.id ? 'selected-node-content' : 'node-content'"
+                    [attr.tabindex]="selectedKnowledgeId === node.id ? 0 : -1">
+
+                    <!-- Bouton expand/collapse -->
+                    <app-button
+                        [icon]="treeControl.isExpanded(node) ? 'expand_more' : 'chevron_right'"
+                        [label]="''"
+                        [type]="'icon-button'"
+                        [backgroundColor]="'transparent'"
+                        [color]="'var(--text-primary)'"
+                        [disabled]="false"
+                        matTreeNodeToggle
+                        class="expand-button"
+                        [title]="treeControl.isExpanded(node) ? 'Réduire' : 'Développer'">
+                    </app-button>
+
+                    <!-- Icône du type de nœud -->
+                    <span class="node-icon material-icons" aria-hidden="true">
+                        {{ treeControl.isExpanded(node) ? 'folder_open' : 'folder' }}
+                    </span>
+
+                    <!-- Contenu du nœud -->
+                    <div class="node-info">
+                        <span class="node-text label" [title]="node.indice + ' ' + node.name">
+                            <span class="node-indice">{{ node.indice }}</span> {{ node.name }}
+                        </span>
+                    </div>
+
+                    <!-- Actions du nœud -->
+                    <div
+                        class="node-actions"
+                        *ngIf="knowledgeMouseEnterId === node.id || selectedKnowledgeId === node.id"
+                        [@slideIn]>
+
+                        <app-button
+                            [icon]="'arrow_upward'"
+                            [label]="'Monter'"
+                            [color]="'var(--text-primary)'"
+                            class="action-btn"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="moveChapter(node.id, 'up')"
+                            title="Déplacer vers le haut">
+                        </app-button>
+
+                        <app-button
+                            [icon]="'arrow_downward'"
+                            [label]="'Descendre'"
+                            [color]="'var(--text-primary)'"
+                            class="action-btn"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="moveChapter(node.id, 'down')"
+                            title="Déplacer vers le bas">
+                        </app-button>
+
+                        <div class="action-divider"></div>
+
+                        <app-button
+                            [icon]="'add'"
+                            [label]="'Ajouter'"
+                            [color]="'var(--text-primary)'"
+                            class="action-btn"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="createSubChapter(node)"
+                            title="Ajouter un sous-élément">
+                        </app-button>
+
+                        <app-button
+                            [icon]="'delete'"
+                            [label]="'Supprimer'"
+                            [color]="'var(--text-warning)'"
+                            class="action-btn action-btn-danger"
+                            [type]="'icon-button'"
+                            [backgroundColor]="'transparent'"
+                            [disabled]="false"
+                            (buttonClickedEvent)="deleteChapter(node.id)"
+                            title="Supprimer">
+                        </app-button>
+                    </div>
+                 </div>
+            </mat-tree-node>
+        </mat-tree>
+    </div>
+</div>

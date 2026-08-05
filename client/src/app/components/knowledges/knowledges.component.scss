@@ -1,0 +1,604 @@
+// ========== Modern Knowledge Component Styles ==========
+
+:host {
+  display: block;
+  width: 100%;
+  height: 100%;
+  contain: layout style;
+}
+
+// ========== Material Card Container ==========
+.chapters-mat-card {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  min-height: 640px;
+  max-height: 100%;
+  overflow: hidden;
+  transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  }
+
+  .add-btn {
+    position: absolute;
+    right: 12rem;
+  }
+
+  ::ng-deep .mat-mdc-card-header {
+    padding: 1.5rem 1.75rem;
+    background: var(--bg-primary);
+    border-bottom: 2px solid var(--border-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+  }
+
+  ::ng-deep .mat-mdc-card-content {
+    flex: 1 1 auto;
+    padding: 0 !important;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    // Modern scrollbar styling
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-primary) transparent;
+
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-primary);
+      border-radius: 4px;
+      transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+      &:hover {
+        background: var(--text-secondary);
+      }
+    }
+  }
+}
+
+// ========== Header Section ==========
+.title_context {
+  font-size: clamp(1.25rem, 2vw, 1.5rem);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.top-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+
+  .top-buttons {
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &:hover {
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+}
+
+// ========== Tree Container ==========
+.tree-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.custom_input_field {
+  width: 100%;
+  padding: 0.75rem;
+  overflow: hidden;
+  background-color: transparent;
+  box-sizing: border-box;
+
+  ::ng-deep .mat-tree {
+    overflow: visible;
+    background: transparent;
+  }
+
+  ::ng-deep .mat-tree-node {
+    min-height: 56px;
+    padding: 0.375rem 0.75rem;
+    margin-bottom: 0.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: visible;
+    box-sizing: border-box;
+    position: relative;
+
+    &:focus {
+      outline: none;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--text-accent);
+      outline-offset: 2px;
+      border-radius: 10px;
+    }
+
+    // Animation d'apparition des nœuds
+    animation: nodeSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  ::ng-deep .mat-nested-tree-node {
+    padding-left: 0 !important;
+    overflow: visible;
+  }
+}
+
+// ========== Node Container ==========
+.node-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  cursor: pointer;
+  background: var(--bg-secondary);
+  border: 2px solid transparent;
+  box-sizing: border-box;
+  min-height: 56px;
+  max-width: 100%;
+  overflow: visible;
+
+  // Touch-friendly tap target
+  @media (pointer: coarse) {
+    min-height: 60px;
+    padding: 1rem 1.125rem;
+  }
+}
+
+// ========== Node States ==========
+.node-content {
+  border-color: var(--border-primary);
+  will-change: transform, background, border-color, box-shadow;
+
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-accent);
+    transform: translateX(6px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08),
+                -4px 0 0 0 var(--text-accent);
+  }
+
+  &:active {
+    transform: translateX(3px) scale(0.99);
+    transition-duration: 0.1s;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--text-accent);
+    outline-offset: 2px;
+  }
+}
+
+.selected-node-content {
+  border-color: var(--border-accent);
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-hover) 100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12),
+              -4px 0 0 0 var(--text-accent),
+              0 0 0 4px rgba(var(--text-accent-rgb, 59, 130, 246), 0.12);
+  transform: translateX(4px);
+
+  &:hover {
+    transform: translateX(6px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15),
+                -4px 0 0 0 var(--text-accent),
+                0 0 0 4px rgba(var(--text-accent-rgb, 59, 130, 246), 0.15);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--text-accent);
+    outline-offset: 2px;
+  }
+}
+
+// ========== Node Icon ==========
+.node-icon {
+  font-size: 1.375rem;
+  color: var(--text-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+
+  .node-content:hover & {
+    color: var(--text-accent);
+    transform: scale(1.1);
+  }
+
+  .selected-node-content & {
+    color: var(--text-accent);
+  }
+}
+
+// ========== Expand Button ==========
+.expand-button {
+  margin-right: 0.25rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    transform: scale(1.15) rotate(0deg);
+  }
+
+  ::ng-deep .material-icons {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+// ========== Node Info ==========
+.node-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.node-text {
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.label {
+  font-size: clamp(0.9375rem, 1.5vw, 1.0625rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.4;
+  color: var(--text-primary);
+  transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  .node-content:hover & {
+    color: var(--text-accent);
+  }
+
+  .selected-node-content & {
+    font-weight: 700;
+  }
+}
+
+.node-indice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem 0.5rem;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-right: 0.5rem;
+  border: 1px solid var(--border-primary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  .node-content:hover & {
+    background: var(--bg-hover);
+    border-color: var(--text-accent);
+    color: var(--text-accent);
+  }
+
+  .selected-node-content & {
+    background: var(--text-accent);
+    border-color: var(--text-accent);
+    color: white;
+  }
+}
+
+// ========== Node Actions ==========
+.node-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding-left: 0.875rem;
+  margin-left: auto;
+  border-left: 2px solid var(--border-primary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  .node-content:hover & {
+    border-left-color: var(--text-accent);
+  }
+}
+
+.action-btn {
+  opacity: 0.8;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: manipulation;
+
+  &:hover {
+    opacity: 1;
+    transform: scale(1.2) translateY(-2px);
+  }
+
+  &:active {
+    transform: scale(1.1) translateY(0);
+    transition-duration: 0.1s;
+  }
+
+  // Effet de surbrillance au survol
+  ::ng-deep .material-icons {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    transition: filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  &:hover ::ng-deep .material-icons {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+  }
+}
+
+.action-btn-danger {
+  &:hover {
+    background: rgba(var(--text-warning-rgb, 239, 68, 68), 0.1) !important;
+    transform: scale(1.25) translateY(-2px);
+  }
+}
+
+.action-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-primary);
+  margin: 0 0.25rem;
+  transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  .node-content:hover & {
+    background: var(--text-accent);
+  }
+}
+
+// ========== Responsive Design ==========
+@media (max-width: 768px) {
+  .chapters-mat-card {
+    border-radius: 8px;
+
+    ::ng-deep .mat-mdc-card-header {
+      padding: 1.25rem 1.5rem;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+  }
+
+  .title_context {
+    font-size: 1.25rem;
+  }
+
+  .top-toolbar {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .node-container {
+    padding: 0.75rem 0.875rem;
+    gap: 0.625rem;
+    min-height: 52px;
+    border-radius: 10px;
+  }
+
+  .node-icon {
+    font-size: 1.25rem;
+  }
+
+  .label {
+    font-size: 0.9375rem;
+  }
+
+  .node-actions {
+    gap: 0.25rem;
+    padding-left: 0.625rem;
+  }
+
+  .action-btn {
+    &:hover {
+      transform: scale(1.15) translateY(-1px);
+    }
+  }
+
+  .custom_input_field {
+    padding: 0.5rem;
+  }
+
+  ::ng-deep .mat-tree-node {
+    min-height: 52px;
+    padding: 0.25rem 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .chapters-mat-card {
+    border-radius: 6px;
+    min-height: 500px;
+
+    ::ng-deep .mat-mdc-card-header {
+      padding: 1rem 1.25rem;
+    }
+  }
+
+  .title_context {
+    font-size: 1.125rem;
+  }
+
+  .node-container {
+    padding: 0.625rem 0.75rem;
+    gap: 0.5rem;
+    min-height: 48px;
+    border-radius: 8px;
+  }
+
+  .node-icon {
+    font-size: 1.125rem;
+  }
+
+  .label {
+    font-size: 0.875rem;
+  }
+
+  .node-indice {
+    font-size: 0.6875rem;
+    padding: 0.0625rem 0.375rem;
+  }
+
+  .node-actions {
+    gap: 0.1875rem;
+    padding-left: 0.5rem;
+
+    .action-btn {
+      ::ng-deep .material-icons {
+        font-size: 1.125rem;
+      }
+
+      &:hover {
+        transform: scale(1.12) translateY(-1px);
+      }
+    }
+
+    .action-divider {
+      height: 16px;
+    }
+  }
+
+  .expand-button {
+    ::ng-deep .material-icons {
+      font-size: 1.25rem;
+    }
+  }
+
+  .custom_input_field {
+    padding: 0.5rem 0.375rem;
+  }
+
+  .top-toolbar {
+    gap: 0.375rem;
+  }
+
+  ::ng-deep .mat-tree-node {
+    min-height: 48px;
+    padding: 0.25rem 0.375rem;
+    margin-bottom: 0.375rem;
+  }
+}
+
+// Reduce motion for accessibility
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+// ========== Animations ==========
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes nodeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes iconBounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+// Loading state
+.loading {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+// ========== Hover Effects ==========
+.node-content,
+.selected-node-content {
+  // Effet de brillance au survol
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+
+  &:hover::before {
+    left: 100%;
+  }
+}

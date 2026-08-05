@@ -1,0 +1,20 @@
+<app-custom-dialog [title]="'User informations'" [action]="'Update informations'" [isInValid]="profileForm.invalid"
+  (submit)="onProfileSubmit()"   [dialogRef]="dialogRef" >
+  <form [formGroup]="profileForm">
+
+    <div *ngIf="profileError" class="alert alert-danger" role="alert">
+      {{ profileError }}
+    </div>
+    <div *ngIf="profileSuccess" class="alert alert-success" role="alert">
+      Profil mis à jour avec succès !
+    </div>
+
+    <app-form-field [control]="user_name_ctrl" [name]="'user_name'" [label]="'User name'"
+      errorMessage="'Can't be empty'">
+    </app-form-field>
+
+    <app-form-field [control]="email_ctrl" [name]="'email'" [label]="'User name'" errorMessage="'Can't be empty'">
+    </app-form-field>
+
+  </form>
+</app-custom-dialog>

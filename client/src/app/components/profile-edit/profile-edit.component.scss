@@ -1,0 +1,71 @@
+// Profile Edit Component Styles
+
+:host {
+  display: block;
+  width: 100%;
+  padding: 2rem;
+}
+
+.profile-container {
+  max-width: 800px;
+  margin: 0 auto;
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  box-shadow: var(--shadow-md);
+}
+
+.profile-header {
+  margin-bottom: 2rem;
+  text-align: center;
+
+  h2 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+  }
+
+  p {
+    color: var(--text-secondary);
+    margin: 0;
+  }
+}
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+
+  .form-section {
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-primary);
+
+    &:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    h3 {
+      margin: 0 0 1rem 0;
+      font-size: 1.125rem;
+      color: var(--text-primary);
+    }
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    padding-top: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  :host {
+    padding: 1rem;
+  }
+
+  .profile-container {
+    padding: 1.5rem;
+  }
+}

@@ -1,0 +1,166 @@
+<div class="token-stats-container">
+  <!-- En-tête avec titre et bouton de rafraîchissement -->
+  <div class="header">
+    <h2>Statistiques de consommation de tokens</h2>
+    <div class="header-actions">
+      <div class="time-period-toggle">
+        <button
+          class="toggle-btn"
+          [class.active]="showLast24h"
+          (click)="toggleTimePeriod()">
+          24 dernières heures
+         
+        </button>
+        <button
+          class="toggle-btn"
+          [class.active]="!showLast24h"
+          (click)="toggleTimePeriod()">
+           Tout le temps
+        </button>
+      </div>
+      <app-button
+        [icon]="'refresh'"
+        [label]="'Rafraîchir'"
+        (buttonClickedEvent)="refreshStats()"
+        [color]="'var(--text-primary)'"
+        [backgroundColor]="'var(--btn-color1)'"
+        [type]="'small-icon-button'"
+        [size]="'small'"
+        [disabled]="loading">
+      </app-button>
+    </div>
+  </div>
+
+  <!-- Indicateur de chargement -->
+  <div *ngIf="loading" class="loading-container">
+    <p>Chargement des statistiques...</p>
+  </div>
+
+  <!-- Message d'erreur -->
+  <div *ngIf="error && !loading" class="error-container">
+    <p class="error-message">{{ error }}</p>
+    <app-button
+      [label]="'Réessayer'"
+      (buttonClickedEvent)="refreshStats()"
+      [color]="'var(--text-primary)'"
+      [backgroundColor]="'var(--btn-color1)'"
+      [type]="'small-button'"
+      [size]="'small'">
+    </app-button>
+  </div>
+
+  <!-- Contenu principal -->
+  <div *ngIf="!loading && !error && stats" class="stats-content">
+
+    <!-- Cartes de statistiques -->
+    <div class="stats-cards">
+      <div class="stat-card total-card">
+        <div class="card-icon">
+          <span class="material-icons">assessment</span>
+        </div>
+        <div class="card-content">
+          <h3>Total de tokens</h3>
+          <p class="stat-value">{{ formatNumber(getDisplayedTotal()) }}</p>
+          <span class="stat-subtitle">{{ showLast24h ? 'tokens (24h)' : 'tokens consommés' }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card requests-card">
+        <div class="card-icon">
+          <span class="material-icons">forum</span>
+        </div>
+        <div class="card-content">
+          <h3>Requêtes effectuées</h3>
+          <p class="stat-value">{{ formatNumber(stats.total_requests) }}</p>
+          <span class="stat-subtitle">{{ getAverageTokensPerRequest() }} tokens/requête</span>
+        </div>
+      </div>
+
+      <div class="stat-card prompt-card">
+        <div class="card-icon">
+          <span class="material-icons">edit_note</span>
+        </div>
+        <div class="card-content">
+          <h3>Tokens de prompt</h3>
+          <p class="stat-value">{{ formatNumber(stats.total_prompt_tokens) }}</p>
+          <span class="stat-subtitle">{{ getPromptPercentage() }}% du total</span>
+        </div>
+      </div>
+
+      <div class="stat-card completion-card">
+        <div class="card-icon">
+          <span class="material-icons">auto_awesome</span>
+        </div>
+        <div class="card-content">
+          <h3>Tokens de réponse</h3>
+          <p class="stat-value">{{ formatNumber(stats.total_completion_tokens) }}</p>
+          <span class="stat-subtitle">{{ getCompletionPercentage() }}% du total</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section historique -->
+    <div class="history-section">
+      <div class="history-header">
+        <h3>Historique récent</h3>
+        <div class="history-controls">
+          <label for="history-limit">Afficher:</label>
+          <select id="history-limit" [(ngModel)]="historyLimit" (change)="loadHistory()">
+            <option [value]="10">10 dernières</option>
+            <option [value]="25">25 dernières</option>
+            <option [value]="50">50 dernières</option>
+            <option [value]="100">100 dernières</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Chargement de l'historique -->
+      <div *ngIf="loadingHistory" class="loading-history">
+        <p>Chargement de l'historique...</p>
+      </div>
+
+      <!-- Tableau d'historique -->
+      <div *ngIf="!loadingHistory && history.length > 0" class="history-table-container">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Guest Id</th>
+              <th>Bot</th>
+              <th>Session</th>
+              <th>Prompt</th>
+              <th>Réponse</th>
+              <th>Total</th>
+              <th>Modèle</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let record of history">
+              <td class="timestamp-cell">{{ formatTimestamp(record.timestamp) }}</td>
+              <td class="user-cell">{{ record.user_guest_id != -1 ?record.user_guest_id:'' }}</td>
+              <td class="bot-cell">Bot #{{ record.bot_id }}</td>
+              <td class="session-cell">{{ record.session_id || '-' }}</td>
+              <td class="token-cell">{{ formatNumber(record.prompt_tokens) }}</td>
+              <td class="token-cell">{{ formatNumber(record.completion_tokens) }}</td>
+              <td class="token-cell total-tokens">{{ formatNumber(record.total_tokens) }}</td>
+              <td class="model-cell">{{ record.model_name || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Message si pas d'historique -->
+      <div *ngIf="!loadingHistory && history.length === 0" class="no-history">
+        <span class="material-icons">history</span>
+        <p>Aucun historique disponible</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Message si pas de données -->
+  <div *ngIf="!loading && !error && !stats" class="no-data">
+    <span class="material-icons">bar_chart</span>
+    <p>Aucune donnée de statistiques disponible</p>
+  </div>
+</div>

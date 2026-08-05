@@ -1,0 +1,15 @@
+<app-custom-dialog title="Assign Bots to User" action="Assign" 
+ [isInValid]="assignmentForm.invalid" (submit)="onSubmitFromChild()" [dialogRef]="dialogRef">
+
+    <form [formGroup]="assignmentForm">
+      <p>Assigning bots to: <strong>{{ data.user.name }}</strong> ({{ data.user.email }})</p>
+      
+      <app-multi-select 
+        [options]="botOptions"
+        [label]="'Select Bots'"
+        [placeholder]="'Select one or more bots...'"
+        formControlName="assigned_bot_ids">
+      </app-multi-select>
+    </form>
+
+</app-custom-dialog>

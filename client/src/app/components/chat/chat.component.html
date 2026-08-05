@@ -1,0 +1,59 @@
+<div class="chat-container">
+
+  <div class="messages-container" #scrollContainer>
+    <div *ngFor="let message of messages"
+      [ngClass]="{ 'user-message': message.type=='user', 'bot-message': message.type=='assistant'}"
+      [attr.data-timestamp]="message.timestamp | date:'HH:mm'" class="message">
+
+      <div class="avatar" *ngIf="message.type!='user'">
+        <app-svg-avatar #draw_avatar [avatar]="selected_bot.avatar"></app-svg-avatar>
+      </div>
+
+      <div class="message-content">
+        <div class="message-text">
+          <p>{{ message.content }}</p>
+          <div class="message-footer">
+            <span class="timestamp">{{ message.timestamp | date:'HH:mm' }}</span>
+            <!-- <span class="timestamp">  -->
+            <!--    <app-button *ngIf="message.type === 'assistant'"
+                [icon]="message.isPlaying ? 'volume_up' : 'volume_off'"
+                [label]="message.isPlaying ? 'Playing...' : 'Play'" (buttonClickedEvent)="playMessage(message)"
+                [color]="'var(--text-primary)'" [backgroundColor]="'transparent'" [type]="'small-icon-button'"
+                [size]="'small'" [disabled]="message.isPlaying">
+              </app-button></span> -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="response | async as currentResponse" [ngClass]="'bot-message'" class="message">
+      <div class="avatar">
+        <app-svg-avatar class="avatar" [avatar]="selected_bot.avatar"></app-svg-avatar>
+      </div>
+      <div class="message-content">
+
+        <div class="message-text">
+          <p>{{ currentResponse }}</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+
+  <form [formGroup]="chatForm" class="input-container" [class.highlight]="highlightInput" (ngSubmit)="onSubmit()">
+    <app-form-field #inputField [type]="'text-with-button'" [errorMessage]="'wrong'" [control]="messageToSendCtrl"
+      [name]="'input-message'" [label]="'Write your message here'" errorMessage="" backgroundColor="red"
+      [disabled]=isLoading [buttonIcon]="'send'" [buttonLabel]="'Send'" (buttonClick)="onSubmit()"
+      buttonBackgroundColor="var(--background-elevated)">
+    </app-form-field>
+    <div class="top-reset-bar">
+      <!-- <app-button [icon]="'refresh'" [label]="'Réinitialiser'" (buttonClickedEvent)="resetChat()"
+      [color]="'var(--text-primary)'" [backgroundColor]="'var(--btn-color1)'" [type]="'custom-button'"
+      [size]="'small'" class="reset-chat-btn" [tabindex]="0" [focusOnTab]="true" [disabled]="isLoading"> 
+      [disabled]=isLoading
+    </app-button> -->
+    </div>
+
+  </form>
+</div>

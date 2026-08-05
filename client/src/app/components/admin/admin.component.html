@@ -1,0 +1,169 @@
+<div class="dashboard">
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="header-top">
+        <h1>Gestion des utilisateurs</h1>
+        <button class="create-user-btn" (click)="on_open_create_modal()">
+          <span class="material-icons">person_add</span>
+          <span>Créer un invité</span>
+        </button>
+      </div>
+      <p class="subtitle">
+        Gérez les invités et leurs accès aux bots
+      </p>
+    </div>
+  </div>
+
+  <div class="quick-summary">
+    <div class="summary-card">
+      <div class="card-icon">
+        <span class="material-icons">people</span>
+      </div>
+      <div class="card-content">
+        <span class="card-value">{{ guestUsers.length }}</span>
+        <span class="card-label">Total invités</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-icon">
+        <span class="material-icons">check_circle</span>
+      </div>
+      <div class="card-content">
+        <span class="card-value">{{ activeUsersCount }}</span>
+        <span class="card-label">Invités actifs</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-icon">
+        <span class="material-icons">smart_toy</span>
+      </div>
+      <div class="card-content">
+        <span class="card-value">{{ totalAssignedBots }}</span>
+        <span class="card-label">Bots assignés</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs-container">
+    <nav class="tabs-nav">
+      <button class="tab-button" [class.active]="activeTab === 'overview'" (click)="setActiveTab('overview')">
+        <span class="material-icons">dashboard</span>
+        <span>Vue d'ensemble</span>
+      </button>
+      <button class="tab-button" [class.active]="activeTab === 'users'" (click)="setActiveTab('users')">
+        <span class="material-icons">people</span>
+        <span>Utilisateurs</span>
+      </button>
+      <button class="tab-button" [class.active]="activeTab === 'settings'" (click)="setActiveTab('settings')">
+        <span class="material-icons">settings</span>
+        <span>Paramètres</span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="tab-content">
+    <!-- Overview Tab -->
+    <div class="tab-pane" [class.active]="activeTab === 'overview'">
+      <div class="overview-section users-table-section">
+        <h2>
+          <span class="material-icons">group</span>
+          Gestion des invités
+        </h2>
+        <div class="table-container">
+          <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize">
+            <tr appLine *ngFor="let user of paginatedUsers">
+              <td appColumn>
+                <app-button *ngIf="user.id !==-1" (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
+                [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="user.is_active ? 'var(--btn-color1)' : 'var(--bg-danger)'"
+                [disabled]="false" data-bs-toggle="dropdown">
+              </app-button>
+              </td>
+              <td appColumn>{{ user.email }}</td>
+              <td appColumn>
+                <div class="bots-container" *ngIf="user.id !== -1">
+                  <ng-container *ngIf="user.assigned_bots && user.assigned_bots.length > 0; else noBots">
+                    <span class="bot-badge" *ngFor="let assigned_bot of user.assigned_bots">
+                      Bot #{{ assigned_bot.bot_id }}
+                    </span>
+                  </ng-container>
+                  <ng-template #noBots>
+                    <span class="no-bots">Aucun bot assigné</span>
+                  </ng-template>
+                </div>
+              </td>
+              <td appColumn>
+                <div class="dropdown" *ngIf="user.id != -1">
+                  <app-button [icon]="'more_vert'" [label]="'more'" [color]="'var(--text-primary)'"
+                  [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color1)'"
+                  [disabled]="false" data-bs-toggle="dropdown">
+                </app-button>
+                <app-custom-dropdown-menu [params]="user" [items]="actionItemList" aria-labelledby="navbarDropdown">
+                </app-custom-dropdown-menu>
+                </div>
+              </td>
+            </tr>
+          </app-array>
+        </div>
+      </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-pane" [class.active]="activeTab === 'users'">
+      <div class="overview-section users-table-section">
+        <h2>
+          <span class="material-icons">people</span>
+          Liste complète des utilisateurs
+        </h2>
+        <div class="table-container">
+          <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize">
+            <tr appLine *ngFor="let user of paginatedUsers">
+              <td appColumn>
+                <app-button *ngIf="user.id !==-1" (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
+                [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="user.is_active ? 'var(--btn-color1)' : 'var(--bg-danger)'"
+                [disabled]="false" data-bs-toggle="dropdown">
+              </app-button>
+              </td>
+              <td appColumn>{{ user.email }}</td>
+              <td appColumn>
+                <div class="bots-container" *ngIf="user.id !== -1">
+                  <ng-container *ngIf="user.assigned_bots && user.assigned_bots.length > 0; else noBots">
+                    <span class="bot-badge" *ngFor="let assigned_bot of user.assigned_bots">
+                      Bot #{{ assigned_bot.bot_id }}
+                    </span>
+                  </ng-container>
+                  <ng-template #noBots>
+                    <span class="no-bots">Aucun bot assigné</span>
+                  </ng-template>
+                </div>
+              </td>
+              <td appColumn>
+                <div class="dropdown" *ngIf="user.id != -1">
+                  <app-button [icon]="'more_vert'" [label]="'more'" [color]="'var(--text-primary)'"
+                  [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color1)'"
+                  [disabled]="false" data-bs-toggle="dropdown">
+                </app-button>
+                <app-custom-dropdown-menu [params]="user" [items]="actionItemList" aria-labelledby="navbarDropdown">
+                </app-custom-dropdown-menu>
+                </div>
+              </td>
+            </tr>
+          </app-array>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div class="tab-pane" [class.active]="activeTab === 'settings'">
+      <div class="overview-section settings-section">
+        <h2>
+          <span class="material-icons">settings</span>
+          Paramètres d'administration
+        </h2>
+        <div class="settings-content">
+          <p>Paramètres à définir</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

@@ -1,0 +1,154 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-server"
+version = "1.0.0"
+description = "AI Bot Factory - Python Flask Backend Server"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Bot Factory Team", email = "contact@botfactory.com"}
+]
+
+dependencies = [
+    "setuptools>=77.0.3",
+    "wheel",
+
+    # Web Framework
+    "Flask==2.3.3",
+    "Flask-CORS==4.0.0",
+    "Flask-JWT-Extended==4.5.2",
+    "Werkzeug==3.0.1",
+
+    # Database
+    "Flask-SQLAlchemy==3.1.1",
+    "sqlalchemy==2.0.40",
+    "pymysql==1.1.0",
+    "alembic==1.13.1",
+
+    # Core Dependencies
+    "numpy==2.1.0",
+
+    # LangChain Stack (compatible versions)
+    "langchain>=1.0.0",
+    "langchain-core>=1.5.0",
+    "langchain-community>=0.4.0",
+    "langchain-classic>=1.0.0",
+    "langchain-chroma>=1.0.0",
+    "langchain-ollama>=0.1.0",
+    "langchain-mistralai>=0.1.0",
+    "langchain-huggingface>=0.0.25",
+
+    # Vector Store & Embeddings
+    "chromadb>=1.3.0",
+    "fastembed>=0.2.0",
+
+    # Document Processing
+    "pypdf>=3.17.0",
+    "unstructured>=0.10.0",
+
+    # Schema Validation - Use 3.x for compatibility with current code
+    "marshmallow==3.20.1",
+
+    # Authentication & Security
+    "python-jose==3.3.0",
+    "cryptography>=41.0.0",
+    "google-auth>=2.0.0",
+
+    # Utilities
+    "requests>=2.30.0",
+    "chardet>=5.0.0",
+    "pyyaml>=6.0.0",
+    "jsons>=1.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.3",
+    "pytest-cov==4.1.0",
+    "pytest-mock==3.12.0",
+    "black==23.12.1",
+    "isort==5.13.2",
+    "flake8==6.1.0",
+    "mypy==1.7.1",
+]
+
+test = [
+    "pytest==7.4.3",
+    "pytest-cov==4.1.0",
+    "pytest-mock==3.12.0",
+]
+
+[tool.setuptools]
+packages = ["ai_server"]
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | v-ai-server
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_mode = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_glob = ["*/migrations/*", "v-ai-server/*"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = false
+ignore_missing_imports = true
+exclude = ["v-ai-server/", "db/", "test/"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--strict-markers --tb=short"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+]
+
+[tool.coverage.run]
+source = ["ai_server"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

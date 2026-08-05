@@ -1,0 +1,16 @@
+v-ai-server
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.coverage
+htmlcov
+instance
+.git
+.gitignore
+*.log
+.vscode
+.idea
+.DS_Store
+Dockerfile
+.dockerignore

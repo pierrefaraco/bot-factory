@@ -1,0 +1,33 @@
+:host{
+    height: 100%;
+    width: 100%;
+}
+
+.svg-container {
+  
+    transition: all 0.3s ease;
+    overflow: hidden;
+    position: relative;
+    height: 100%;
+    width: 100%;
+    // background-color: red !important;
+
+    // border-style: solid;
+    // border-color: var(--bg-tertiary);
+    // border-width: 1px;
+    // border-radius: 10px;
+
+  }
+  
+
+  
+ 
+  // app-svg-bot{
+  //   position: absolute;
+  //   min-width:  100%;
+  //   min-height:  100%;
+
+  //   padding: 0px;
+  //   margin: 0px;
+  
+  // }

@@ -1,0 +1,150 @@
+:host {
+    height: 100%;
+    width: 100%;
+    --avatar-width: 60px;
+    --avatar-height: 72px;
+    --avatar-radius: 10px;
+        
+}
+
+// .top-button {
+//     position: sticky;
+//     top: 0;
+//     z-index: 3;
+// }
+
+.container {
+    padding: 0;
+    padding-left: 1.5rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    gap: 0;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    // Layout horizontal (par défaut)
+    &.layout-horizontal {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        align-items: left;
+        justify-content: left;
+
+        // Custom scrollbar styling pour horizontal
+        &::-webkit-scrollbar {
+            height: 8px;
+            width: 0;
+        }
+
+        &::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+            border-radius: 4px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+            background: var(--text-accent);
+            border-radius: 4px;
+
+            &:hover {
+                background: var(--text-primary);
+            }
+        }
+    }
+
+    // Layout vertical
+    &.layout-vertical {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        overflow-x: hidden;
+        overflow-y: auto;
+        align-items: center;
+        justify-content: flex-start;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        gap: 0.75rem;
+
+        // Custom scrollbar styling pour vertical
+        &::-webkit-scrollbar {
+            width: 8px;
+            height: 0;
+        }
+
+        &::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+            border-radius: 4px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+            background: var(--text-accent);
+            border-radius: 4px;
+
+            &:hover {
+                background: var(--text-primary);
+            }
+        }
+
+        //.not-selected {Ajuster les avatars pour le mode vertical
+        .not-selected,
+        .selected {
+            width: var(--avatar-width);
+            height: var(--avatar-height);
+            margin: 0px 5px 0px 0px;
+            border-radius: var(--avatar-radius);
+        }
+
+        .not-selected {
+            background-color: var(--btn-color5);
+        }
+
+        .avatar-container {
+            width: 100%;
+            height: var(--avatar-height);
+            margin: 0;
+        }
+    }
+}
+
+.avatar-container {
+
+    position: relative;
+
+    width: var(--avatar-width) !important;
+    height: var(--avatar-height) !important;
+    overflow: hidden;
+    margin: 0px 5px 0px 0px;
+
+    border-style: solid;
+    border-radius: var(--avatar-radius);
+    border-width: 1px;
+
+    &:hover {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        filter: brightness(1.50);
+    }
+
+    // Style pour le focus clavier
+    &:focus {
+        outline: 2px solid var(--text-accent);
+        outline-offset: 2px;
+        cursor: pointer;
+    }
+
+    // Améliorer la visibilité du focus sans le hover
+    &:focus-visible {
+        outline: 2px solid var(--text-accent);
+        outline-offset: 2px;
+    }
+}
+
+.selected {
+    width: var(--avatar-width);
+    height: var(--avatar-height);
+    margin: 0px 5px 0px 0px;
+    border-radius: var(--avatar-radius);
+    background-color: var(--text-warning);
+}
+
+.not-selected {
+    background-color: var(--btn-color4);
+}

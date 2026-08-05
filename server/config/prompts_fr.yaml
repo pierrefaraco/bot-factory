@@ -1,0 +1,42 @@
+generate_random_bot: |
+  Génère une description JSON d'un chatbot fictif mais réaliste et cohérent.
+  Le chatbot doit avoir une identité complète où tous les éléments sont logiquement liés entre eux :
+
+  - Le nom doit correspondre au lieu et au contexte culturel
+  - Le type de fonction doit être adapté au public cible
+  - Les traits de personnalité doivent être appropriés pour la fonction
+  - Le lieu et le public doivent former un contexte cohérent
+
+  Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte (pas de markdown, pas de blocs de code, pas de texte additionnel) :
+  {
+    "name": "prénom approprié au contexte culturel",
+    "type": "fonction principale spécifique et claire",
+    "location": "pays, région ou contexte géographique spécifique",
+    "audience": "type d'utilisateur cible spécifique",
+    "trait1": "trait de personnalité dominant adapté à la fonction",
+    "trait2": "second trait complémentaire au premier",
+    "trait3": "troisième trait cohérent avec l'ensemble"
+  }
+
+  Contraintes de génération :
+  - Name : prénom courant dans la culture du lieu (éviter les prénoms internationaux génériques)
+  - Type : 3-6 mots maximum, fonction concrète et spécialisée
+  - Location : pays réel ou grande région (ex : "France", "Québec", "Belgique francophone")
+  - Audience : segment spécifique (ex : "étudiants universitaires", "PME du textile", "retraités")
+  - Traits : adjectifs simples, professionnellement appropriés, sans redondance
+
+  IMPÉRATIF DE DIVERSITÉ MAXIMALE :
+  - Explore des secteurs variés (santé, agriculture, arts, sport, technologie, tourisme, éducation, justice, environnement, finance, médias, transport, artisanat, gastronomie, etc.)
+  - Varie les régions francophones (France métropolitaine et DOM-TOM, Belgique, Suisse, Luxembourg, Québec, Maghreb, Afrique subsaharienne, Océan Indien, Caraïbes, Pacifique)
+  - Change les types d'audience (âges, professions, statuts, contextes divers)
+  - Utilise des prénoms authentiques peu communs de chaque culture
+
+  Exemples de diversité recherchée :
+  {"name": "Loïc", "type": "médiateur pour copropriétés", "location": "Bretagne", "audience": "syndics d'immeubles résidentiels", "trait1": "diplomate", "trait2": "équitable", "trait3": "conciliant"}
+  {"name": "Fatoumata", "type": "formatrice en agriculture biologique", "location": "Burkina Faso", "audience": "coopératives de femmes rurales", "trait1": "pédagogue", "trait2": "terre-à-terre", "trait3": "respectueuse"}
+  {"name": "Dimitri", "type": "coach vocal pour comédiens", "location": "Belgique francophone", "audience": "étudiants en art dramatique", "trait1": "exigeant", "trait2": "attentif", "trait3": "stimulant"}
+  {"name": "Nathalie", "type": "analyste en cybersécurité publique", "location": "Luxembourg", "audience": "administrations communales", "trait1": "vigilante", "trait2": "claire", "trait3": "anticipatrice"}
+
+  IMPORTANT : Ne répète JAMAIS les mêmes combinaisons. À chaque génération, change AU MINIMUM 5 des 7 éléments de manière significative. Privilégie l'originalité et la créativité tout en maintenant la cohérence interne.
+
+  Génère maintenant UN chatbot cohérent totalement unique et différent de tous les exemples ci-dessus.

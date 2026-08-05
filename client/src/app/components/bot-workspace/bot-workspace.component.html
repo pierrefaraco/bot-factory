@@ -1,0 +1,229 @@
+<div class="dashboard">
+  <!-- En-tête avec informations rapides -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="header-top">
+        <h1>Mon espace de travail</h1>
+
+        <div class="button-group">
+
+
+        </div>
+
+      </div>
+      <p class="subtitle">
+        <span *ngIf="hasSelectedBot">
+          Bot actif : <strong>{{ botName }}</strong>
+          <span *ngIf="selectedBot.bot_parameters?.bot_type" class="bot-type"> - {{ selectedBot.bot_parameters.bot_type
+            }}</span>
+        </span>
+        <span *ngIf="!hasSelectedBot">
+          Aucun bot sélectionné
+        </span>
+      </p>
+    </div>
+
+  </div>
+
+
+
+
+  <!-- Layout principal avec bot-list à gauche -->
+  <div class="workspace-layout">
+    <!-- Section liste des bots - toujours visible à gauche -->
+    <div class="sidebar-bots">
+      <div class="overview-section bots-section">
+        <h2 *ngIf="hasAvatar">
+          <span class="material-icons">smart_toy</span>
+          <span> Bots</span>
+        </h2>
+        <div class="bots-list-container">
+          <app-bot-list [layout]="botListLayout"></app-bot-list>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenu principal avec onglets -->
+    <div class="main-content">
+      <!-- Navigation par onglets -->
+      <div class="tabs-container">
+        <nav class="tabs-nav">
+          <button class="tab-button" [class.active]="activeTab === 'overview'" (click)="setActiveTab('overview')">
+            <span class="material-icons">dashboard</span>
+            <span>Vue d'ensemble</span>
+          </button>
+
+          <button class="tab-button" [class.active]="activeTab === 'settings'" (click)="setActiveTab('settings')"
+            [disabled]="!hasSelectedBot">
+            <span class="material-icons">tune</span>
+            <span>Paramètres</span>
+          </button>
+
+          <button class="tab-button" [class.active]="activeTab === 'knowledge'" (click)="setActiveTab('knowledge')"
+            [disabled]="!hasSelectedBot">
+            <span class="material-icons">auto_stories</span>
+            <span>Connaissances</span>
+          </button>
+
+
+
+          <button class="tab-button" [class.active]="activeTab === 'draw'" (click)="setActiveTab('draw')"
+            [disabled]="!hasSelectedBot">
+            <span class="material-icons">brush</span>
+            <span>Avatar</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Contenu des onglets -->
+      <div class="tab-content">
+        <!-- Onglet Vue d'ensemble -->
+        <div class="tab-pane" [class.active]="activeTab === 'overview'">
+          <!-- Section état du bot actif -->
+
+          <div class="buttons-and-chat ">
+            <div class="overview-section status-section" *ngIf="hasSelectedBot">
+              <div class="up-section">
+                <span class="material-icons">info</span>
+                <h2>
+                  Bot actif
+                </h2>
+              </div>
+
+              <div class="quick-actions">
+                <button class="action-btn add-btn" (click)="onCreateBot()">
+                  <span class="material-icons">add_circle</span>
+                  Create a new bot
+                </button>
+
+
+
+                <button class="action-btn settings-btn" (click)="setActiveTab('settings')">
+                  <span class="material-icons">tune</span>
+                  Configurer
+                </button>
+
+                <button class="action-btn knowledge-btn" (click)="setActiveTab('knowledge')">
+                  <span class="material-icons">auto_stories</span>
+                  Gérer les connaissances
+                </button>
+
+                <button class="action-btn draw-btn" (click)="setActiveTab('draw')">
+                  <span class="material-icons">brush</span>
+                  Personnaliser l'avatar
+                </button>
+                <button class="action-btn init-btn" (click)="resetChat()" *ngIf="selectedBot">
+                  <span class="material-icons">refresh</span>
+                  Reset conversation
+                </button>
+                <button class="action-btn delete-btn" (click)="deleteBot(selectedBot.id)" *ngIf="selectedBot">
+                  <span class="material-icons">delete</span>
+                  Delete selected bot
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <!-- Section état vide -->
+            <div class="overview-section empty-section" *ngIf="!hasSelectedBot">
+              <div class="empty-state">
+                <span class="material-icons">smart_toy</span>
+                <h3>Aucun bot sélectionné</h3>
+                <p>Sélectionnez un bot dans la liste ou créez-en un nouveau pour commencer</p>
+                <button class="btn-create-first" (click)="onCreateBot()">
+                  <span class="material-icons">add_circle</span>
+                  Créer mon premier bot
+                </button>
+              </div>
+            </div>
+
+
+
+
+
+            <!-- Onglet Discussion -->
+            <!-- <div class="tab-pane" [class.active]="activeTab === 'chat'"> -->
+            <div class="overview-section chat-section" *ngIf="hasSelectedBot">
+              <div class="up-section">
+                <span class="material-icons">chat</span>
+                <h2>
+                  Discussion avec {{ botName }}
+                </h2>
+                <!-- <app-button [icon]="'refresh'" [label]="'Réinitialiser'" (buttonClickedEvent)="resetChat()"
+                [color]="'var(--text-warning)'" [backgroundColor]="'var(--btn-color1)'" [type]="'small-icon-button'"
+                [size]="'small'" class="reset-chat-btn" [tabindex]="0" [focusOnTab]="true" [disabled]="false">
+              </app-button> -->
+
+              </div>
+              <div class="chat-container">
+                <app-chat [bot]="selectedBot"></app-chat>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <!-- Onglet Connaissances -->
+        <div class="tab-pane" [class.active]="activeTab === 'knowledge'">
+          <div class="knowledges-panel">
+            <div class="overview-section knowledge-section" *ngIf="hasSelectedBot">
+              <div class="up-section">
+                <span class="material-icons">auto_stories</span>
+                <h2>
+                  Arbre des connaissances
+                </h2>
+              </div>
+              <div class="knowledge-container">
+                <app-knowledges [bot]="selectedBot"></app-knowledges>
+              </div>
+            </div>
+            <div class="overview-section knowledge-editor-section" *ngIf="hasSelectedBot">
+              <div class="up-section">
+                <span class="material-icons">edit</span>
+                <h2>
+                  Connaissance
+                </h2>
+              </div>
+              <div class="knowledge-editor-container">
+                
+                <app-knowledge-editor></app-knowledge-editor>
+              </div>
+            </div>
+          </div> 
+        </div>
+
+        <!-- Onglet Paramètres -->
+        <div class="tab-pane" [class.active]="activeTab === 'settings'">
+          <div class="overview-section settings-section" *ngIf="hasSelectedBot">
+            <div class="up-section">
+              <span class="material-icons">tune</span>
+              <h2>
+                Configuration de {{ botName }}
+              </h2>
+            </div>
+            <div class="settings-container">
+              <app-bot-params [bot]="selectedBot" [isEditing]="true"></app-bot-params>
+            </div>
+          </div>
+        </div>
+
+        <!-- Onglet Draw -->
+        <div class="tab-pane" [class.active]="activeTab === 'draw'">
+          <div class="overview-section draw-section" *ngIf="hasSelectedBot">
+            <div class="up-section">
+              <span class="material-icons">brush</span>
+              <h2>
+                Avatar de {{ botName }}
+              </h2>
+            </div>
+            <div class="draw-container">
+              <app-bot-draw [isEditing]="true" [bot]="selectedBot"></app-bot-draw>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

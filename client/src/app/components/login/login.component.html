@@ -1,0 +1,39 @@
+<div class="container-fluid">
+    <div class="row justify-content-center align-items-center min-vh-100">
+        <div class="col-11 col-sm-8 col-md-6 col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="text-center">Connexion</h2>
+                    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" >
+
+                        <app-form-field [control]="emailCtrl" [name]="'user_email'" [label]="'Email'"  [type]="'text'"
+                            errorMessage="'Can't be empty'"> </app-form-field>
+
+                        <app-form-field [control]="passwordCtrl" [name]="'password'" [label]="'Password'"
+                            [type]="'password'" errorMessage="'Can't be empty'"> </app-form-field>
+
+                        <app-button [icon]="'play_arrow'" [label]="'ok'" [submit]=true
+                            [color]="'var(--text-accent)'" [type]="'custom-button'"
+                            [backgroundColor]="'var(--fg-secondary)'" [disabled]="loginForm.invalid">
+
+                        </app-button>
+
+                    </form>
+
+                    <div class="divider my-3">
+                        <span>ou</span>
+                    </div>
+
+                    <app-button [icon]="'person'" [label]="'create account'" [color]="'var(--text-accent)'"
+                        [type]="'link-button'" [backgroundColor]="'transparent'"
+                        (buttonClickedEvent)="on_open_create_modal()" [disabled]="false"
+                      >
+                    </app-button>
+                    <div *ngIf="error" class="alert alert-danger mt-4">
+                        {{error}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

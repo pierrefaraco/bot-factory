@@ -1,0 +1,76 @@
+@use 'sass:map';
+@use 'sass:meta';
+@use 'sass:color';
+@use 'sass:math';
+@use '@angular/material' as mat;
+
+// Fonction pour calculer la luminance
+@function get-luminance($color) {
+  $red: math.div(color.red($color), 255);
+  $green: math.div(color.green($color), 255);
+  $blue: math.div(color.blue($color), 255);
+
+  $red: if($red <= 0.03928,
+    math.div($red, 12.92),
+    math.pow(math.div($red + 0.055, 1.055), 2.4)
+  );
+
+  $green: if($green <= 0.03928,
+    math.div($green, 12.92),
+    math.pow(math.div($green + 0.055, 1.055), 2.4)
+  );
+
+  $blue: if($blue <= 0.03928,
+    math.div($blue, 12.92),
+    math.pow(math.div($blue + 0.055, 1.055), 2.4)
+  );
+
+  $luminance: (0.2126 * $red) + (0.7152 * $green) + (0.0722 * $blue);
+  @return $luminance;
+}
+
+// Fonction pour déterminer si une couleur est claire
+@function is-light($color) {
+  $luminance: get-luminance($color);
+  @return $luminance > 0.5;
+}
+
+// Fonction pour créer une palette de couleurs personnalisée
+@function create-custom-palette($base-color, $lighter: null, $darker: null, $text: null) {
+  $lighter: if($lighter == null, lighten($base-color, 15%), $lighter);
+  $darker: if($darker == null, darken($base-color, 15%), $darker);
+  $text: if($text == null, if(is-light($base-color), rgba(0, 0, 0, 0.87), white), $text);
+
+  @return (
+    50: lighten($base-color, 30%),
+    100: lighten($base-color, 25%),
+    200: lighten($base-color, 20%),
+    300: lighten($base-color, 15%),
+    400: lighten($base-color, 5%),
+    500: $base-color,
+    600: darken($base-color, 5%),
+    700: darken($base-color, 10%),
+    800: darken($base-color, 15%),
+    900: darken($base-color, 20%),
+    A100: lighten($base-color, 25%),
+    A200: $lighter,
+    A400: $base-color,
+    A700: $darker,
+    contrast: (
+      50: if(is-light(lighten($base-color, 30%)), rgba(0, 0, 0, 0.87), white),
+      100: if(is-light(lighten($base-color, 25%)), rgba(0, 0, 0, 0.87), white),
+      200: if(is-light(lighten($base-color, 20%)), rgba(0, 0, 0, 0.87), white),
+      300: if(is-light(lighten($base-color, 15%)), rgba(0, 0, 0, 0.87), white),
+      400: if(is-light(lighten($base-color, 5%)), rgba(0, 0, 0, 0.87), white),
+      500: if(is-light($base-color), rgba(0, 0, 0, 0.87), white),
+      600: if(is-light(darken($base-color, 5%)), rgba(0, 0, 0, 0.87), white),
+      700: if(is-light(darken($base-color, 10%)), rgba(0, 0, 0, 0.87), white),
+      800: if(is-light(darken($base-color, 15%)), rgba(0, 0, 0, 0.87), white),
+      900: if(is-light(darken($base-color, 20%)), rgba(0, 0, 0, 0.87), white),
+      A100: if(is-light(lighten($base-color, 25%)), rgba(0, 0, 0, 0.87), white),
+      A200: if(is-light($lighter), rgba(0, 0, 0, 0.87), white),
+      A400: if(is-light($base-color), rgba(0, 0, 0, 0.87), white),
+      A700: if(is-light($darker), rgba(0, 0, 0, 0.87), white)
+    )
+  );
+}

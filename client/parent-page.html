@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Parent - Hébergeur d'Iframe Sécurisée</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .controls button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            margin-right: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .controls button:hover {
+            background: #1976D2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .iframe-wrapper {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            min-height: 600px;
+            position: relative;
+        }
+        
+        .iframe-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ccc;
+        }
+        
+        .status-indicator.active {
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+        
+        #secureIframe {
+            width: 100%;
+            height: 700px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            background: #f5f5f5;
+        }
+        
+        .logs {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .logs h3 {
+            margin-top: 0;
+            color: #666;
+        }
+        
+        .log-entry {
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-left: 3px solid #2196F3;
+            background: white;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        
+        .log-entry.error {
+            border-left-color: #f44336;
+            background: #ffebee;
+        }
+        
+        .log-entry.success {
+            border-left-color: #4CAF50;
+            background: #e8f5e9;
+        }
+        
+        .security-notice {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .security-notice h4 {
+            margin-top: 0;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔐 Page Parent - Hébergeur d'Iframe Sécurisée</h1>
+            <p>Cette page démontre comment héberger une iframe Angular de manière sécurisée avec authentification automatique.</p>
+        </div>
+        
+        <div class="security-notice">
+            <h4>⚠️ Mécanismes de Sécurité Actifs</h4>
+            <ul>
+                <li>✓ Vérification de l'origine (CORS)</li>
+                <li>✓ Token CSRF pour chaque session</li>
+                <li>✓ Token d'iframe unique</li>
+                <li>✓ Signature HMAC pour l'intégrité</li>
+                <li>✓ Vérification du referer</li>
+                <li>✓ Session sécurisée avec cookies HTTPOnly</li>
+                <li>✓ Renouvellement automatique des tokens</li>
+            </ul>
+        </div>
+        
+        <div class="controls">
+            <button onclick="initializeIframe()">Initialiser l'Iframe</button>
+            <button onclick="refreshIframe()">Rafraîchir</button>
+            <button onclick="testSecurityViolation()">Tester Violation de Sécurité</button>
+        </div>
+        
+        <div class="iframe-wrapper">
+            <div class="iframe-header">
+                <h2>Iframe Angular Sécurisée</h2>
+                <div class="status">
+                    <span>Statut:</span>
+                    <div id="statusIndicator" class="status-indicator"></div>
+                    <span id="statusText">Non initialisé</span>
+                </div>
+            </div>
+            
+            <iframe 
+                id="secureIframe" 
+                src="https://virtualfred.com"
+                sandbox="allow-scripts allow-same-origin allow-forms"
+                title="Iframe Sécurisée">
+            </iframe>
+        </div>
+        
+        <div class="logs">
+            <h3>📝 Logs de Communication</h3>
+            <div id="logContainer"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Configuration
+        const API_URL = 'https://virtualfred.com:444/api';
+
+        const IFRAME_URL = 'https://virtualfred.com';
+        let iframeInitData = null;
+        
+        // Gestionnaire de messages depuis l'iframe
+        window.addEventListener('message', (event) => {
+            // Vérifier l'origine
+            if (event.origin !== IFRAME_URL) {
+                addLog(`Message rejeté de l'origine non autorisée: ${event.origin}`, 'error');
+                return;
+            }
+            
+            handleIframeMessage(event.data);
+        });
+        
+        function handleIframeMessage(data) {
+            switch(data.type) {
+                case 'IFRAME_READY':
+                    addLog('Iframe prête, envoi des credentials...', 'success');
+                    sendCredentialsToIframe();
+                    break;
+                    
+                case 'IFRAME_AUTHENTICATED':
+                    if (data.success) {
+                        addLog('Iframe authentifiée avec succès', 'success');
+                        updateStatus('Connecté', true);
+                    } else {
+                        addLog(`Échec d'authentification: ${data.error}`, 'error');
+                        updateStatus('Erreur d\'authentification', false);
+                    }
+                    break;
+                    
+                case 'SECURITY_VIOLATION':
+                    addLog(`⚠️ Violation de sécurité détectée: ${data.reason}`, 'error');
+                    updateStatus('Violation de sécurité', false);
+                    break;
+                    
+                default:
+                    addLog(`Message reçu: ${data.type}`, 'info');
+            }
+        }
+        
+        async function initializeIframe() {
+            addLog('Initialisation de l\'iframe...', 'info');
+            
+            try {
+                // Simuler l'authentification du parent (remplacez par votre vraie auth)
+                const parentAuthToken = 'parent-jwt-token-example';
+                
+                // Demander une session iframe au backend
+                const response = await fetch(`${API_URL}/iframe/init`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${parentAuthToken}`
+                    },
+                    body: JSON.stringify({
+                        user_id: 'user123' // ID de l'utilisateur connecté
+                    }),
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Échec de l\'initialisation');
+                }
+                
+                iframeInitData = await response.json();
+                addLog('Session iframe créée avec succès', 'success');
+                
+                // L'iframe va envoyer un message "IFRAME_READY" quand elle sera prête
+                
+            } catch (error) {
+                addLog(`Erreur: ${error.message}`, 'error');
+                updateStatus('Erreur d\'initialisation', false);
+            }
+        }
+        
+        function sendCredentialsToIframe() {
+            if (!iframeInitData) {
+                addLog('Pas de données d\'initialisation disponibles', 'error');
+                return;
+            }
+            
+            const iframe = document.getElementById('secureIframe');
+            
+            // Envoyer les credentials à l'iframe
+            iframe.contentWindow.postMessage({
+                type: 'IFRAME_INIT',
+                payload: {
+                    iframe_token: iframeInitData.iframe_token,
+                    csrf_token: iframeInitData.csrf_token,
+                    session_id: iframeInitData.session_id
+                }
+            }, IFRAME_URL);
+            
+            addLog('Credentials envoyés à l\'iframe', 'info');
+        }
+        
+        function refreshIframe() {
+            const iframe = document.getElementById('secureIframe');
+            iframe.src = iframe.src;
+            updateStatus('Rafraîchissement...', false);
+            addLog('Iframe rafraîchie', 'info');
+        }
+        
+        function testSecurityViolation() {
+            addLog('Test de violation de sécurité...', 'info');
+            
+            // Créer une nouvelle fenêtre avec la même URL (simule une copie non autorisée)
+            const newWindow = window.open(IFRAME_URL, '_blank');
+            
+            addLog('Tentative d\'ouverture dans une nouvelle fenêtre (sera bloquée)', 'error');
+        }
+        
+        function updateStatus(text, isActive) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            
+            statusText.textContent = text;
+            
+            if (isActive) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+        
+        function addLog(message, type = 'info') {
+            console.log(message)
+            const logContainer = document.getElementById('logContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            
+            logContainer.insertBefore(logEntry, logContainer.firstChild);
+            
+            // Limiter le nombre de logs affichés
+            while (logContainer.children.length > 10) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+        
+        // Log initial
+        addLog('Page parent chargée, en attente d\'initialisation', 'info');
+    </script>
+</body>
+</html>

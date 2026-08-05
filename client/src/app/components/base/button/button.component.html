@@ -1,0 +1,62 @@
+<div class="custom-common button-common" [ngSwitch]="type">
+
+    <button *ngSwitchCase="'icon-button'" [style.background-color]="backgroundColor" mat-icon-button
+        [attr.aria-label]="label" (click)="onClick()" (mousedown)="onClickMouse()" class="custom-icon-button"
+        [disabled]="disabled" [attr.tabindex]="focusOnTab ? 0 : -1" [type]="submit?'submit':'button'">
+        <mat-icon [style.color]="color"
+            [ngClass]="{'small-icon': size =='small', 'medium-icon': size =='medium' , 'big-icon': size =='big' }">{{icon}}</mat-icon>
+    </button>
+
+    <button mat-icon-button  *ngSwitchCase="'small-icon-button'" [style.background-color]="backgroundColor" 
+        [attr.aria-label]="label" (click)="onClick()" (mousedown)="onClickMouse()" class="small-icon-button"
+        [disabled]="disabled" [attr.tabindex]="focusOnTab ? 0 : -1" [type]="submit?'submit':'button'">
+        <mat-icon [style.color]="color"
+            [ngClass]="{'small-icon': size =='small', 'medium-icon': size =='medium' , 'big-icon': size =='big' }">{{icon}}</mat-icon>
+    </button>
+
+    <button *ngSwitchCase="'custom-button'" [style.background-color]="backgroundColor" mat-button
+        [attr.aria-label]="label" (click)="onClick()" (mousedown)="onClickMouse()" class=" custom-button"
+        [disabled]="disabled" [attr.tabindex]="focusOnTab ? 0 : -1" [type]="submit?'submit':'button'">
+        <mat-icon [style.color]="color"
+        [ngClass]="{'small-icon': size =='small', 'medium-icon': size =='medium' , 'big-icon': size =='big' }">{{icon}}</mat-icon>
+        <div class="custom-label"> {{label}}</div>
+    </button>
+
+    <button *ngSwitchCase="'link-button'" [style.background-color]="backgroundColor" mat-button
+        [attr.aria-label]="label" (click)="onClick()" (mousedown)="onClickMouse()" class="link-button"
+        [disabled]="disabled" [attr.tabindex]="focusOnTab ? 0 : -1" [type]="submit?'submit':'button'">
+
+        <mat-icon [style.color]="color"
+        [ngClass]="{'small-icon': size =='small', 'medium-icon': size =='medium' , 'big-icon': size =='big' }">{{icon}}</mat-icon>
+        <div class="link-label"> {{label}}</div>
+    </button>
+
+    <div *ngSwitchCase="'big-button'" class="big-button">
+        <button [style.background-color]="backgroundColor" (click)="onClick()" class="" [disabled]="disabled"
+            [attr.tabindex]="focusOnTab ? 0 : -1" [type]="submit?'submit':'button'">
+            <mat-icon [style.color]="color"
+            [ngClass]="{'small-icon': size =='small', 'medium-icon': size =='medium' , 'big-icon': size =='big' }">{{icon}}</mat-icon>
+
+        </button>
+    </div>
+    <button *ngSwitchCase="'big-button-2'" mat-button [style.background-color]="backgroundColor" mat-button
+        [attr.aria-label]="label" (click)="onClick()" (mousedown)="onClickMouse()" [disabled]="disabled"
+        [attr.tabindex]="focusOnTab ? 0 : -1" class="big-button" [type]="submit?'submit':'button'">
+        <!-- <div class="button-content"> -->
+            <mat-icon [style.color]="color"
+            [ngClass]="{'small-icon': size =='small', 'medium-icon': size =='medium' , 'big-icon': size =='big' }">{{icon}}</mat-icon>
+        <span [style.color]="color">Texte sur deux lignes<br>avec saut de ligne</span>
+        <!-- </div> -->
+    </button>
+    <!-- {{icon}} -->
+
+
+    <button *ngSwitchCase="'field-button'" [style.background-color]="backgroundColor" mat-icon-button
+        [attr.aria-label]="label" (click)="onClick()" (mousedown)="onClickMouse()" class="field-icon-button"
+        [disabled]="disabled" [attr.tabindex]="focusOnTab ? 0 : -1" [type]="submit?'submit':'button'">
+        <mat-icon [style.color]="color"
+            [ngClass]="{'small-icon': size =='small', 'medium-icon': size =='medium' , 'big-icon': size =='big' }">{{icon}}</mat-icon>
+    </button>
+
+
+</div>

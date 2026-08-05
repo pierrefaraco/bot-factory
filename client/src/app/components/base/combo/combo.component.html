@@ -1,0 +1,35 @@
+<div class="custom_input_field custom-common ">
+    <mat-form-field appearance="outline" class="custom-background" *ngIf="!autoComplete">
+        <mat-label  class="custom-label">{{ label }}</mat-label>
+        <mat-select [formControl]="control" name="name" (selectionChange)="onMychange($event)">
+            <mat-option *ngFor="let option of options" [value]="option.label" class="option">{{ option.label
+                }}</mat-option>
+        </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="custom-background" *ngIf="autoComplete">
+        <mat-label class="custom-label">{{ label }}</mat-label>
+        <input matInput type="text" [formControl]="control" [matAutocomplete]="autoCompleteRef" required (blur)="onMychange($event)">
+
+
+
+        <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+            [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button"
+            [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'"
+            [disabled]="control.value === null">
+
+        </app-button>
+
+
+        <mat-autocomplete #autoCompleteRef="matAutocomplete">
+            <mat-option *ngFor="let option of filteredOptions | async" [value]="option.label" class="option">
+                {{ option.label }}
+            </mat-option>
+        </mat-autocomplete>
+        @if (hasError()) {
+        <mat-error>
+            Please, choose an item in the list.
+        </mat-error>
+        }
+    </mat-form-field>
+</div>

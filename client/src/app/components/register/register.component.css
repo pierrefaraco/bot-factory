@@ -1,0 +1,57 @@
+/* Register Component Styles */
+
+.container-fluid {
+  background-color: var(--bg-primary);
+}
+
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  animation: slideInUp 0.3s ease-out;
+}
+
+.card-body {
+  padding: 2rem;
+}
+
+h2 {
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+app-form-field {
+  width: 100%;
+}
+
+app-button {
+  margin-top: 0.5rem;
+}
+
+.alert {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.login-link {
+  text-align: center;
+  margin-top: 1rem;
+  color: var(--text-secondary);
+
+  a {
+    color: var(--interactive-active);
+    font-weight: 500;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

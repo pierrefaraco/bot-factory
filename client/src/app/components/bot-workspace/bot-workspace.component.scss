@@ -1,0 +1,595 @@
+// Bot Workspace Styles
+
+
+app-bot-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// Layout principal avec sidebar
+.workspace-layout {
+  display: flex;
+  min-height: 100%;
+  gap: 1rem;
+
+  @media (max-width: 1023px) {
+    flex-direction: column;
+  }
+}
+
+// Sidebar avec la liste des bots
+.sidebar-bots {
+  flex: 0 0 auto;
+  width: 160px;
+  min-width: 160px;
+  min-height: 100%;
+
+  @media (max-width: 1023px) {
+    width: 100%;
+    min-width: 100%;
+    height: 200px;
+  }
+}
+
+// Contenu principal
+.main-content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+
+  @media (max-width: 1023px) {
+    height: auto;
+    max-height: none;
+  }
+}
+
+// Navigation par onglets
+.tabs-container {
+  margin-bottom: 1rem;
+  background: var(--bg-primary);
+  border-radius: 12px;
+  padding: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+
+  .tab-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.875rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    flex: 0 0 auto;
+
+
+    .material-icons {
+      font-size: 1.25rem;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%) scaleX(0);
+      width: 80%;
+      height: 3px;
+      background: var(--text-accent);
+      border-radius: 3px 3px 0 0;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    &:hover:not(.active):not(:disabled) {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    &.active {
+      background: var(--btn-color1);
+      color: var(--text-accent);
+      font-weight: 600;
+
+      &::before {
+        transform: translateX(-50%) scaleX(1);
+      }
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &:focus {
+      outline-offset: 2px;
+    }
+  }
+}
+
+// Contenu des onglets
+.tab-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  .tab-pane {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+    flex: 1;
+    overflow: hidden;
+
+    &.active {
+      display: flex;
+      flex-direction: column;
+    }
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Section overview commune
+.overview-section {
+  background: var(--bg-primary);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-primary);
+  display: flex;
+  flex-direction: column;
+
+
+
+  // Style pour la section bots dans la sidebar
+  &.bots-section {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    h2 {
+      flex: 0 0 auto;
+      min-height: fit-content;
+    }
+
+    .bots-list-container {
+      flex: 1 1 auto;
+      overflow: hidden;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+
+      ::ng-deep app-bot-list {
+        flex: 1 1 auto;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+
+        .container {
+          flex: 1 1 auto;
+          height: 100%;
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+      }
+    }
+  }
+
+  &.status-section {
+    background-color: var(--bg-primary);
+    flex: 1;
+
+    .bot-info-details {
+      margin-bottom: 1.5rem;
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--border-primary);
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        .label {
+          font-weight: 600;
+          color: var(--text-secondary);
+        }
+
+        .value {
+          color: var(--text-primary);
+          font-weight: 500;
+        }
+      }
+    }
+
+    .quick-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      flex: 1;
+
+      .action-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        border: 1px solid var(--border-primary);
+        border-radius: 8px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 0.9375rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        width: 256px;
+
+        .material-icons {
+          font-size: 1.5rem;
+        }
+
+        &:hover {
+          transform: translateX(5px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        &.add-btn {
+          border-left: 4px solid var(--text-accent);
+
+          span {
+            color: var(--text-accent);
+            ;
+          }
+
+          &:hover {
+            background: var(--bg-accent);
+          }
+        }
+
+        &.delete-btn {
+          border-left: 4px solid var(--text-danger);
+          background-color: var(--bg-danger);
+
+          span {
+            color: var(--text-danger);
+            ;
+          }
+
+          &:hover {
+            background: var(--bg-danger);
+          }
+        }
+        &.init-btn {
+          border-left: 4px solid var(--text-warning);
+          background-color: var(--bg-warning);
+
+          span {
+            color: var(--text-warning);
+            ;
+          }
+
+          &:hover {
+            background: var(--bg-warning);
+          }
+        }
+
+        &.chat-btn {
+          border-left: 4px solid var(--text-primary);
+
+          &:hover {
+            background: var(--bg-primary);
+          }
+        }
+
+        &.knowledge-btn {
+          border-left: 4px solid var(--text-secondary);
+
+          &:hover {
+            background: var(--bg-secondary);
+          }
+        }
+
+        &.settings-btn {
+          border-left: 4px solid var(--text-tertiary);
+
+          &:hover {
+            background: var(--bg-tertiary);
+          }
+        }
+
+        &.draw-btn {
+          border-left: 4px solid var(--text-primary);
+
+          &:hover {
+            background: var(--bg-primary);
+          }
+        }
+      }
+    }
+  }
+
+  &.empty-section {
+    flex: 1;
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+      text-align: center;
+      height: 100%;
+
+      .material-icons {
+        font-size: 6rem;
+        color: var(--text-secondary);
+        opacity: 0.5;
+        margin-bottom: 1rem;
+      }
+
+      h3 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 0.5rem 0;
+      }
+
+      p {
+        color: var(--text-secondary);
+        margin: 0 0 2rem 0;
+        max-width: 400px;
+      }
+
+      .btn-create-first {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 2rem;
+        background: var(--text-accent);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        .material-icons {
+          font-size: 1.5rem;
+          color: white;
+          opacity: 1;
+          margin: 0;
+        }
+
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+      }
+    }
+  }
+}
+
+
+
+.buttons-and-chat {
+  display: flex;
+  align-items: center;
+  justify-content: left;
+  gap: 1rem;
+
+  .status-section {}
+
+  .chat-section {
+    width: 75%;
+  }
+
+}
+
+.knowledges-panel  {
+  display: flex;
+  align-items: center;
+  justify-content: left;
+  gap: 1rem;
+
+   .knowledge-section {
+     width: 60%;
+   }
+
+  .knowledge-editor-section {
+    width: 40%;
+  }
+}
+
+// Sections spécifiques pour les autres onglets
+.overview-section {
+
+  &.status-section,
+  &.chat-section,
+  &.knowledge-section,
+  &.knowledge-editor-section,
+  &.settings-section,
+  &.draw-section {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 65vh;
+
+
+    // Empêcher tout scrollbar dans les sections
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+
+    .up-section {
+      display: flex;
+      align-items: center;
+      justify-content: left;
+      transition: all 0.2s ease;
+      position: relative;
+      border-bottom: 2px solid var(--border-primary);
+      margin-top: 0px;
+      margin-bottom: 0.75rem;
+
+      // background-color: yellow;
+      span {
+        top: 0px;
+        margin: 0.25rem;
+        ;
+        padding: 0;
+      }
+
+
+      h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0.25rem;
+        ;
+        padding: 0;
+
+
+
+        .material-icons {
+          font-size: 1.5rem;
+          color: var(--text-accent);
+        }
+      }
+
+      app-button {
+        right: 0px;
+        margin: 0.25rem;
+        ;
+        padding: 0;
+      }
+
+    }
+  }
+
+  &.chat-section {
+
+    .chat-container {
+      flex: 1 1 auto;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+
+      ::ng-deep app-chat {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+    }
+  }
+
+  &.knowledge-section {
+    .knowledge-container {
+      width: 100%;
+      height: 100%;
+      margin: 0px;
+
+      ::ng-deep app-knowledges {
+        display: block;
+        height: 100%;
+      }
+    }
+  }
+  &.knowledge-editor-section{ 
+    .knowledge-editor-container {
+      width: 100%;
+      margin: 0px;
+
+
+      ::ng-deep app-knowledges {
+        display: block;
+        height: 100%;
+      }
+    }
+  }
+
+  &.settings-section {
+    .settings-container {
+      width: 100%;
+      height: 100%;
+
+      ::ng-deep app-bot-params {
+        display: block;
+      }
+    }
+  }
+
+  &.draw-section {
+    .draw-container {
+      width: 100%;
+      height: 100%;
+
+      ::ng-deep app-bot-draw {
+        display: block;
+        height: 100%;
+      }
+    }
+  }
+}
+
+// Responsive
+@media (max-width: 1023px) {
+  .sidebar-bots {
+    .overview-section.bots-section {
+      height: 200px;
+      max-height: 200px;
+
+      .bots-list-container {
+        ::ng-deep app-bot-list {
+          height: 100%;
+
+          .container {
+            height: 100%;
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: row;
+          }
+        }
+      }
+    }
+  }
+}

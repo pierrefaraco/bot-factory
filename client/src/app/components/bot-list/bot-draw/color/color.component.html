@@ -1,0 +1,34 @@
+<div class="btn-bar row ">
+  <div class='item-name  col-5'>
+    <img [src]="imgAddress" class="img">
+ 
+    <button type="button" class="nav-btn  col-2 " (click)="previous()"  [disabled]="isFirstItem()" >
+      <mat-icon class="icon" color="primary" [color]="isFirstItem() ? 'disabled' : 'primary'">keyboard_arrow_left</mat-icon>
+    </button>
+    <button type="button" class="nav-btn  col-2 " (click)="next()"  [disabled]="isLastItem()"> 
+      <mat-icon class="icon" color="primary"  [color]="isLastItem() ? 'disabled' : 'primary'">keyboard_arrow_right</mat-icon>
+    </button>
+  </div>
+
+  <div class="btns  col-7">
+
+    <button type="button" class="color-btn col-1" [style.backgroundColor]="colors[0]" (click)="setColor(0)">
+    </button>
+    <button type="button" class="color-btn col-1" [style.backgroundColor]="colors[1]" (click)="setColor(1)">
+    </button>
+    <button type="button" class="color-btn col-1" [style.backgroundColor]="colors[2]" (click)="setColor(2)">
+    </button>
+    <button type="button" class="color-btn col-1" [style.backgroundColor]="colors[3]" (click)="setColor(3)">
+    </button>
+    <button type="button" class="color-btn col-1" [style.backgroundColor]="colors[4]" (click)="setColor(4)">
+    </button>
+    <button type="button" class="color-btn col-1" [style.backgroundColor]="colors[5]" (click)="setColor(5)">
+    </button>
+
+   
+
+
+
+  </div>
+
+</div>

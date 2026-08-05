@@ -1,0 +1,286 @@
+quality:
+  # Adjectifs intellectuels
+  intellectuels:
+    - intelligent
+    - curieux
+    - créatif
+    - critique
+    - sage
+    - perspicace
+    - intuitif
+    - ouvert d'esprit
+    - adaptable
+    - méthodique
+    - rationnel
+    - clairvoyant
+    - imaginatif
+    - innovant
+    
+  # Adjectifs moraux et éthiques
+  moraux:
+    - honnête
+    - intègre
+    - loyal
+    - juste
+    - courageux
+    - responsable
+    - humble
+    - altruiste
+    - généreux
+    - respectueux
+    - tolérant
+    - clément
+    - reconnaissant
+    - compatissant
+    - bienveillant
+    - fiable
+    - équitable
+    
+  # Adjectifs émotionnels
+  emotionnels:
+    - empathique
+    - sensible
+    - joyeux
+    - enthousiaste
+    - optimiste
+    - serein
+    - résilient
+    - patient
+    - enjoué
+    - chaleureux
+    - tendre
+    - passionné
+    - espérant
+    - aimant
+    
+  # Adjectifs sociaux
+  sociaux:
+    - communicatif
+    - leader
+    - diplomatique
+    - charismatique
+    - attentif
+    - coopératif
+    - solidaire
+    - humoristique
+    - hospitalier
+    - médiateur
+    - serviable
+    - convivial
+    - inclusif
+    
+  # Adjectifs professionnels
+  professionnels:
+    - discipliné
+    - persévérant
+    - ambitieux
+    - organisé
+    - efficace
+    - déterminé
+    - minutieux
+    - ponctuel
+    - rigoureux
+    - polyvalent
+    - fiable
+    - entreprenant
+    - autonome
+    - engagé
+    
+  # Adjectifs spirituels
+  spirituels:
+    - conscient
+    - transcendant
+    - méditatif
+    - serein
+    - paisible
+    - harmonieux
+    - contemplatif
+    - recueilli
+    - éclairé
+    - inspiré
+
+defauts:
+  # Défauts d'égocentrisme
+  egocentrisme:
+    - égoïste
+    - narcissique
+    - vaniteux
+    - égocentrique
+    - prétentieux
+    - arrogant
+    - imbu de sa personne
+    - nombriliste
+    - égotiste
+    - égomaniaque
+    - suffisant
+    - hautain
+    
+  # Défauts de caractère social
+  caractere_social:
+    - manipulateur
+    - hypocrite
+    - sournois
+    - médisant
+    - perfide
+    - fourbe
+    - mesquin
+    - tyrannique
+    - dominateur
+    - envahissant
+    - intimidant
+    - moqueur
+    - sarcastique
+    - dédaigneux
+    - méprisant
+    - vantard
+    - snob
+    
+  # Défauts d'instabilité émotionnelle
+  instabilite:
+    - colérique
+    - impulsif
+    - irritable
+    - instable
+    - susceptible
+    - lunatique
+    - capricieux
+    - hystérique
+    - excessif
+    - dramatique
+    - rancunier
+    - vengeur
+    - jaloux
+    - possessif
+    - envieux
+    
+  # Défauts de paresse/manque de volonté
+  paresse:
+    - paresseux
+    - oisif
+    - apathique
+    - indolent
+    - négligent
+    - nonchalant
+    - laxiste
+    - fainéant
+    - flemmard
+    - procrastinateur
+    - dilettante
+    - désorganisé
+    - désordonné
+    - distrait
+    - irrégulier
+    
+  # Défauts d'entêtement/rigidité
+  entetement:
+    - entêté
+    - obstiné
+    - têtu
+    - borné
+    - buté
+    - rigide
+    - inflexible
+    - dogmatique
+    - intransigeant
+    - radical
+    - obtus
+    - opiniâtre
+    - intolérant
+    - étroit d'esprit
+    - sectaire
+    
+  # Défauts liés à l'avarice
+  avarice:
+    - avare
+    - cupide
+    - pingre
+    - radin
+    - grippe-sou
+    - avide
+    - rapace
+    - calculateur
+    - égoïste
+    - intéressé
+    - matérialiste
+    - vénal
+    
+  # Défauts de malhonnêteté
+  malhonnete:
+    - malhonnête
+    - menteur
+    - fourbe
+    - tricheur
+    - faux
+    - déloyal
+    - traître
+    - sournois
+    - hypocrite
+    - dissimulateur
+    - frauduleux
+    - corrompu
+    - opportuniste
+    
+  # Défauts de peur/lâcheté
+  lachete:
+    - lâche
+    - peureux
+    - craintif
+    - timoré
+    - couard
+    - pusillanime
+    - froussard
+    - pleutre
+    - fuyard
+    - indécis
+    - hésitant
+    - versatile
+    
+  # Défauts d'excès/manque de contrôle
+  exces:
+    - excessif
+    - immodéré
+    - intempérant
+    - compulsif
+    - obsessionnel
+    - dépendant
+    - addictif
+    - déréglé
+    - impulsif
+    - incontrôlable
+    - irrationnel
+    - imprudent
+    - insatiable
+    
+  # Défauts liés à l'orgueil
+  orgueil:
+    - orgueilleux
+    - fier
+    - présomptueux
+    - vaniteux
+    - imbu
+    - condescendant
+    - dédaigneux
+    - arrogant
+    - suffisant
+    - pédant
+    - supérieur
+    - méprisant 
+    
+  # Défauts de cruauté
+  cruaute:
+    - cruel
+    - sadique
+    - brutal
+    - impitoyable
+    - inhumain
+    - barbare
+    - féroce
+    - tyrannique
+    - violent
+    - agressif
+    - malveillant
+    - méchant
+    - acerbe
+    - mordant
+    - virulent
+    - vindicatif

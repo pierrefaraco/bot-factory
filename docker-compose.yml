@@ -1,0 +1,107 @@
+version: '3.9'
+
+services:
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: botfactory-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-botcraft}
+      MYSQL_USER: ${MYSQL_USER:-botcraft_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - botfactory-network
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:0.5.20
+    container_name: botfactory-chromadb
+    environment:
+      IS_PERSISTENT: TRUE
+      PERSIST_DIRECTORY: /chroma/chroma
+      ANONYMIZED_TELEMETRY: FALSE
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - botfactory-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v2/heartbeat || exit 1"]
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  # Python Flask Backend
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: botfactory-api
+    depends_on:
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    environment:
+      FLASK_APP: ai_server.main
+      FLASK_ENV: ${FLASK_ENV:-development}
+      FLASK_DEBUG: ${FLASK_DEBUG:-True}
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@db:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      CHROMA_CONTAINER: ${CHROMA_CONTAINER:-true}
+      CHROMA_HOST: ${CHROMA_HOST:-chromadb}
+      CHROMA_PORT: ${CHROMA_PORT:-8000}
+      PERSIST: ${PERSIST:-true}
+      PERSIST_DIRECTORY: ${PERSIST_DIRECTORY:-chroma_db_2}
+      LOGGER_LVL: ${LOGGER_LVL:-INFO}
+      OPERATIONAL_LOG_FILE: ${OPERATIONAL_LOG_FILE:-ai-server.log}
+      SUPER_ADMIN_LOGIN: ${SUPER_ADMIN_LOGIN:-pierre.faraco@gmail.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-123}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-a}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
+    ports:
+      - "444:444"
+    volumes:
+      - ./server/ai_server:/app/ai_server
+    networks:
+      - botfactory-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:444/api/health"]
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Angular Frontend
+  web:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: botfactory-web
+    depends_on:
+      - api
+    ports:
+      - "4200:80"
+    networks:
+      - botfactory-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      timeout: 10s
+      retries: 5
+
+volumes:
+  mysql_data:
+  chroma_data:
+
+networks:
+  botfactory-network:
+    driver: bridge
