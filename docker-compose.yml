@@ -26,9 +26,9 @@ services:
     image: chromadb/chroma:0.5.20
     container_name: botfactory-chromadb
     environment:
-      IS_PERSISTENT: TRUE
+      IS_PERSISTENT: "TRUE"
       PERSIST_DIRECTORY: /chroma/chroma
-      ANONYMIZED_TELEMETRY: FALSE
+      ANONYMIZED_TELEMETRY: "FALSE"
     ports:
       - "8000:8000"
     volumes:
@@ -56,7 +56,7 @@ services:
       FLASK_APP: ai_server.main
       FLASK_ENV: ${FLASK_ENV:-development}
       FLASK_DEBUG: ${FLASK_DEBUG:-True}
-      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@db:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@${MYSQL_HOST:-db}:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
       CHROMA_CONTAINER: ${CHROMA_CONTAINER:-true}
       CHROMA_HOST: ${CHROMA_HOST:-chromadb}

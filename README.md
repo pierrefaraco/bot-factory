@@ -229,9 +229,41 @@ cd server && uv run --extra test pytest test/ --cov=ai_server
 
 ## 🗄️ Database
 
+### Configure the MySQL Container
+
+MySQL runs as its own service (`db`) in `docker-compose.yml`, using `mysql:8.0` with a healthcheck (`mysqladmin ping`) that the `api` service waits on before starting.
+
+Credentials come from `.env` at the repo root (defaults shown, override as needed):
+```bash
+MYSQL_ROOT_PASSWORD=root
+MYSQL_DATABASE=botcraft
+MYSQL_USER=botcraft_user
+MYSQL_PASSWORD=123456789
+```
+
+Start just the database container:
+```bash
+make db-only        # docker-compose up -d db
+# ✓ MySQL running on localhost:3306, data persisted in the `mysql_data` volume
+```
+
+Point the backend at it via `server/.env`:
+```bash
+# Running the api inside docker-compose (same network, resolves the service by name):
+DATABASE_URL=mysql+pymysql://botcraft_user:123456789@db:3306/botcraft?charset=utf8mb4
+
+# Running the api locally with `./z-run.sh` / `uv run`, from the host or a container
+# that shares the host's Docker networking (port 3306 is published to the host):
+DATABASE_URL=mysql+pymysql://botcraft_user:123456789@127.0.0.1:3306/botcraft?charset=utf8mb4
+```
+> If you're working from a separate dev/devcontainer (not the host, not part of
+> `docker-compose`), see [Database Connection Error](#database-connection-error) below —
+> `127.0.0.1` won't resolve to `botfactory-db` in that case.
+
 ### Initialize Database
 ```bash
-make migrate       # Run all pending migrations
+make migrate       # Run all pending migrations (inside the `api` Docker container)
+make db-upgrade     # Run all pending migrations locally via uv (uses DATABASE_URL from server/.env)
 ```
 
 ### Database Operations
@@ -387,7 +419,24 @@ make logs-db
 
 # Verify DATABASE_URL in .env
 # For Docker: mysql+pymysql://user:pass@db:3306/botcraft
+# For local (host or a container sharing the host's Docker networking):
+#   mysql+pymysql://user:pass@127.0.0.1:3306/botcraft
 ```
+
+**Working from a separate dev container** (e.g. a devcontainer/SSH box that is not
+the Docker host and not part of `docker-compose`)? `127.0.0.1` and `db` won't
+resolve to `botfactory-db` by default — it lives on the `bot-factory_botfactory-network`
+Docker network, which your dev container isn't attached to.
+
+```bash
+# 1. Attach your dev container to the project's Docker network
+docker network connect bot-factory_botfactory-network <your-dev-container-name>
+
+# 2. Point DATABASE_URL at the service name (now resolvable) instead of 127.0.0.1
+#    server/.env:
+#    DATABASE_URL=mysql+pymysql://botcraft_user:123456789@db:3306/botcraft?charset=utf8mb4
+```
+This has to be redone if the dev container is recreated (it's not persisted in `docker-compose.yml`).
 
 ### ChromaDB Connection Error
 ```bash
