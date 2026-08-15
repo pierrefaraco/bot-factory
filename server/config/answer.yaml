@@ -1,44 +1,40 @@
 used_sources:
   - label: "only context"
-    description: "You should only use the context to answer the question. You 're not allowed to search on internet, or something else."
+    description: "Answer only from the retrieved context. If the context does not contain the answer, say so clearly instead of using outside knowledge."
   - label: "only outside context"
-    description: "You're not allowed to use context, you have to search answers on internet."
+    description: "Do not use the retrieved context: answer only from your own general knowledge."
   - label: "inside and outside context"
-    description: "You can search informations inside and outside context. If you don't find the answer in context, you have to search on internet."
+    description: "Answer primarily from the retrieved context. When the context is not enough, you may complete it with your own general knowledge, making clear what comes from the documents and what does not."
 
 context_type:
   - label: "your memories"
-    description: "The context elements retrieved contain a part of your memories."
+    description: "The retrieved context elements contain a part of your memories."
   - label: "Your fiction book"
-    description: "The context elements retrieved  contain a part of a book." 
-  - label: "An story"
-    description: "The context elements retrieved  contain a part of a story" 
-  - label: "Technichal documentation"
-    description: "The context elements retrieved  contain a part of technial documentation." 
+    description: "The retrieved context elements contain a part of a fiction book."
+  - label: "A story"
+    description: "The retrieved context elements contain a part of a story."
+  - label: "Technical documentation"
+    description: "The retrieved context elements contain a part of technical documentation."
   - label: journal
-    description: "The context elements retrieved  contain a part of your diary." 
+    description: "The retrieved context elements contain a part of your diary."
   - label: "manual"
-    description: "The context elements retrieved  contain a part of a manual with useful informations." 
+    description: "The retrieved context elements contain a part of a manual with useful information."
   - label: "role-play guide"
-    description: "The context elements are retrieved contain a part of a role-play guide." 
+    description: "The retrieved context elements contain a part of a role-play guide."
 
 answer_style:
   - label: informative
-    description: "Factual and objective, presenting information clearly."
+    description: "factual and objective, presenting information clearly."
   - label: conversational
-    description: "Natural and engaging, like in a conversation."
+    description: "natural and engaging, like in a conversation."
   - label: technical
-    description: "Precise and detailed, using appropriate technical terminology."
+    description: "precise and detailed, using appropriate technical terminology."
   - label: simplified
-    description: "Simplified and accessible, explaining technical concepts in simple terms."
+    description: "simplified and accessible, explaining technical concepts in simple terms."
   - label: mytho
-    description: "Arranged to one's advantage, with the aim of impressing the interlocutor."
+    description: "embellished and boastful, arranged to your advantage with the aim of impressing the interlocutor."
   - label: comical
-    description: "Far-fetched, with the aim of making the interlocutor laugh."
-  - label: propagandistic
-    description: "With the aim of supporting a political idea and convincing the interlocutor."
-  - label: harmful
-    description: "With the aim of causing harm."
+    description: "far-fetched and humorous, with the aim of making the interlocutor laugh."
 
 answer_format:
   - label: paragraphs
@@ -52,14 +48,14 @@ answer_format:
 
 answer_length:
   - label: very-short
-    description: "It's very important that you give a very short answer. (about 1-20 words)."
+    description: "It's very important that you give a very short answer (about 1-20 words)."
   - label: short
-    description: "It's very important that you give a short answer. (about 100-150 words)."
+    description: "It's very important that you give a short answer (about 100-150 words)."
   - label: medium
-    description: "It's very important that you give a short answer but you have to be exaustif (about 200-300 words)."
+    description: "It's very important that you give a concise but complete answer (about 200-300 words)."
   - label: long
     description: "It's very important that you give a detailed and in-depth answer (about 400-600 words)."
   - label: exhaustive
-    description: "It's very important that you give a  complete and covering all important aspects  of the answer (600+ words)."
-  - label: adaptée
-    description: "It's very important that you give productive and complete answers but try to optimise the length of your answers according to the context size and the complexity of the question."
+    description: "It's very important that you give a complete answer covering all important aspects (600+ words)."
+  - label: adaptive
+    description: "Give productive and complete answers, but adapt their length to the complexity of the question and the amount of relevant context."

@@ -1,9 +1,9 @@
 generate_random_bot: |
   Generate a JSON description of a fictional but realistic and coherent chatbot.
-  The chatbot must have a complete identity where all elements are logically connected to each other:
+  The chatbot must have a complete identity where all elements are logically connected:
 
   - The name must match the location and cultural context
-  - The type of function must be adapted to the target audience
+  - The function type must fit the target audience
   - The personality traits must be appropriate for the function
   - The location and audience must form a coherent context
 
@@ -11,27 +11,32 @@ generate_random_bot: |
   {
     "name": "first name appropriate to the cultural context",
     "type": "specific and clear main function",
-    "location": "country, region or specific geographical context",
+    "location": "specific country, region or geographic context",
     "audience": "specific target user type",
-    "trait1": "dominant personality trait adapted to the function",
+    "trait1": "dominant personality trait suited to the function",
     "trait2": "second trait complementary to the first",
-    "trait3": "third trait coherent with the whole"
+    "trait3": "third trait consistent with the whole"
   }
 
   Generation constraints:
-  - Name: common first name in the location's culture (avoid generic international names)
+  - Name: a common first name in the culture of the location (avoid generic international names)
   - Type: 3-6 words maximum, concrete and specialized function
-  - Location: real country or large region (e.g., "France", "Quebec", "French-speaking Belgium")
-  - Audience: specific segment (e.g., "university students", "textile industry SMEs", "retirees")
+  - Location: a real country or large region (e.g. "France", "Quebec", "Scotland")
+  - Audience: a specific segment (e.g. "university students", "textile SMEs", "retirees")
   - Traits: simple adjectives, professionally appropriate, without redundancy
 
-  Coherence examples:
-  ✅ GOOD: HR Assistant in Belgium, traits "structured, caring, procedural" for audience "newly arrived employees"
-  ❌ BAD: HR Assistant named "Sakura" in Belgium, traits "casual, spontaneous" for administrative function
+  MAXIMUM DIVERSITY REQUIRED:
+  - Explore varied sectors (health, agriculture, arts, sports, technology, tourism, education, justice, environment, finance, media, transport, crafts, gastronomy, etc.)
+  - Vary the regions across the whole world (Europe, North and South America, Africa, Asia, Oceania, islands and overseas territories)
+  - Change the audience types (ages, professions, statuses, various contexts)
+  - Use authentic, less common first names from each culture
 
-  Examples of valid outputs:
-  {"name": "Thomas", "type": "school guidance counselor", "location": "French-speaking Switzerland", "audience": "high school seniors", "trait1": "encouraging", "trait2": "methodical", "trait3": "inspiring"}
-  {"name": "Aminata", "type": "e-commerce technical support", "location": "Senegal", "audience": "small online merchants", "trait1": "educational", "trait2": "pragmatic", "trait3": "accessible"}
-  {"name": "Jean-Marc", "type": "SME accounting assistant", "location": "France (regions)", "audience": "small business owners", "trait1": "rigorous", "trait2": "reassuring", "trait3": "simplifying"}
+  Examples of the diversity expected:
+  {"name": "Loic", "type": "mediator for co-owned buildings", "location": "Brittany", "audience": "residential building managers", "trait1": "diplomatic", "trait2": "fair", "trait3": "conciliatory"}
+  {"name": "Fatoumata", "type": "organic farming trainer", "location": "Burkina Faso", "audience": "rural women's cooperatives", "trait1": "pedagogical", "trait2": "down-to-earth", "trait3": "respectful"}
+  {"name": "Dimitri", "type": "vocal coach for actors", "location": "Belgium", "audience": "drama students", "trait1": "demanding", "trait2": "attentive", "trait3": "stimulating"}
+  {"name": "Nathalie", "type": "public cybersecurity analyst", "location": "Luxembourg", "audience": "municipal administrations", "trait1": "vigilant", "trait2": "clear", "trait3": "forward-thinking"}
 
-  Now generate ONE random coherent chatbot.
+  IMPORTANT: NEVER repeat the same combinations. On each generation, significantly change AT LEAST 5 of the 7 elements. Favor originality and creativity while maintaining internal coherence.
+
+  Now generate ONE coherent chatbot that is totally unique and different from all the examples above.

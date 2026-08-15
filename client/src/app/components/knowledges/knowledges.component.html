@@ -74,7 +74,7 @@
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="moveChapter(node.id, 'up')"
-                            title="Déplacer vers le haut">
+                            title="Move up">
                         </app-button>
 
                         <app-button
@@ -86,33 +86,33 @@
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="moveChapter(node.id, 'down')"
-                            title="Déplacer vers le bas">
+                            title="Move down">
                         </app-button>
 
                         <div class="action-divider"></div>
 
                         <app-button
                             [icon]="'add'"
-                            [label]="'Ajouter'"
+                            [label]="'Add'"
                             [color]="'var(--text-primary)'"
                             class="action-btn"
                             [type]="'icon-button'"
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="createSubChapter(node)"
-                            title="Ajouter un sous-élément">
+                            title="Add a sub-item">
                         </app-button>
 
                         <app-button
                             [icon]="'delete'"
-                            [label]="'Supprimer'"
+                            [label]="'Delete'"
                             [color]="'var(--text-warning)'"
                             class="action-btn action-btn-danger"
                             [type]="'icon-button'"
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="deleteChapter(node.id)"
-                            title="Supprimer">
+                            title="Delete">
                         </app-button>
                     </div>
                 </div>
@@ -144,7 +144,7 @@
                         [disabled]="false"
                         matTreeNodeToggle
                         class="expand-button"
-                        [title]="treeControl.isExpanded(node) ? 'Réduire' : 'Développer'">
+                        [title]="treeControl.isExpanded(node) ? 'Collapse' : 'Expand'">
                     </app-button>
 
                     <!-- Icône du type de nœud -->
@@ -174,7 +174,7 @@
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="moveChapter(node.id, 'up')"
-                            title="Déplacer vers le haut">
+                            title="Move up">
                         </app-button>
 
                         <app-button
@@ -186,33 +186,33 @@
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="moveChapter(node.id, 'down')"
-                            title="Déplacer vers le bas">
+                            title="Move down">
                         </app-button>
 
                         <div class="action-divider"></div>
 
                         <app-button
                             [icon]="'add'"
-                            [label]="'Ajouter'"
+                            [label]="'Add'"
                             [color]="'var(--text-primary)'"
                             class="action-btn"
                             [type]="'icon-button'"
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="createSubChapter(node)"
-                            title="Ajouter un sous-élément">
+                            title="Add a sub-item">
                         </app-button>
 
                         <app-button
                             [icon]="'delete'"
-                            [label]="'Supprimer'"
+                            [label]="'Delete'"
                             [color]="'var(--text-warning)'"
                             class="action-btn action-btn-danger"
                             [type]="'icon-button'"
                             [backgroundColor]="'transparent'"
                             [disabled]="false"
                             (buttonClickedEvent)="deleteChapter(node.id)"
-                            title="Supprimer">
+                            title="Delete">
                         </app-button>
                     </div>
                  </div>

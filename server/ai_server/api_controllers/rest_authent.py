@@ -3,8 +3,9 @@
 from flask import Blueprint, jsonify, make_response, request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from http import HTTPStatus
-from marshmallow import Schema, fields, ValidationError
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 
+from ai_server.config.openapi import api, pydantic_error_messages
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.authent_svc import AuthenticationService
@@ -17,31 +18,29 @@ CONTROLLER_PATH = "/auth"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 
-class GoogleOAuthSchema(Schema):
+class GoogleOAuthRequest(BaseModel):
+    """Schema for Google OAuth login validation"""
+
+    credential: str = Field(min_length=1)
+
+
+class LoginRequest(BaseModel):
     """Schema for login validation"""
 
-    credential = fields.String(required=True, validate=lambda x: len(x) >= 1)
-
-
-class LoginSchema(Schema):
-    """Schema for login validation"""
-
-    email = fields.Email(required=True)
-    password = fields.String(required=True, validate=lambda x: len(x) >= 1)
+    email: EmailStr
+    password: str = Field(min_length=1)
 
 
 # Services initialization
 app_logger = BotFactoryLogger()
 auth_svc = AuthenticationService()
 google_auth_svc = GoogleAuthentSvc()
-google_auth_schema = GoogleOAuthSchema()
-
-login_schema = LoginSchema()
 
 
 @bp.route(f"{CONTROLLER_PATH}/login", methods=["POST"])
+@api.validate(json=LoginRequest, tags=["auth"])
 def login():
-    """User login with email and password"""
+    """User login with email and password. Returns a JWT access token."""
     try:
         if not request.is_json:
             return jsonify(
@@ -49,7 +48,7 @@ def login():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = login_schema.load(data)
+        validated_data = LoginRequest.model_validate(data).model_dump()
 
         app_logger.info(f"User attempting login with email: {validated_data['email']}")
 
@@ -68,7 +67,7 @@ def login():
         return jsonify({"token": access_token}), HTTPStatus.OK
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         app_logger.error(f"Login error: {exc}")
         return jsonify(
@@ -77,7 +76,9 @@ def login():
 
 
 @bp.route(f"{CONTROLLER_PATH}/google", methods=["POST"])
+@api.validate(json=GoogleOAuthRequest, tags=["auth"])
 def login_with_google():
+    """User login with a Google OAuth credential. Returns a JWT access token."""
     try:
         if not request.is_json:
             return jsonify(
@@ -85,7 +86,7 @@ def login_with_google():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = google_auth_schema.load(data)
+        validated_data = GoogleOAuthRequest.model_validate(data).model_dump()
 
         app_logger.info(
             f"User attempting login with credential: {validated_data['credential']}"
@@ -104,7 +105,7 @@ def login_with_google():
         )
         return jsonify({"token": access_token}), HTTPStatus.OK
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         app_logger.error(f"Login error: {exc}")
         return jsonify(
@@ -114,6 +115,7 @@ def login_with_google():
 
 @bp.route(f"{CONTROLLER_PATH}/refresh", methods=["POST"])
 @jwt_required()
+@api.validate(tags=["auth"], security={"BearerAuth": []})
 def refresh():
     """Refresh JWT access token"""
     try:
@@ -128,6 +130,7 @@ def refresh():
 
 @bp.route(f"{CONTROLLER_PATH}/logout", methods=["POST"])
 @jwt_required()
+@api.validate(tags=["auth"], security={"BearerAuth": []})
 def logout():
     """User logout"""
     try:

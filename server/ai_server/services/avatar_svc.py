@@ -72,7 +72,7 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar creation fails
         """
-        result = self._safe_execute("_perform_create", self._perform_create, data)
+        result = self._perform_create(data)
         if result is None:
             raise ServiceError("Avatar creation failed, no AvatarDto returned.")
         return result
@@ -106,9 +106,7 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_id", self._perform_get_by_id, entity_id
-        )
+        result = self._perform_get_by_id(entity_id)
         if result is None:
             raise ServiceError("Get avatar by id failed, no AvatarDto returned.")
         return result
@@ -129,7 +127,7 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar retrieval fails
         """
-        result = self._safe_execute("_perform_get_all", self._perform_get_all)
+        result = self._perform_get_all()
         if result is None:
             raise ServiceError("Avatar get_all failed, no list returned.")
         return result
@@ -193,8 +191,9 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar update fails
         """
-        result = self._safe_execute(
-            "_perform_update", self._perform_update, data.get("id"), data
+        result = self._perform_update(
+            data.get("id"),
+            data,
         )
         if result is None:
             raise ServiceError("Avatar update failed, no AvatarDto returned.")
@@ -225,7 +224,7 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar deletion fails
         """
-        result = self._safe_execute("_perform_delete", self._perform_delete, entity_id)
+        result = self._perform_delete(entity_id)
         if result is None:
             raise ServiceError("Avatar delete failed, no avatar deleted.")
         return result
@@ -252,10 +251,7 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_bot_id", self._perform_get_by_bot_id, bot_id
-        )
-        return result
+        return self._perform_get_by_bot_id(bot_id)
 
     def _perform_get_by_bot_id(self, bot_id: int) -> Optional[AvatarDto]:
         avatar = BotAvatar.query.filter_by(bot_id=bot_id).first()
@@ -276,9 +272,7 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar deletion fails
         """
-        result = self._safe_execute(
-            "_perform_delete_by_bot_id", self._perform_delete_by_bot_id, bot_id
-        )
+        result = self._perform_delete_by_bot_id(bot_id)
         if result is None:
             return False
         return result

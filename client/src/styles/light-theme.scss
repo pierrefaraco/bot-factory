@@ -17,7 +17,7 @@ $background-elevated: #ffffff;
 // Couleurs de texte
 $text-primary: #0f172a;      // Slate 900
 $text-secondary: #475569;    // Slate 600
-$text-tertiary: #b82486;
+$text-tertiary: #64748b;   // Slate 500
 $text-muted: #94a3b8;        // Slate 400
 
 // Classe du thème clair
@@ -35,7 +35,9 @@ $text-muted: #94a3b8;        // Slate 400
   --text-secondary: #{$text-secondary};
   --text-tertiary: #{$text-tertiary};
   --text-muted: #{$text-muted};
-  --text-accent: #{$color-accent};
+  // Accent = action color (indigo). Green is reserved for --success-color.
+  --text-accent: #{$color-primary};
+  --text-on-accent: #ffffff;
   --text-warning: #{$color-warning};
   --text-danger: #{$color-danger};
 
@@ -54,7 +56,7 @@ $text-muted: #94a3b8;        // Slate 400
 
   // Couleurs de bordure
   --border-primary: #e2e8f0;
-  --border-secondary: rgba(15, 23,, 0.1);
+  --border-secondary: rgba(15, 23, 42, 0.1);
   --border-accent: #{$color-primary};
 
   // Ombres
@@ -68,6 +70,9 @@ $text-muted: #94a3b8;        // Slate 400
   --warning-color: #{$color-warning};
   --error-color: #{$color-danger};
   --info-color: #{$color-primary};
+  --bg-success: rgba(16, 185, 129, 0.12);
+  --bg-warning: rgba(245, 158, 11, 0.12);
+  --bg-danger: rgba(239, 68, 68, 0.12);
 
   // Inputs
   --input-bg: #{$background-primary};

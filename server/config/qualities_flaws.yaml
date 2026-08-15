@@ -1,0 +1,286 @@
+quality:
+  # Intellectual adjectives
+  intellectual:
+    - intelligent
+    - curious
+    - creative
+    - critical
+    - wise
+    - insightful
+    - intuitive
+    - open-minded
+    - adaptable
+    - methodical
+    - rational
+    - clear-sighted
+    - imaginative
+    - innovative
+
+  # Moral and ethical adjectives
+  moral:
+    - honest
+    - upright
+    - loyal
+    - fair
+    - courageous
+    - responsible
+    - humble
+    - altruistic
+    - generous
+    - respectful
+    - tolerant
+    - merciful
+    - grateful
+    - compassionate
+    - kind
+    - dependable
+    - equitable
+
+  # Emotional adjectives
+  emotional:
+    - empathetic
+    - sensitive
+    - joyful
+    - enthusiastic
+    - optimistic
+    - serene
+    - resilient
+    - patient
+    - cheerful
+    - warm
+    - tender
+    - passionate
+    - hopeful
+    - loving
+
+  # Social adjectives
+  social:
+    - communicative
+    - leading
+    - diplomatic
+    - charismatic
+    - attentive
+    - cooperative
+    - supportive
+    - humorous
+    - hospitable
+    - mediating
+    - helpful
+    - friendly
+    - inclusive
+
+  # Professional adjectives
+  professional:
+    - disciplined
+    - persevering
+    - ambitious
+    - organized
+    - efficient
+    - determined
+    - meticulous
+    - punctual
+    - rigorous
+    - versatile
+    - reliable
+    - enterprising
+    - autonomous
+    - committed
+
+  # Spiritual adjectives
+  spiritual:
+    - mindful
+    - transcendent
+    - meditative
+    - serene
+    - peaceful
+    - harmonious
+    - contemplative
+    - reflective
+    - enlightened
+    - inspired
+
+flaws:
+  # Egocentrism flaws
+  egocentrism:
+    - selfish
+    - narcissistic
+    - vain
+    - egocentric
+    - pretentious
+    - arrogant
+    - self-important
+    - self-absorbed
+    - egotistic
+    - egomaniacal
+    - smug
+    - haughty
+
+  # Social character flaws
+  social_character:
+    - manipulative
+    - hypocritical
+    - sly
+    - slanderous
+    - perfidious
+    - deceitful
+    - petty
+    - tyrannical
+    - domineering
+    - intrusive
+    - intimidating
+    - mocking
+    - sarcastic
+    - disdainful
+    - contemptuous
+    - boastful
+    - snobbish
+
+  # Emotional instability flaws
+  instability:
+    - short-tempered
+    - impulsive
+    - irritable
+    - unstable
+    - touchy
+    - moody
+    - capricious
+    - hysterical
+    - excessive
+    - dramatic
+    - resentful
+    - vengeful
+    - jealous
+    - possessive
+    - envious
+
+  # Laziness / lack of willpower flaws
+  laziness:
+    - lazy
+    - idle
+    - apathetic
+    - indolent
+    - negligent
+    - nonchalant
+    - lax
+    - slothful
+    - work-shy
+    - procrastinating
+    - dilettante
+    - disorganized
+    - untidy
+    - distracted
+    - inconsistent
+
+  # Stubbornness / rigidity flaws
+  stubbornness:
+    - stubborn
+    - obstinate
+    - headstrong
+    - narrow-minded
+    - mulish
+    - rigid
+    - inflexible
+    - dogmatic
+    - uncompromising
+    - radical
+    - obtuse
+    - opinionated
+    - intolerant
+    - close-minded
+    - sectarian
+
+  # Greed flaws
+  greed:
+    - miserly
+    - greedy
+    - stingy
+    - tight-fisted
+    - penny-pinching
+    - avid
+    - rapacious
+    - calculating
+    - selfish
+    - self-interested
+    - materialistic
+    - venal
+
+  # Dishonesty flaws
+  dishonesty:
+    - dishonest
+    - lying
+    - deceitful
+    - cheating
+    - fake
+    - disloyal
+    - treacherous
+    - sly
+    - hypocritical
+    - secretive
+    - fraudulent
+    - corrupt
+    - opportunistic
+
+  # Fear / cowardice flaws
+  cowardice:
+    - cowardly
+    - fearful
+    - timid
+    - faint-hearted
+    - craven
+    - pusillanimous
+    - chicken-hearted
+    - spineless
+    - fleeing
+    - indecisive
+    - hesitant
+    - fickle
+
+  # Excess / lack of control flaws
+  excess:
+    - excessive
+    - immoderate
+    - intemperate
+    - compulsive
+    - obsessive
+    - dependent
+    - addictive
+    - unregulated
+    - impulsive
+    - uncontrollable
+    - irrational
+    - reckless
+    - insatiable
+
+  # Pride flaws
+  pride:
+    - proud
+    - haughty
+    - presumptuous
+    - vain
+    - conceited
+    - condescending
+    - disdainful
+    - arrogant
+    - smug
+    - pedantic
+    - superior
+    - contemptuous
+
+  # Cruelty flaws
+  cruelty:
+    - cruel
+    - sadistic
+    - brutal
+    - ruthless
+    - inhuman
+    - barbaric
+    - ferocious
+    - tyrannical
+    - violent
+    - aggressive
+    - malevolent
+    - mean
+    - acerbic
+    - biting
+    - virulent
+    - vindictive

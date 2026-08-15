@@ -7,7 +7,8 @@ export const alfred_routes: Routes = [
     },
     {
         path: 'login',
-        loadComponent: () => import('./components/login/login.component').then(m => m.LoginComponent)
+        redirectTo: 'auth',
+        pathMatch: 'full'
     },
      {
         path: 'auth',
@@ -41,17 +42,14 @@ export const alfred_routes: Routes = [
         path: 'admin', 
         loadComponent: () => import('./components/admin/admin.component').then(m => m.AdminComponent)
     },
-    { 
-        path: 'home', 
-        loadComponent: () => import('./components/home/home.component').then(m => m.HomeComponent)
+    {
+        path: 'home',
+        redirectTo: 'landing',
+        pathMatch: 'full'
     },
     { 
         path: 'help', 
         loadComponent: () => import('./components/help/help.component').then(m => m.HelpComponent)
-    },
-    {
-        path: 'iframe-generator',
-        loadComponent: () => import('./components/iframe-generator/iframe-generator.component').then(m => m.IframeGeneratorComponent)
     },
     {
         path: 'policies',

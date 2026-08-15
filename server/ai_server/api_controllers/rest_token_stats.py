@@ -3,6 +3,9 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
+from pydantic import BaseModel, Field
+
+from ai_server.config.openapi import api
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.token_tracking_svc import TokenTrackingService
 from ai_server.decorators.role_required import role_required
@@ -14,6 +17,14 @@ CONTROLLER_PATH = "/token-stats"
 
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
+
+class TokenHistoryQuery(BaseModel):
+    """Query parameters for token usage history"""
+
+    limit: int = Field(default=100, ge=1, le=1000)
+    last24h: bool = False
+
+
 # Services initialization
 logger = BotFactoryLogger()
 token_tracking_svc = TokenTrackingService()
@@ -21,6 +32,7 @@ token_tracking_svc = TokenTrackingService()
 
 @bp.route(f"{CONTROLLER_PATH}/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_token_stats_self():
     """Get token statistics for the current user"""
     try:
@@ -36,6 +48,7 @@ def get_token_stats_self():
 
 @bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_token_stats_guest(guest_id):
     """Get token statistics for a guest user"""
     try:
@@ -64,6 +77,7 @@ def get_token_stats_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_token_stats_user(user_id):
     """Get token statistics for a specific user (admin only)"""
     try:
@@ -78,6 +92,7 @@ def get_token_stats_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/history/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(query=TokenHistoryQuery, tags=["token-stats"], security={"BearerAuth": []})
 def get_token_history_self():
     """Get token usage history for the current user"""
     try:
@@ -102,6 +117,7 @@ def get_token_history_self():
 
 @bp.route(f"{CONTROLLER_PATH}/history/guest/<int:guest_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(query=TokenHistoryQuery, tags=["token-stats"], security={"BearerAuth": []})
 def get_token_history_guest(guest_id):
     """Get token usage history for a guest user"""
     try:
@@ -137,6 +153,7 @@ def get_token_history_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/history/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(query=TokenHistoryQuery, tags=["token-stats"], security={"BearerAuth": []})
 def get_token_history_user(user_id):
     """Get token usage history for a specific user (admin only)"""
     try:
@@ -158,6 +175,7 @@ def get_token_history_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/bot/<int:bot_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_bot_token_stats(bot_id):
     """Get token statistics for a specific bot"""
     try:
@@ -172,6 +190,7 @@ def get_bot_token_stats(bot_id):
 
 @bp.route(f"{CONTROLLER_PATH}/all-users", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_all_users_token_stats():
     """Get token statistics for all users (admin only)"""
     try:
@@ -186,6 +205,7 @@ def get_all_users_token_stats():
 
 @bp.route(f"{CONTROLLER_PATH}/total/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_total_tokens_self():
     """Get total tokens consumed by the current user"""
     try:
@@ -201,6 +221,7 @@ def get_total_tokens_self():
 
 @bp.route(f"{CONTROLLER_PATH}/total/guest/<int:guest_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_total_tokens_guest(guest_id):
     """Get total tokens consumed by a guest user"""
     try:
@@ -229,6 +250,7 @@ def get_total_tokens_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/total/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_total_tokens_user(user_id):
     """Get total tokens consumed by a specific user (admin only)"""
     try:
@@ -243,6 +265,7 @@ def get_total_tokens_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/last-24h/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_tokens_last_24h_self():
     """Get total tokens consumed by the current user in the last 24 hours"""
     try:
@@ -260,6 +283,7 @@ def get_tokens_last_24h_self():
 
 @bp.route(f"{CONTROLLER_PATH}/last-24h/guest/<int:guest_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_tokens_last_24h_guest(guest_id):
     """Get total tokens consumed by a guest user in the last 24 hours"""
     try:
@@ -290,6 +314,7 @@ def get_tokens_last_24h_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/last-24h/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_tokens_last_24h_user(user_id):
     """Get total tokens consumed by a specific user in the last 24 hours (admin only)"""
     try:
@@ -306,6 +331,7 @@ def get_tokens_last_24h_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/stats-24h/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_stats_last_24h_self():
     """Get detailed token statistics for the current user in the last 24 hours"""
     try:
@@ -321,6 +347,7 @@ def get_stats_last_24h_self():
 
 @bp.route(f"{CONTROLLER_PATH}/stats-24h/guest/<int:guest_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_stats_last_24h_guest(guest_id):
     """Get detailed token statistics for a guest user in the last 24 hours"""
     try:
@@ -349,6 +376,7 @@ def get_stats_last_24h_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/stats-24h/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_stats_last_24h_user(user_id):
     """Get detailed token statistics for a specific user in the last 24 hours (admin only)"""
     try:

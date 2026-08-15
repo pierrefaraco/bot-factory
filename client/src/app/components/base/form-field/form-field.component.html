@@ -4,7 +4,7 @@
     <mat-label class="custom-label"> {{ label }}</mat-label>
     <input class="input-size" matInput [type]="'text'" [formControl]="control" [name]="name" required 
       [disabled]="disabled"  (blur)="onMychange($event)">
-    <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+    <app-button [icon]="'close'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
       [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button"
       [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'" [size]="'big'"
       [disabled]="!control?.value">
@@ -24,7 +24,7 @@
       [cdkAutosizeMaxRows]="2" (blur)="onMychange($event)"></textarea>
 
 
-    <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+    <app-button [icon]="'close'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
       [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button"
       [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'"
       [disabled]="control?.value === null"  [size]="'big'">
@@ -40,7 +40,7 @@
       (input)="onInputChange()" [disabled]="disabled" (blur)="onMychange($event)">
 
     <div matSuffix class="password-suffix-buttons">
-      <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+      <app-button [icon]="'close'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
         [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button-password"
         [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'" [size]="'small'"
         [disabled]="control?.value === null" [size]="'big'">
@@ -63,7 +63,7 @@
     <input class="input-size" matInput [type]="'text'" [formControl]="control" [name]="name" required (input)="onInputChange()"
       [disabled]="disabled" (blur)="onMychange($event)">
     <div matSuffix class="suffix-buttons">
-      <app-button [icon]="'cancel_presentation'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
+      <app-button [icon]="'close'" [label]="'Clear'" (buttonClickedEvent)="clearField()"
         [focusOnTab]="false" [onlyOnMouseClick]="true" [color]="'var(--text-primary)'" class="clear-button-inline" [size]="'small'"
         [color]="'var(--text-accent)'" [type]="'icon-button'" [backgroundColor]="'transparent'"
         [disabled]="control?.value === null || control?.value === ''">

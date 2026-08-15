@@ -88,7 +88,7 @@ class RagService:
             self.llm_service.get_llm(
                 user_id=user_id, bot_id=bot_id, session_id=session_id
             ),
-            self.prompt_service.get_qa_promt(bot_id),
+            self.prompt_service.get_qa_prompt(bot_id),
         )
         self.rag_chain = create_retrieval_chain(
             history_aware_retriever, question_answer_chain

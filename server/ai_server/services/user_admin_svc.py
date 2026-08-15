@@ -150,9 +150,7 @@ class UserAdminService(BaseService[UserDto]):
         if user_dto is None:
             raise ServiceError("User creation failed, no UserDto returned.")
         user_data["id"] = user_dto.id
-        bots_ass_dto: BotAssignmentDto = self._safe_execute(
-            "_perform_assign_bot", self._perform_assign_bot, user_data
-        )
+        bots_ass_dto: BotAssignmentDto = self._perform_assign_bot(user_data)
         if bots_ass_dto:
             user_dto.assigned_bots = bots_ass_dto
 
@@ -213,9 +211,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_id", self._perform_get_by_id, entity_id
-        )
+        result = self._perform_get_by_id(entity_id)
         if result is None:
             raise ServiceError("Get user by id failed, no UserDto returned.")
         return result
@@ -242,10 +238,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_user_by_id", self._perform_get_user_by_id, user_id
-        )
-        return result
+        return self._perform_get_user_by_id(user_id)
 
     def _perform_get_user_by_id(self, user_id: int) -> Optional[User]:
         self.logger.debug(f"Fetching user with id: {user_id}")
@@ -276,7 +269,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._safe_execute("_perform_get_all", self._perform_get_all)
+        result = self._perform_get_all()
         if result is None:
             raise ServiceError("User get_all failed, no list returned.")
         return result
@@ -311,8 +304,9 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user update fails
         """
-        user_dto: UserDto = self._safe_execute(
-            "_perform_update", self._perform_update, user_id, user_data
+        user_dto: UserDto = self._perform_update(
+            user_id,
+            user_data,
         )
         if user_dto is None:
             raise ServiceError("User update failed, no UserDto returned.")
@@ -338,8 +332,10 @@ class UserAdminService(BaseService[UserDto]):
         return self.user_to_dto(user)
 
     def patch_user(self, parent_id: int, guest_id: int, data: dict) -> UserDto:
-        user_dto = self._safe_execute(
-            "_perform_patch_user", self._perform_patch_user, parent_id, guest_id, data
+        user_dto = self._perform_patch_user(
+            parent_id,
+            guest_id,
+            data,
         )
         if user_dto is None:
             raise ServiceError("Patch user failed.")
@@ -366,9 +362,7 @@ class UserAdminService(BaseService[UserDto]):
                 "parent_id": parent_id,
                 "assigned_bot_ids": assigned_bot_ids,
             }
-            bots_ass_dto = self._safe_execute(
-                "_perform_assign_bot", self._perform_assign_bot, user_data
-            )
+            bots_ass_dto = self._perform_assign_bot(user_data)
             if bots_ass_dto:
                 user_dto.assigned_bots = bots_ass_dto
         db.session.commit()
@@ -387,7 +381,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user deletion fails
         """
-        result = self._safe_execute("_perform_delete", self._perform_delete, entity_id)
+        result = self._perform_delete(entity_id)
         if result is None:
             raise ServiceError("User delete failed, no user deleted.")
         return result
@@ -446,10 +440,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_email", self._perform_get_by_email, email
-        )
-        return result
+        return self._perform_get_by_email(email)
 
     def _perform_get_by_email(self, email: str) -> Optional[UserDto]:
         self.logger.debug(f"Fetching user by email: {email}")
@@ -471,9 +462,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_role", self._perform_get_by_role, role
-        )
+        result = self._perform_get_by_role(role)
         if result is None:
             raise ServiceError("Get users by role failed.")
         return result
@@ -495,9 +484,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_children_count", self._perform_get_children_count, parent_id
-        )
+        result = self._perform_get_children_count(parent_id)
         if result is None:
             raise ServiceError("Get children users count failed.")
         return result
@@ -515,9 +502,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_children", self._perform_get_children, parent_id
-        )
+        result = self._perform_get_children(parent_id)
         if result is None:
             raise ServiceError("Get children users failed.")
         return result
@@ -548,8 +533,9 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When role change fails
         """
-        result = self._safe_execute(
-            "_perform_change_role", self._perform_change_role, user_id, new_role
+        result = self._perform_change_role(
+            user_id,
+            new_role,
         )
         if result is None:
             raise ServiceError("Change user role failed.")
@@ -581,9 +567,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When password change fails
         """
-        result = self._safe_execute(
-            "_perform_change_password",
-            self._perform_change_password,
+        result = self._perform_change_password(
             user_id,
             old_password,
             new_password,
@@ -619,9 +603,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user deactivation fails
         """
-        result = self._safe_execute(
-            "_perform_deactivate", self._perform_deactivate, user_id
-        )
+        result = self._perform_deactivate(user_id)
         if result is None:
             raise ServiceError("Deactivate user failed.")
         return result
@@ -651,9 +633,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user activation fails
         """
-        result = self._safe_execute(
-            "_perform_activate", self._perform_activate, user_id
-        )
+        result = self._perform_activate(user_id)
         if result is None:
             raise ServiceError("Activate user failed.")
         return result
@@ -681,9 +661,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When reassignment fails
         """
-        result = self._safe_execute(
-            "_perform_reassign_children",
-            self._perform_reassign_children,
+        result = self._perform_reassign_children(
             old_parent_id,
             new_parent_id,
         )

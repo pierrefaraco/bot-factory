@@ -2,9 +2,10 @@ from typing import List, Optional
 from flask import Blueprint, request, jsonify
 from http import HTTPStatus
 from flask_jwt_extended import get_jwt_identity
-from marshmallow import Schema, fields, ValidationError
+from pydantic import BaseModel, ValidationError, field_validator
 
 from ai_server.config.constant import USER_ROLE, ADMIN_ROLE, GUEST_ROLE
+from ai_server.config.openapi import api, pydantic_error_messages
 from ai_server.dao.database import User, db
 from ai_server.decorators.role_required import role_required
 from ai_server.dto.bot_dto import BotDto
@@ -18,29 +19,34 @@ CONTROLLER_PATH = "/bot"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 
-class BotSchema(Schema):
+class BotUpdateRequest(BaseModel):
     """Schéma de validation pour les bots"""
 
-    id = fields.Integer(required=False)
-    user_account_id = fields.Integer(required=False)
-    name = fields.String(
-        required=False, validate=lambda x: len(x.strip()) > 0 if x else True
-    )
-    description = fields.String(required=False)
-    is_active = fields.Boolean(required=False)
+    id: Optional[int] = None
+    user_account_id: Optional[int] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, value):
+        if value is not None and not value.strip():
+            raise ValueError("name must not be blank")
+        return value
 
 
 # Services initialization
 bot_svc = BotService()
-bot_schema = BotSchema()
 message_svc = MessageService()
 logger = BotFactoryLogger()
 
 
 @bp.route(CONTROLLER_PATH, methods=["POST"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["bot"], security={"BearerAuth": []})
 def create_bot():
-    # """Create a new bot"""
+    """Create a new bot with random parameters for the authenticated user."""
     try:
         user_account_id = get_jwt_identity()
         if not user_account_id:
@@ -56,15 +62,22 @@ def create_bot():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+class BotViewQuery(BaseModel):
+    """Level of detail of the returned bot"""
+
+    view: Optional[str] = "minimal"
+
+
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(query=BotViewQuery, tags=["bot"], security={"BearerAuth": []})
 def get_bot(bot_id):
-    """Récupère un bot par son ID"""
+    """Get a bot by its ID."""
     try:
         user_id = get_jwt_identity()
         user: User = User.query.filter_by(id=user_id).first()
@@ -105,6 +118,7 @@ def get_bot(bot_id):
 
 @bp.route(f"{CONTROLLER_PATH}/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["bot"], security={"BearerAuth": []})
 def get_user_bots():
     """Récupère tous les bots d'un utilisateur"""
     try:
@@ -127,6 +141,7 @@ def get_user_bots():
 
 @bp.route(f"{CONTROLLER_PATH}", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["bot"], security={"BearerAuth": []})
 def get_all_bots():
     """Récupère tous les bots"""
     try:
@@ -138,6 +153,7 @@ def get_all_bots():
 
 @bp.route(f"{CONTROLLER_PATH}/owned", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["bot"], security={"BearerAuth": []})
 def get_all_owned_bots():
     """Récupère tous les bots"""
     user_id = get_jwt_identity()
@@ -151,6 +167,7 @@ def get_all_owned_bots():
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=BotUpdateRequest, tags=["bot"], security={"BearerAuth": []})
 def update_bot_admin(bot_id):
     """Met à jour un bot existant"""
     try:
@@ -174,7 +191,11 @@ def __update_bot(bot_id):
     """Met à jour un bot existant"""
     try:
         data = request.get_json()
-        validated_data = bot_schema.load(data) if data else {}
+        validated_data = (
+            BotUpdateRequest.model_validate(data).model_dump(exclude_unset=True)
+            if data
+            else {}
+        )
         bot_dto: BotDto = bot_svc.update(bot_id, validated_data)
         if not bot_dto:
             return jsonify({"error": "Bot not found"}), HTTPStatus.NOT_FOUND
@@ -182,13 +203,14 @@ def __update_bot(bot_id):
         return jsonify(bot_dto.to_dict()), HTTPStatus.OK
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["bot"], security={"BearerAuth": []})
 def delete_bot(bot_id):
     """Supprime un bot"""
     try:
@@ -231,6 +253,7 @@ def _can_modify_bot(user: User, bot_id: int) -> bool:
 
 @bp.route(f"{CONTROLLER_PATH}/parameters-description", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["bot"], security={"BearerAuth": []})
 def get_bot_parameters_description():
     try:
         return jsonify(bot_svc.get_bot_parameters_description()), 200
@@ -240,6 +263,7 @@ def get_bot_parameters_description():
 
 @bp.route(f"{CONTROLLER_PATH}/selectbot/<int:bot_id>", methods=["PATCH"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["bot"], security={"BearerAuth": []})
 def select_bot(bot_id: int):
     """
     Select a bot by its ID and user ID.

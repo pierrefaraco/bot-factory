@@ -4,7 +4,11 @@ from typing import List
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
-from marshmallow import Schema, fields, ValidationError
+from typing import Literal, Optional
+
+from pydantic import BaseModel, EmailStr, Field, ValidationError
+
+from ai_server.config.openapi import api, pydantic_error_messages
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 
@@ -20,71 +24,57 @@ CONTROLLER_PATH = "/users"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 
-class UserRegistrationSchema(Schema):
+class UserRegistrationRequest(BaseModel):
     """Schema for user registration validation"""
 
-    name = fields.String(required=True, validate=lambda x: len(x.strip()) > 0)
-    email = fields.Email(required=True)
-    password = fields.String(required=True)
-    assigned_bot_ids = fields.List(fields.Int(), allow_none=True)
+    name: str = Field(min_length=1)
+    email: EmailStr
+    password: str
+    assigned_bot_ids: Optional[list[int]] = None
 
 
-class UserUpdateSchema(Schema):
+class UserUpdateRequest(BaseModel):
     """Schema for user update validation"""
 
-    name = fields.String(
-        required=False, validate=lambda x: len(x.strip()) > 0 if x else True
-    )
-    email = fields.Email(required=False)
-    # assigned_bot_ids=fields.List(fields.Int(), allow_none=True)
+    name: Optional[str] = Field(default=None, min_length=1)
+    email: Optional[EmailStr] = None
 
 
-class RoleChangeSchema(Schema):
+class RoleChangeRequest(BaseModel):
     """Schema for role change validation"""
 
-    role = fields.String(
-        required=True, validate=lambda x: x in [ADMIN_ROLE, USER_ROLE, GUEST_ROLE]
-    )
+    role: Literal[ADMIN_ROLE, USER_ROLE, GUEST_ROLE]
 
 
-class PasswordChangeSchema(Schema):
+class PasswordChangeRequest(BaseModel):
     """Schema for password change validation"""
 
-    old_password = fields.String(required=True)
-    new_password = fields.String(required=True, validate=lambda x: len(x) >= 6)
+    old_password: str
+    new_password: str = Field(min_length=6)
 
 
-class ReassignChildrenSchema(Schema):
+class ReassignChildrenRequest(BaseModel):
     """Schema for children reassignment validation"""
 
-    old_parent_id = fields.Integer(required=True)
-    new_parent_id = fields.Integer(required=True)
+    old_parent_id: int
+    new_parent_id: int
 
 
-class PatchBotSchema(Schema):
+class PatchBotRequest(BaseModel):
     """Schema for selected bot validation"""
 
-    selected_bot_id = fields.Integer(required=False, allow_none=True)
-    assigned_bot_ids = fields.List(
-        fields.Int(),
-        allow_none=True,
-        required=False,
-    )
+    selected_bot_id: Optional[int] = None
+    assigned_bot_ids: Optional[list[int]] = None
 
 
 # Services initialization
 app_logger = BotFactoryLogger()
 logger = BotFactoryLogger()
 user_admin_svc = UserAdminService()
-user_registration_schema = UserRegistrationSchema()
-user_update_schema = UserUpdateSchema()
-role_change_schema = RoleChangeSchema()
-password_change_schema = PasswordChangeSchema()
-reassign_children_schema = ReassignChildrenSchema()
-patch_bot_schema = PatchBotSchema()
 
 
 @bp.route(f"{CONTROLLER_PATH}", methods=["POST"])
+@api.validate(json=UserRegistrationRequest, tags=["users-admin"])
 def register():
     """Register a new user"""
     try:
@@ -94,7 +84,7 @@ def register():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = user_registration_schema.load(data)
+        validated_data = UserRegistrationRequest.model_validate(data).model_dump()
 
         existing_user = User.query.filter_by(mail=validated_data["email"]).first()
         if existing_user:
@@ -110,7 +100,7 @@ def register():
         ), HTTPStatus.CREATED
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         logger.error(f"User registration error: {exc}")
         return jsonify(
@@ -120,6 +110,7 @@ def register():
 
 @bp.route(f"{CONTROLLER_PATH}/self", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(json=UserUpdateRequest, tags=["users-admin"], security={"BearerAuth": []})
 def update_users_self():
     """Update current user's information"""
     user_id = get_jwt_identity()
@@ -128,6 +119,7 @@ def update_users_self():
 
 @bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=UserUpdateRequest, tags=["users-admin"], security={"BearerAuth": []})
 def update_users_guest(guest_id):
     """Update guest user's information"""
     try:
@@ -153,6 +145,7 @@ def update_users_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["PUT"])
 @role_required([ADMIN_ROLE])
+@api.validate(json=UserUpdateRequest, tags=["users-admin"], security={"BearerAuth": []})
 def update_users_admin(user_id):
     """Update user's information (admin only)"""
     return _update_users(user_id)
@@ -167,7 +160,7 @@ def _update_users(user_id):
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = user_update_schema.load(data)
+        validated_data = UserUpdateRequest.model_validate(data).model_dump(exclude_unset=True)
 
         user_dto = user_admin_svc.update(user_id, validated_data)
 
@@ -176,7 +169,7 @@ def _update_users(user_id):
         ), HTTPStatus.OK
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         logger.error(f"User update error: {exc}")
         return jsonify(
@@ -186,6 +179,7 @@ def _update_users(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/guest", methods=["POST"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=UserRegistrationRequest, tags=["users-admin"], security={"BearerAuth": []})
 def register_guest():
     """Register a new guest user"""
     try:
@@ -195,7 +189,7 @@ def register_guest():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = user_registration_schema.load(data)
+        validated_data = UserRegistrationRequest.model_validate(data).model_dump()
         parent_id = get_jwt_identity()
 
         existing_user = User.query.filter_by(mail=validated_data["email"]).first()
@@ -212,7 +206,7 @@ def register_guest():
         ), HTTPStatus.CREATED
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         logger.error(f"Guest registration error: {exc}")
         return jsonify(
@@ -222,6 +216,7 @@ def register_guest():
 
 @bp.route(f"{CONTROLLER_PATH}", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_all_users():
     """Get all users (admin only)"""
     try:
@@ -236,6 +231,7 @@ def get_all_users():
 
 @bp.route(f"{CONTROLLER_PATH}/guests", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_all_guests():
     """Get all guest users for current user"""
     try:
@@ -251,6 +247,7 @@ def get_all_guests():
 
 @bp.route(f"{CONTROLLER_PATH}/role/<role>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_users_by_role(role):
     """Get users by role"""
     try:
@@ -268,6 +265,7 @@ def get_users_by_role(role):
 
 @bp.route(f"{CONTROLLER_PATH}/children/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_children_self():
     """Get children users for current user"""
     user_id = get_jwt_identity()
@@ -276,6 +274,7 @@ def get_children_self():
 
 @bp.route(f"{CONTROLLER_PATH}/children/<int:parent_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_children_admin(parent_id):
     """Get children users for a parent (admin only)"""
     return _get_children(parent_id)
@@ -295,6 +294,7 @@ def _get_children(parent_id):
 
 @bp.route(f"{CONTROLLER_PATH}/self", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def delete_user_self():
     user_id = get_jwt_identity()
     return delete_user(user_id)
@@ -302,6 +302,7 @@ def delete_user_self():
 
 @bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def delete_user_guest(guest_id):
     try:
         user_id = get_jwt_identity()
@@ -319,6 +320,7 @@ def delete_user_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["DELETE"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def delete_user_admin(user_id):
     delete_user(user_id)
 
@@ -337,6 +339,7 @@ def delete_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:user_id>/role", methods=["PUT"])
 @role_required([ADMIN_ROLE])
+@api.validate(json=RoleChangeRequest, tags=["users-admin"], security={"BearerAuth": []})
 def change_role(user_id):
     """Change le rôle d'un utilisateur"""
     try:
@@ -366,6 +369,7 @@ def change_role(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/password/self", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(json=PasswordChangeRequest, tags=["users-admin"], security={"BearerAuth": []})
 def change_password_self():
     """Change le mot de passe de l'utilisateur connecté"""
     try:
@@ -384,6 +388,7 @@ def change_password_self():
 
 @bp.route(f"{CONTROLLER_PATH}/password/guest/<int:guest_id>", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=PasswordChangeRequest, tags=["users-admin"], security={"BearerAuth": []})
 def change_password_guest(guest_id):
     """Change le mot de passe de l'utilisateur connecté"""
     try:
@@ -424,6 +429,7 @@ def change_password(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:guest_id>/deactivate/guest", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def deactivate_user_guest(guest_id):
     try:
         user_id = get_jwt_identity()
@@ -442,6 +448,7 @@ def deactivate_user_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:user_id>/deactivate", methods=["PUT"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def deactivate_user_admin(user_id):
     return deactivate_user(user_id)
 
@@ -462,6 +469,7 @@ def deactivate_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:guest_id>/activate/guest", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def activate_user_guest(guest_id):
     try:
         user_id = get_jwt_identity()
@@ -482,6 +490,7 @@ def activate_user_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:user_id>/activate", methods=["PUT"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def activate_user_admin(user_id):
     return activate_user(user_id)
 
@@ -500,6 +509,7 @@ def activate_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/reassign-children", methods=["PUT"])
 @role_required([ADMIN_ROLE])
+@api.validate(json=ReassignChildrenRequest, tags=["users-admin"], security={"BearerAuth": []})
 def reassign_children():
     """Réassigne les utilisateurs enfants à un nouveau parent"""
     try:
@@ -523,6 +533,7 @@ def reassign_children():
 
 @bp.route(f"{CONTROLLER_PATH}/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_user_self():
     user_id = get_jwt_identity()
     return get_user(user_id)
@@ -530,6 +541,7 @@ def get_user_self():
 
 @bp.route(f"{CONTROLLER_PATH}/guest/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_user_guest(guest_id):
     try:
         user_id = get_jwt_identity()
@@ -547,6 +559,7 @@ def get_user_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_user_admin(user_id):
     return get_user(user_id)
 
@@ -569,6 +582,7 @@ def get_user(user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/self", methods=["PATCH"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(json=PatchBotRequest, tags=["users-admin"], security={"BearerAuth": []})
 def patch_user_self():
     """Update current user's selected bot"""
     user_id = get_jwt_identity()
@@ -577,6 +591,7 @@ def patch_user_self():
 
 @bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["PATCH"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=PatchBotRequest, tags=["users-admin"], security={"BearerAuth": []})
 def patch_user_guest(guest_id):
     # """Update guest user's selected bot"""
     try:
@@ -602,6 +617,7 @@ def patch_user_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["PATCH"])
 @role_required([ADMIN_ROLE])
+@api.validate(json=PatchBotRequest, tags=["users-admin"], security={"BearerAuth": []})
 def patch_user_admin(guest_id):
     """Update user's selected bot (admin only)"""
     parent_id = get_jwt_identity()
@@ -617,7 +633,7 @@ def _patch_user(parent_id, guest_id=-1):
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = patch_bot_schema.load(data)
+        validated_data = PatchBotRequest.model_validate(data).model_dump(exclude_unset=True)
 
         user_dto = user_admin_svc.patch_user(parent_id, guest_id, validated_data)
         logger.debug(f"User {guest_id} patched successfully by parent {parent_id}")
@@ -625,7 +641,7 @@ def _patch_user(parent_id, guest_id=-1):
         return jsonify(user_dto.to_dict()), HTTPStatus.OK
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         logger.error(f"User patch error: {exc}")
         return jsonify(
@@ -635,6 +651,7 @@ def _patch_user(parent_id, guest_id=-1):
 
 @bp.route(f"{CONTROLLER_PATH}/selected_bot/self", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_selected_bot_self():
     """Get current user's selected bot"""
     user_id = get_jwt_identity()
@@ -643,6 +660,7 @@ def get_selected_bot_self():
 
 @bp.route(f"{CONTROLLER_PATH}/selected_bot/guest/<int:guest_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_selected_bot_guest(guest_id):
     """Get guest user's selected bot"""
     try:
@@ -668,6 +686,7 @@ def get_selected_bot_guest(guest_id):
 
 @bp.route(f"{CONTROLLER_PATH}/selected_bot/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE])
+@api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_selected_bot_admin(user_id):
     """Get user's selected bot (admin only)"""
     return _get_selected_bot(user_id)

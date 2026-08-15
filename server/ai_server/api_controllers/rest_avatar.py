@@ -1,11 +1,14 @@
 """Avatar Management REST API Controller"""
 
+from typing import Optional
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
-from marshmallow import Schema, fields, ValidationError
+from pydantic import BaseModel, ValidationError
 
 from ai_server.config.constant import USER_ROLE, ADMIN_ROLE, GUEST_ROLE
+from ai_server.config.openapi import api, pydantic_error_messages
 from ai_server.dao.database import User
 from ai_server.decorators.role_required import role_required
 from ai_server.dto.avatar_dto import AvatarDto
@@ -18,36 +21,50 @@ CONTROLLER_PATH = "/avatar"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 
-class AvatarRandomSchema(Schema):
+class AvatarRandomRequest(BaseModel):
     """Schema for avatar creation validation"""
 
-    bot_id = fields.Integer(required=True)
+    bot_id: int
 
 
-class AvatarSchema(Schema):
+class AvatarPatchRequest(BaseModel):
+    """Schema for partial avatar update: any subset of the avatar fields"""
+
+    id: Optional[int] = None
+    bot_id: Optional[int] = None
+    hat: Optional[int] = None
+    hat_color: Optional[int] = None
+    body: Optional[int] = None
+    body_color: Optional[int] = None
+    eyes: Optional[int] = None
+    eyes_color: Optional[int] = None
+    mouth: Optional[int] = None
+    mouth_color: Optional[int] = None
+
+
+class AvatarRequest(BaseModel):
     """Schema for avatar update validation"""
 
-    id = fields.Integer(required=False)
-    bot_id = fields.Integer(required=True)
-    hat = fields.Integer(required=False)
-    hat_color = fields.Integer(required=False)
-    body = fields.Integer(required=False)
-    body_color = fields.Integer(required=False)
-    eyes = fields.Integer(required=False)
-    eyes_color = fields.Integer(required=False)
-    mouth = fields.Integer(required=False)
-    mouth_color = fields.Integer(required=False)
+    id: Optional[int] = None
+    bot_id: int
+    hat: Optional[int] = None
+    hat_color: Optional[int] = None
+    body: Optional[int] = None
+    body_color: Optional[int] = None
+    eyes: Optional[int] = None
+    eyes_color: Optional[int] = None
+    mouth: Optional[int] = None
+    mouth_color: Optional[int] = None
 
 
 # Services initialization
 avatar_service = AvatarService()
 logger = BotFactoryLogger()
-avatar_schema = AvatarSchema()
-avatar_random_schema = AvatarRandomSchema()
 
 
 @bp.route(f"{CONTROLLER_PATH}/random", methods=["POST"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=AvatarRandomRequest, tags=["avatar"], security={"BearerAuth": []})
 def create_random_avatar():
     """Create or update an avatar"""
     try:
@@ -58,7 +75,7 @@ def create_random_avatar():
 
         data = request.get_json()
 
-        validated_data = avatar_random_schema.load(data)
+        validated_data = AvatarRandomRequest.model_validate(data).model_dump()
         avatar_dto: AvatarDto = avatar_service.create_random_avatar(
             validated_data["bot_id"]
         )
@@ -71,7 +88,7 @@ def create_random_avatar():
         return jsonify(avatar_dto.to_dict()), status_code
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         logger.error(f"Avatar random create error: {e}")
         return jsonify(
@@ -81,6 +98,7 @@ def create_random_avatar():
 
 @bp.route(CONTROLLER_PATH, methods=["PATCH"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=AvatarPatchRequest, tags=["avatar"], security={"BearerAuth": []})
 def patch_avatar():
     """Create or update an avatar"""
     try:
@@ -93,7 +111,7 @@ def patch_avatar():
         return "", HTTPStatus.NO_CONTENT
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         logger.error(f"Avatar create/update error: {e}")
         return jsonify(
@@ -103,6 +121,7 @@ def patch_avatar():
 
 @bp.route(CONTROLLER_PATH, methods=["POST", "PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=AvatarRequest, tags=["avatar"], security={"BearerAuth": []})
 def create_or_update_avatar():
     """Create or update an avatar"""
     try:
@@ -112,7 +131,7 @@ def create_or_update_avatar():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = avatar_schema.load(data)
+        validated_data = AvatarRequest.model_validate(data).model_dump(exclude_unset=True)
         if request.method == "POST":
             avatar_dto: AvatarDto = avatar_service.create(validated_data)
             return jsonify(avatar_dto.to_dict()), HTTPStatus.CREATED
@@ -128,7 +147,7 @@ def create_or_update_avatar():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         logger.error(f"Avatar create/update error: {e}")
         return jsonify(
@@ -138,6 +157,7 @@ def create_or_update_avatar():
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["avatar"], security={"BearerAuth": []})
 def get_avatar_by_bot_id(bot_id: int):
     """Get avatar by bot ID"""
     try:
@@ -157,6 +177,7 @@ def get_avatar_by_bot_id(bot_id: int):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["avatar"], security={"BearerAuth": []})
 def delete_avatar(bot_id):
     """Delete avatar by bot ID"""
     try:

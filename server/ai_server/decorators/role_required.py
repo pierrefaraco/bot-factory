@@ -21,7 +21,7 @@ def role_required(roles):
 
             # Vérifie si l'utilisateur a au moins un des rôles requis
             if not any(role in current_roles for role in roles):
-                return jsonify({"msg": "Accès non autorisé"}), 403
+                return jsonify({"msg": "Access denied"}), 403
             return fn(*args, **kwargs)
 
         return decorator

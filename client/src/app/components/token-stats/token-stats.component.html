@@ -8,7 +8,7 @@
           class="toggle-btn"
           [class.active]="showLast24h"
           (click)="toggleTimePeriod()">
-          24 dernières heures
+          Last 24 hours
          
         </button>
         <button
@@ -20,7 +20,7 @@
       </div>
       <app-button
         [icon]="'refresh'"
-        [label]="'Rafraîchir'"
+        [label]="'Refresh'"
         (buttonClickedEvent)="refreshStats()"
         [color]="'var(--text-primary)'"
         [backgroundColor]="'var(--btn-color1)'"
@@ -33,14 +33,14 @@
 
   <!-- Indicateur de chargement -->
   <div *ngIf="loading" class="loading-container">
-    <p>Chargement des statistiques...</p>
+    <p>Loading statistics...</p>
   </div>
 
   <!-- Message d'erreur -->
   <div *ngIf="error && !loading" class="error-container">
     <p class="error-message">{{ error }}</p>
     <app-button
-      [label]="'Réessayer'"
+      [label]="'Retry'"
       (buttonClickedEvent)="refreshStats()"
       [color]="'var(--text-primary)'"
       [backgroundColor]="'var(--btn-color1)'"
@@ -61,7 +61,7 @@
         <div class="card-content">
           <h3>Total de tokens</h3>
           <p class="stat-value">{{ formatNumber(getDisplayedTotal()) }}</p>
-          <span class="stat-subtitle">{{ showLast24h ? 'tokens (24h)' : 'tokens consommés' }}</span>
+          <span class="stat-subtitle">{{ showLast24h ? 'tokens (24h)' : 'tokens consumed' }}</span>
         </div>
       </div>
 
@@ -70,9 +70,9 @@
           <span class="material-icons">forum</span>
         </div>
         <div class="card-content">
-          <h3>Requêtes effectuées</h3>
+          <h3>Requests made</h3>
           <p class="stat-value">{{ formatNumber(stats.total_requests) }}</p>
-          <span class="stat-subtitle">{{ getAverageTokensPerRequest() }} tokens/requête</span>
+          <span class="stat-subtitle">{{ getAverageTokensPerRequest() }} tokens/request</span>
         </div>
       </div>
 
@@ -92,7 +92,7 @@
           <span class="material-icons">auto_awesome</span>
         </div>
         <div class="card-content">
-          <h3>Tokens de réponse</h3>
+          <h3>Response tokens</h3>
           <p class="stat-value">{{ formatNumber(stats.total_completion_tokens) }}</p>
           <span class="stat-subtitle">{{ getCompletionPercentage() }}% du total</span>
         </div>
@@ -102,21 +102,21 @@
     <!-- Section historique -->
     <div class="history-section">
       <div class="history-header">
-        <h3>Historique récent</h3>
+        <h3>Recent history</h3>
         <div class="history-controls">
           <label for="history-limit">Afficher:</label>
           <select id="history-limit" [(ngModel)]="historyLimit" (change)="loadHistory()">
-            <option [value]="10">10 dernières</option>
-            <option [value]="25">25 dernières</option>
-            <option [value]="50">50 dernières</option>
-            <option [value]="100">100 dernières</option>
+            <option [value]="10">Last 10</option>
+            <option [value]="25">Last 25</option>
+            <option [value]="50">Last 50</option>
+            <option [value]="100">Last 100</option>
           </select>
         </div>
       </div>
 
       <!-- Chargement de l'historique -->
       <div *ngIf="loadingHistory" class="loading-history">
-        <p>Chargement de l'historique...</p>
+        <p>Loading history...</p>
       </div>
 
       <!-- Tableau d'historique -->
@@ -129,9 +129,9 @@
               <th>Bot</th>
               <th>Session</th>
               <th>Prompt</th>
-              <th>Réponse</th>
+              <th>Response</th>
               <th>Total</th>
-              <th>Modèle</th>
+              <th>Model</th>
             </tr>
           </thead>
           <tbody>
@@ -152,7 +152,7 @@
       <!-- Message si pas d'historique -->
       <div *ngIf="!loadingHistory && history.length === 0" class="no-history">
         <span class="material-icons">history</span>
-        <p>Aucun historique disponible</p>
+        <p>No history available</p>
       </div>
     </div>
 
@@ -161,6 +161,6 @@
   <!-- Message si pas de données -->
   <div *ngIf="!loading && !error && !stats" class="no-data">
     <span class="material-icons">bar_chart</span>
-    <p>Aucune donnée de statistiques disponible</p>
+    <p>No statistics data available</p>
   </div>
 </div>

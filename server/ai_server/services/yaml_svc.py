@@ -7,8 +7,8 @@ YAML_DIRECTORY = "config"
 
 ANSWER_YAML = f"{YAML_DIRECTORY}/answer.yaml"
 BEHAVIOUR_YAML = f"{YAML_DIRECTORY}/behaviour.yaml"
-QUALITIES_DEFAUTS = f"{YAML_DIRECTORY}/qualities_defauts.yaml"
-PROMPTS = f"{YAML_DIRECTORY}/prompts_fr.yaml"
+QUALITIES_FLAWS = f"{YAML_DIRECTORY}/qualities_flaws.yaml"
+PROMPTS = f"{YAML_DIRECTORY}/prompts.yaml"
 
 
 @singleton
@@ -17,8 +17,7 @@ class YamlSvc:
         self.logger = BotFactoryLogger()
         self.answer_dict = self.load_yaml_to_dict(ANSWER_YAML)
         self.behaviour_dict = self.load_yaml_to_dict(BEHAVIOUR_YAML)
-        self.qualities_defauts_dict = self.load_yaml_to_dict(QUALITIES_DEFAUTS)
-        self.prompts = self.load_yaml_to_dict(PROMPTS)
+        self.qualities_flaws_dict = self.load_yaml_to_dict(QUALITIES_FLAWS)
 
     # Méthode 1: Avec un gestionnaire de contexte (recommandé)
     def load_yaml_to_dict(self, file_path):

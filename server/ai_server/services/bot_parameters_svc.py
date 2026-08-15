@@ -1,5 +1,4 @@
-from typing import List, Optional, Dict, Any, Union
-from ai_server.config.prompt_constants import GOAL
+from typing import List, Dict, Any
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.services.prompt_svc import PromptService
 from ai_server.services.yaml_svc import YamlSvc
@@ -8,7 +7,6 @@ from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.decorators.singleton import singleton
 from ai_server.services.llm_svc import LlmService
-import pprint
 
 yaml_svc = YamlSvc()
 prompt_svc = PromptService()
@@ -50,6 +48,9 @@ class BotParametersService(BaseService[BotParametersDto]):
             behaviour_with_language=bot_parameters.behaviour_with_language,
             localisation=bot_parameters.localisation,
             interlocutor_identity=bot_parameters.interlocutor_identity,
+            answer_format=bot_parameters.answer_format,
+            voice_output=bot_parameters.voice_output,
+            persona_description=bot_parameters.persona_description,
         )
 
     @staticmethod
@@ -58,7 +59,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         return (
             yaml_svc.answer_dict
             | yaml_svc.behaviour_dict
-            | yaml_svc.qualities_defauts_dict
+            | yaml_svc.qualities_flaws_dict
         )
 
     def create_bot_parameters(
@@ -101,10 +102,13 @@ class BotParametersService(BaseService[BotParametersDto]):
             "behaviour_with_language": str(params.get("behaviour_with_language") or ""),
             "localisation": str(params.get("localisation") or ""),
             "interlocutor_identity": str(params.get("interlocutor_identity") or ""),
+            "answer_format": str(params.get("answer_format") or ""),
+            "voice_output": bool(params.get("voice_output")),
+            "persona_description": str(params.get("persona_description") or ""),
         }
-        self.create(data)
+        result = self.create(data)
         self.update_prompt(user_name, data["bot_id"])
-        return self.create(data)
+        return result
 
     def create(self, data: Dict[str, Any]) -> BotParametersDto:
         """
@@ -119,7 +123,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters creation fails
         """
-        result = self._safe_execute("_perform_create", self._perform_create, data)
+        result = self._perform_create(data)
 
         if result is None:
             raise ServiceError(
@@ -145,74 +149,199 @@ class BotParametersService(BaseService[BotParametersDto]):
             behaviour_with_language=data.get("behaviour_with_language", ""),
             localisation=data.get("localisation", ""),
             interlocutor_identity=data.get("interlocutor_identity", ""),
+            answer_format=data.get("answer_format", ""),
+            voice_output=bool(data.get("voice_output", False)),
+            persona_description=data.get("persona_description", ""),
         )
         db.session.add(bot_params)
         db.session.commit()
         return self._bot_parameters_to_dto(bot_params)
 
-    def create_random_parameters(self, user_name: str, bot_id: int) -> BotParametersDto:
-        # print(f'yaml_svc.answer_dict {yaml_svc.answer_dict}')
-        # print(f'yaml_svc.behaviour_dict {yaml_svc.behaviour_dict}')
-        # print('###################################')
-        # print('###################################')
-
-        # prompts = yaml_svc.prompts
-        # dict_bot  = self.llm_svc.system_ask_question(prompts['generate_random_bot'])
-
-        # print('################### dict_bot')
-        # print(dict_bot)
-        # data: Dict[str, Any] ={
-        #     'bot_id': bot_id,
-        #     'bot_name': dict_bot.get('name',''),
-        #     'bot_type': dict_bot.get('type',''),
-        #     'main_personality_trait_1':dict_bot.get('trait1',''),
-        #     'main_personality_trait_2': dict_bot.get('trait2',''),
-        #     'main_personality_trait_3':dict_bot.get('trait3',''),
-        #     'used_sources': self.get_random_value_from_dict('used_sources',yaml_svc.answer_dict),
-        #     'context_type': self.get_random_value_from_dict('answer_style',yaml_svc.answer_dict),
-        #     'answer_style': self.get_random_value_from_dict('answer_style',yaml_svc.answer_dict),
-        #     'answer_length':self.get_random_value_from_dict('answer_length',yaml_svc.answer_dict),
-        #     'interlocutor_type': dict_bot.get('audience',''),
-        #     'goal': self.get_random_value_from_dict('goal',yaml_svc.behaviour_dict),
-        #     'behaviour_when_ignore': self.get_random_value_from_dict('behaviour_when_ignore',yaml_svc.behaviour_dict),
-        #     'behaviour_with_language': self.get_random_value_from_dict('behaviour_with_language',yaml_svc.behaviour_dict),
-        #     'localisation': dict_bot.get('location',''),
-        #     'interlocutor_identity': self.get_random_value_from_dict('interlocutor_identity',yaml_svc.behaviour_dict),
-        # }
-        data: Dict[str, Any] = {
-            "bot_id": bot_id,
-            "bot_name": self.generate_random_bot_name(),
-            "bot_type": "",
-            "main_personality_trait_1": "optimiste",
+    # 10 coherent bot personas used by create_random_parameters. Every value taken
+    # from answer.yaml / behaviour.yaml must match one of the "label" entries there,
+    # since prompt_svc looks up the description text by that label.
+    RANDOM_BOT_PROFILES: List[Dict[str, Any]] = [
+        {
+            "bot_name": "Professor Aurelian",
+            "bot_type": "History professor",
+            "main_personality_trait_1": "passionate",
             "main_personality_trait_2": "patient",
-            "main_personality_trait_3": "curieux",
-            "used_sources": self.get_random_value_from_dict(
-                "used_sources", yaml_svc.answer_dict
-            ),
-            "context_type": self.get_random_value_from_dict(
-                "answer_style", yaml_svc.answer_dict
-            ),
-            "answer_style": self.get_random_value_from_dict(
-                "answer_style", yaml_svc.answer_dict
-            ),
-            "answer_length": self.get_random_value_from_dict(
-                "answer_length", yaml_svc.answer_dict
-            ),
-            "interlocutor_type": "",
-            "goal": self.get_random_value_from_dict("goal", yaml_svc.behaviour_dict),
-            "behaviour_when_ignore": self.get_random_value_from_dict(
-                "behaviour_when_ignore", yaml_svc.behaviour_dict
-            ),
-            "behaviour_with_language": self.get_random_value_from_dict(
-                "behaviour_with_language", yaml_svc.behaviour_dict
-            ),
+            "main_personality_trait_3": "rigorous",
+            "used_sources": "only context",
+            "context_type": "manual",
+            "answer_style": "informative",
+            "answer_length": "medium",
+            "interlocutor_type": "Students",
+            "goal": "Add usefull responses to your interlocutor's question",
+            "behaviour_when_ignore": "mention",
+            "behaviour_with_language": "adapt",
             "localisation": "Paris, France",
-            "interlocutor_identity": self.get_random_value_from_dict(
-                "interlocutor_identity", yaml_svc.behaviour_dict
-            ),
-        }
-        self.update_prompt(user_name, data["bot_id"])
-        return self._perform_create(data)
+            "interlocutor_identity": "USER",
+        },
+        {
+            "bot_name": "Chef Marco",
+            "bot_type": "Head chef",
+            "main_personality_trait_1": "creative",
+            "main_personality_trait_2": "food-loving",
+            "main_personality_trait_3": "warm",
+            "used_sources": "inside and outside context",
+            "context_type": "manual",
+            "answer_style": "conversational",
+            "answer_length": "short",
+            "interlocutor_type": "Cooking enthusiasts",
+            "goal": "Be helpful for your interlocutor",
+            "behaviour_when_ignore": "elaborate_alternative",
+            "behaviour_with_language": "adapt",
+            "localisation": "Lyon, France",
+            "interlocutor_identity": "USER",
+        },
+        {
+            "bot_name": "TechBot Nova",
+            "bot_type": "Technical support",
+            "main_personality_trait_1": "precise",
+            "main_personality_trait_2": "patient",
+            "main_personality_trait_3": "methodical",
+            "used_sources": "only context",
+            "context_type": "Technical documentation",
+            "answer_style": "technical",
+            "answer_length": "long",
+            "interlocutor_type": "Developers",
+            "goal": "Add usefull responses to your interlocutor's question",
+            "behaviour_when_ignore": "mention",
+            "behaviour_with_language": "english",
+            "localisation": "San Francisco, USA",
+            "interlocutor_identity": "ANONYME",
+        },
+        {
+            "bot_name": "Luna",
+            "bot_type": "Storyteller",
+            "main_personality_trait_1": "imaginative",
+            "main_personality_trait_2": "poetic",
+            "main_personality_trait_3": "gentle",
+            "used_sources": "only outside context",
+            "context_type": "A story",
+            "answer_style": "mytho",
+            "answer_length": "long",
+            "interlocutor_type": "Children",
+            "goal": "Be friend with interlocutor",
+            "behaviour_when_ignore": "mytho",
+            "behaviour_with_language": "adapt",
+            "localisation": "Quebec, Canada",
+            "interlocutor_identity": "GROUP",
+        },
+        {
+            "bot_name": "Coach Max",
+            "bot_type": "Sports coach",
+            "main_personality_trait_1": "motivating",
+            "main_personality_trait_2": "energetic",
+            "main_personality_trait_3": "disciplined",
+            "used_sources": "inside and outside context",
+            "context_type": "manual",
+            "answer_style": "conversational",
+            "answer_length": "short",
+            "interlocutor_type": "Amateur athletes",
+            "goal": "Be helpful for your interlocutor",
+            "behaviour_when_ignore": "elaborate_alternative",
+            "behaviour_with_language": "english",
+            "localisation": "Los Angeles, USA",
+            "interlocutor_identity": "USER",
+        },
+        {
+            "bot_name": "Elena Voyage",
+            "bot_type": "Travel guide",
+            "main_personality_trait_1": "curious",
+            "main_personality_trait_2": "adventurous",
+            "main_personality_trait_3": "cultured",
+            "used_sources": "inside and outside context",
+            "context_type": "journal",
+            "answer_style": "informative",
+            "answer_length": "medium",
+            "interlocutor_type": "Travelers",
+            "goal": "Add usefull responses to your interlocutor's question",
+            "behaviour_when_ignore": "elaborate_alternative",
+            "behaviour_with_language": "spanish",
+            "localisation": "Barcelona, Spain",
+            "interlocutor_identity": "USER",
+        },
+        {
+            "bot_name": "Sage Confucius",
+            "bot_type": "Philosopher",
+            "main_personality_trait_1": "wise",
+            "main_personality_trait_2": "thoughtful",
+            "main_personality_trait_3": "kind",
+            "used_sources": "only context",
+            "context_type": "your memories",
+            "answer_style": "simplified",
+            "answer_length": "exhaustive",
+            "interlocutor_type": "Seekers of wisdom",
+            "goal": "Be neutral with interlocutor",
+            "behaviour_when_ignore": "mention",
+            "behaviour_with_language": "chinese",
+            "localisation": "Beijing, China",
+            "interlocutor_identity": "ANONYME",
+        },
+        {
+            "bot_name": "Robo Friend",
+            "bot_type": "Virtual companion",
+            "main_personality_trait_1": "empathetic",
+            "main_personality_trait_2": "funny",
+            "main_personality_trait_3": "loyal",
+            "used_sources": "only outside context",
+            "context_type": "role-play guide",
+            "answer_style": "comical",
+            "answer_length": "very-short",
+            "interlocutor_type": "Teenagers",
+            "goal": "Be friend with interlocutor",
+            "behaviour_when_ignore": "mytho",
+            "behaviour_with_language": "adapt",
+            "localisation": "Berlin, Germany",
+            "interlocutor_identity": "USER",
+        },
+        {
+            "bot_name": "AI Financial Advisor",
+            "bot_type": "Financial advisor",
+            "main_personality_trait_1": "rigorous",
+            "main_personality_trait_2": "analytical",
+            "main_personality_trait_3": "prudent",
+            "used_sources": "only context",
+            "context_type": "Technical documentation",
+            "answer_style": "technical",
+            "answer_length": "long",
+            "interlocutor_type": "Investors",
+            "goal": "Add usefull responses to your interlocutor's question",
+            "behaviour_when_ignore": "mention",
+            "behaviour_with_language": "english",
+            "localisation": "London, United Kingdom",
+            "interlocutor_identity": "USER",
+        },
+        {
+            "bot_name": "Sensei Hiro",
+            "bot_type": "Language tutor",
+            "main_personality_trait_1": "patient",
+            "main_personality_trait_2": "encouraging",
+            "main_personality_trait_3": "methodical",
+            "used_sources": "inside and outside context",
+            "context_type": "manual",
+            "answer_style": "simplified",
+            "answer_length": "medium",
+            "interlocutor_type": "Learners",
+            "goal": "Be helpful for your interlocutor",
+            "behaviour_when_ignore": "elaborate_alternative",
+            "behaviour_with_language": "japanese",
+            "localisation": "Tokyo, Japan",
+            "interlocutor_identity": "USER",
+        },
+    ]
+
+    def create_random_parameters(self, user_name: str, bot_id: int) -> BotParametersDto:
+        import random
+
+        profile = random.choice(self.RANDOM_BOT_PROFILES)
+        data: Dict[str, Any] = {"bot_id": bot_id, **profile}
+
+        result = self._perform_create(data)
+        self.update_prompt(user_name, bot_id)
+        return result
 
     def get_random_value_from_dict(self, cat, data: dict):
         import random
@@ -221,48 +350,6 @@ class BotParametersService(BaseService[BotParametersDto]):
         if label_list and isinstance(label_list, list) and len(label_list) > 0:
             return random.choice(label_list)["label"]
         return ""
-
-    def generate_random_bot_name(self) -> str:
-        """Generate a random bot name from predefined lists"""
-        import random
-
-        adjectives = [
-            "Sage",
-            "Brillant",
-            "Rapide",
-            "Astucieux",
-            "Vaillant",
-            "Noble",
-            "Fidèle",
-            "Audacieux",
-            "Rusé",
-            "Élégant",
-            "Mystérieux",
-            "Lumineux",
-            "Puissant",
-            "Agile",
-            "Majestueux",
-        ]
-
-        nouns = [
-            "Assistant",
-            "Conseiller",
-            "Guide",
-            "Compagnon",
-            "Oracle",
-            "Mentor",
-            "Explorateur",
-            "Gardien",
-            "Stratège",
-            "Visionnaire",
-            "Navigateur",
-            "Érudit",
-            "Penseur",
-            "Créateur",
-            "Innovateur",
-        ]
-
-        return f"{random.choice(adjectives)} {random.choice(nouns)}"
 
     def get_dto_by_id(self, entity_id: int) -> BotParametersDto:
         """
@@ -277,9 +364,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_id", self._perform_get_by_id, entity_id
-        )
+        result = self._perform_get_by_id(entity_id)
         if result is None:
             raise ServiceError(
                 "Get bot parameters by id failed, no BotParametersDto returned."
@@ -302,7 +387,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters retrieval fails
         """
-        result = self._safe_execute("_perform_get_all", self._perform_get_all)
+        result = self._perform_get_all()
         if result is None:
             raise ServiceError("Bot parameters get_all failed, no list returned.")
         return result
@@ -327,8 +412,9 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters update fails
         """
-        result = self._safe_execute(
-            "_perform_update", self._perform_update, entity_id, data
+        result = self._perform_update(
+            entity_id,
+            data,
         )
         if result is None:
             raise ServiceError(
@@ -366,7 +452,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters deletion fails
         """
-        result = self._safe_execute("_perform_delete", self._perform_delete, entity_id)
+        result = self._perform_delete(entity_id)
         if result is None:
             raise ServiceError(
                 "Bot parameters delete failed, no bot parameters deleted."
@@ -396,9 +482,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When welcome message generation fails
         """
-        result = self._safe_execute(
-            "_perform_get_welcome_message",
-            self._perform_get_welcome_message,
+        result = self._perform_get_welcome_message(
             user_name,
             bot_id,
         )
@@ -427,9 +511,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_bot_id", self._perform_get_by_bot_id, bot_id
-        )
+        result = self._perform_get_by_bot_id(bot_id)
         if result is None:
             raise ServiceError("Get bot parameters by bot_id failed.")
         return result
@@ -457,9 +539,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters update fails
         """
-        result = self._safe_execute(
-            "_perform_update_by_bot_id",
-            self._perform_update_by_bot_id,
+        result = self._perform_update_by_bot_id(
             user_name,
             bot_id,
             update_data,
@@ -501,9 +581,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters patch fails
         """
-        result = self._safe_execute(
-            "_perform_patch_bot_parameters",
-            self._perform_patch_bot_parameters,
+        result = self._perform_patch_bot_parameters(
             bot_id,
             data,
             user_name,
@@ -520,51 +598,18 @@ class BotParametersService(BaseService[BotParametersDto]):
         if not bot_params:
             raise NotFoundError("BotParameters", str(bot_id))
 
-        # Update fields with specific logic (keeping original print statements for debugging)
-        if bot_name := data.get("bot_name"):
-            bot_params.bot_name = bot_name
-
-        if bot_type := data.get("bot_type"):
-            bot_params.bot_type = bot_type
-
-        if main_personality_trait_1 := data.get("main_personality_trait_1"):
-            bot_params.main_personality_trait_1 = main_personality_trait_1
-
-        if main_personality_trait_2 := data.get("main_personality_trait_2"):
-            bot_params.main_personality_trait_2 = main_personality_trait_2
-
-        if main_personality_trait_3 := data.get("main_personality_trait_3"):
-            bot_params.main_personality_trait_3 = main_personality_trait_3
-
-        if used_sources := data.get("used_sources"):
-            bot_params.used_sources = used_sources
-
-        if context_type := data.get("context_type"):
-            bot_params.context_type = context_type
-
-        if answer_style := data.get("answer_style"):
-            bot_params.answer_style = answer_style
-
-        if answer_length := data.get("answer_length"):
-            bot_params.answer_length = answer_length
-
-        if interlocutor_type := data.get("interlocutor_type"):
-            bot_params.interlocutor_type = interlocutor_type
-
-        if goal := data.get("goal"):
-            bot_params.goal = goal
-
-        if behaviour_when_ignore := data.get("behaviour_when_ignore"):
-            bot_params.behaviour_when_ignore = behaviour_when_ignore
-
-        if behaviour_with_language := data.get("behaviour_with_language"):
-            bot_params.behaviour_with_language = behaviour_with_language
-
-        if localisation := data.get("localisation"):
-            bot_params.localisation = localisation
-
-        if interlocutor_identity := data.get("interlocutor_identity"):
-            bot_params.interlocutor_identity = interlocutor_identity
+        # Only overwrite fields that are present in the payload. Empty strings
+        # are ignored except for optional fields the user may want to clear,
+        # and False is a valid value (e.g. voice_output).
+        clearable_fields = {"persona_description", "answer_format"}
+        for key, value in data.items():
+            if (
+                key != "user_name"
+                and value is not None
+                and (value != "" or key in clearable_fields)
+                and hasattr(bot_params, key)
+            ):
+                setattr(bot_params, key, value)
 
         db.session.commit()
         self.update_prompt(user_name, bot_id)
@@ -583,9 +628,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters deletion fails
         """
-        result = self._safe_execute(
-            "_perform_delete_by_bot_id", self._perform_delete_by_bot_id, bot_id
-        )
+        result = self._perform_delete_by_bot_id(bot_id)
         if result is None:
             return False
         return result
@@ -610,8 +653,9 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When prompt update fails
         """
-        result = self._safe_execute(
-            "_perform_update_prompt", self._perform_update_prompt, user_name, bot_id
+        result = self._perform_update_prompt(
+            user_name,
+            bot_id,
         )
 
     def _perform_update_prompt(self, user_name: str, bot_id: int):
@@ -621,4 +665,8 @@ class BotParametersService(BaseService[BotParametersDto]):
         if params:
             prompt_svc.update_prompt(
                 user_name, bot_id, params, behaviour_dict, answer_dict
+            )
+        else:
+            self.logger.warning(
+                f"No BotParameters found for bot_id {bot_id}, prompt not updated"
             )

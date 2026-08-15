@@ -82,6 +82,10 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
   personalityTrait2Ctrl = new FormControl('', Validators.required);
   personalityTrait3Ctrl = new FormControl('', Validators.required);
   localisationCtrl = new FormControl('', Validators.required);
+  // Champs optionnels (pas de Validators.required : les bots existants n'ont pas encore ces valeurs)
+  answerFormatCtrl = new FormControl('');
+  voiceOutputCtrl = new FormControl(false);
+  personaDescriptionCtrl = new FormControl('');
   isInValid = true;
  
   success: boolean = false;
@@ -178,7 +182,7 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
             id: -1,
           }
         this.bot.bot_parameters = {
-          bot_type: "Un Majordome",
+          bot_type: "A Butler",
           bot_name: "Alfred",
           answer_length: this.options_combo.answer_length[0].label,
           answer_style: this.options_combo.answer_style[0].label,
@@ -186,13 +190,16 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
           behaviour_with_language: this.options_combo.behaviour_with_language[0].label,
           context_type: this.options_combo.context_type[2].label,
           goal: this.options_combo.goal[0].label,
-          interlocutor_type: "Un Invité",
+          interlocutor_type: "A guest",
           interlocutor_identity: this.options_combo.interlocutor_identity[0].label,
-          main_personality_trait_1: this.options_combo.quality.intellectuels[5],
-          main_personality_trait_2: this.options_combo.quality.moraux[1],
-          main_personality_trait_3: this.options_combo.quality.professionnels[4],
+          main_personality_trait_1: this.options_combo.quality.intellectual[5],
+          main_personality_trait_2: this.options_combo.quality.moral[1],
+          main_personality_trait_3: this.options_combo.quality.professional[4],
           used_sources: this.options_combo.used_sources[0].label,
-          localisation: 'Paris, France' // Valeur par défaut si non spécifiée
+          localisation: 'Paris, France', // Valeur par défaut si non spécifiée
+          answer_format: '',
+          voice_output: false,
+          persona_description: ''
         };
         this.initFormControls()
         this.onSubmitFromChild(false)
@@ -223,6 +230,9 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
       this.personalityTrait1Ctrl.setValue(this.bot.bot_parameters.main_personality_trait_1 || '');
       this.personalityTrait2Ctrl.setValue(this.bot.bot_parameters.main_personality_trait_2 || '');
       this.personalityTrait3Ctrl.setValue(this.bot.bot_parameters.main_personality_trait_3 || '');
+      this.answerFormatCtrl.setValue(this.bot.bot_parameters.answer_format || '');
+      this.voiceOutputCtrl.setValue(this.bot.bot_parameters.voice_output || false);
+      this.personaDescriptionCtrl.setValue(this.bot.bot_parameters.persona_description || '');
     }
 
     this.botForm = this.fb.group({
@@ -242,6 +252,9 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
       main_personality_trait_1: this.personalityTrait1Ctrl,
       main_personality_trait_2: this.personalityTrait2Ctrl,
       main_personality_trait_3: this.personalityTrait3Ctrl,
+      answer_format: this.answerFormatCtrl,
+      voice_output: this.voiceOutputCtrl,
+      persona_description: this.personaDescriptionCtrl,
     });
     this.markAllControlsAsTouched()
 
@@ -281,7 +294,10 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
         main_personality_trait_2: this.personalityTrait2Ctrl.value,
         main_personality_trait_3: this.personalityTrait3Ctrl.value,
         used_sources: this.usedSourcesCtrl.value,
-        localisation: this.localisationCtrl.value
+        localisation: this.localisationCtrl.value,
+        answer_format: this.answerFormatCtrl.value,
+        voice_output: this.voiceOutputCtrl.value,
+        persona_description: this.personaDescriptionCtrl.value
       };
 
    

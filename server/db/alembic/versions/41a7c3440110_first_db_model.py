@@ -1,8 +1,8 @@
-"""first migration
+"""first db model
 
-Revision ID: 31689b35e242
+Revision ID: 41a7c3440110
 Revises: 
-Create Date: 2026-08-05 08:47:25.489249
+Create Date: 2026-08-15 10:59:03.644734
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '31689b35e242'
+revision: str = '41a7c3440110'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -104,6 +104,9 @@ def upgrade() -> None:
     sa.Column('behaviour_when_ignore', sa.String(length=128), nullable=True),
     sa.Column('behaviour_with_language', sa.String(length=128), nullable=True),
     sa.Column('localisation', sa.String(length=128), nullable=True),
+    sa.Column('answer_format', sa.String(length=128), nullable=True),
+    sa.Column('voice_output', sa.Boolean(), server_default=sa.text('0'), nullable=False),
+    sa.Column('persona_description', sa.String(length=2048), nullable=True),
     sa.ForeignKeyConstraint(['bot_id'], ['bot.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )

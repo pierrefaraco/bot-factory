@@ -1,5 +1,5 @@
 <div class="form-container">
-    <form [formGroup]="botForm" *ngIf="bot" class="bot-form">
+    <form [formGroup]="botForm" *ngIf="bot && botForm" class="bot-form">
 
         <!-- Navigation par onglets -->
         <mat-tab-group [scrollDistance]="50" [(selectedIndex)]="selectedTabIndex">
@@ -32,13 +32,16 @@
                     <app-combo [control]="interlocutorIdentityCtrl" [name]="'interlocutor_identity'"
                         [label]="'Interlocutor identity'" [options]="options_combo?.interlocutor_identity" (my_change)="onPatchBot('interlocutor_identity')"></app-combo>
 
+                    <app-form-field [control]="personaDescriptionCtrl" [name]="'persona_description'"
+                        [type]="'big-field'" [label]="'Describe your bot in your own words (optional)'"
+                        (my_change)="onPatchBot('persona_description')"></app-form-field>
 
                 </div>
 
             </mat-tab>
 
             <!-- ONGLET 2: Comportement - Voici un exemple pour cet onglet -->
-            <mat-tab label="Personnality and behavior">
+            <mat-tab label="Personality and behavior">
                 <div class="custom-tabs">
 
          
@@ -47,6 +50,14 @@
 
                     <app-combo [control]="answerStyleCtrl" [name]="'answer_style'"
                         [label]="'What is the bot writing style'" [options]="options_combo?.answer_style" (my_change)="onPatchBot('answer_style')"></app-combo>
+
+                    <app-combo [control]="answerFormatCtrl" [name]="'answer_format'"
+                        [label]="'Answer format (optional)'" [options]="options_combo?.answer_format" (my_change)="onPatchBot('answer_format')"></app-combo>
+
+                    <label class="voice-output-toggle">
+                        <input type="checkbox" [formControl]="voiceOutputCtrl" (change)="onPatchBot('voice_output')">
+                        Voice output (answers optimized for text-to-speech)
+                    </label>
 
 
 

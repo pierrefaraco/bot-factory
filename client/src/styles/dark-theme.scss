@@ -35,7 +35,9 @@ $text-muted: #94a3b8;        // Slate 400
   --text-secondary: #{$text-secondary};
   --text-tertiary: #{$text-tertiary};
   --text-muted: #{$text-muted};
-  --text-accent: #{$color-accent};
+  // Accent = action color (indigo). Green is reserved for --success-color.
+  --text-accent: #{$color-primary};
+  --text-on-accent: #ffffff;
   --text-warning: #{$color-warning};
   --text-danger: #{$color-danger};
 
@@ -68,6 +70,9 @@ $text-muted: #94a3b8;        // Slate 400
   --warning-color: #{$color-warning};
   --error-color: #{$color-danger};
   --info-color: #{$color-primary};
+  --bg-success: rgba(16, 185, 129, 0.12);
+  --bg-warning: rgba(245, 158, 11, 0.12);
+  --bg-danger: rgba(239, 68, 68, 0.12);
 
   // Inputs
   --input-bg: #{$background-secondary};

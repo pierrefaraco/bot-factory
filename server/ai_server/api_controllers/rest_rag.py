@@ -1,10 +1,11 @@
 """RAG (Retrieval-Augmented Generation) REST API Controller"""
 
-from ai_server.api_controllers.rest_iframe_security import verify_iframe_origin
 from flask import Blueprint, jsonify, request, Response, stream_with_context
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
-from marshmallow import Schema, fields, ValidationError
+from pydantic import BaseModel, Field, ValidationError
+
+from ai_server.config.openapi import api, pydantic_error_messages
 from typing import Callable
 import os
 import json
@@ -17,9 +18,8 @@ from ai_server.services.rag_svc import RagService, message_service
 from ai_server.api_controllers.rest_bot_parameters import bot_parameters_svc
 from ai_server.services.knowledge_svc import KnowledgeSvc
 from ai_server.services.bot_assignment_svc import BotAssignmentService
-from ai_server.api_controllers.rest_iframe_security import iframe_sessions
 from ai_server.dao.database import User
-from ai_server.config.constant import ADMIN_ROLE, IFRAME, USER_ROLE, GUEST_ROLE
+from ai_server.config.constant import ADMIN_ROLE, USER_ROLE, GUEST_ROLE
 from ai_server.services.user_admin_svc import UserAdminService
 
 CONTROLLER_NAME = "rag"
@@ -29,18 +29,33 @@ UPLOAD_FOLDER = "/tmp/"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 
-class ChatSchema(Schema):
+class ChatRequest(BaseModel):
     """Schema for chat validation"""
 
-    question = fields.String(required=True, validate=lambda x: len(x.strip()) > 0)
+    question: str = Field(min_length=1)
 
 
-class StreamChatSchema(Schema):
+class StreamChatRequest(BaseModel):
     """Schema for stream chat validation"""
 
-    question = fields.String(required=True, validate=lambda x: len(x.strip()) > 0)
-    bot_id = fields.Integer(required=True)
-    data = fields.Dict(required=False, load_default={})
+    question: str = Field(min_length=1)
+    bot_id: int
+    data: dict = Field(default_factory=dict)
+
+
+class StreamChatQuery(BaseModel):
+    """Query parameters for the SSE stream chat endpoint"""
+
+    question: str = Field(min_length=1)
+    bot_id: int
+    data: str = Field(default="{}", description="JSON-encoded payload")
+
+
+class FirstMessageQuery(BaseModel):
+    """Query parameters for the welcome-message trigger endpoint"""
+
+    stream: str = "TRUE"
+    data: str = Field(default="{}", description="JSON-encoded payload")
 
 
 # Services initialization
@@ -48,8 +63,6 @@ logger = BotFactoryLogger()
 rag_svc = RagService()
 knowledge_svc = KnowledgeSvc(rag_svc)
 bot_assignment_svc = BotAssignmentService()
-chat_schema = ChatSchema()
-stream_chat_schema = StreamChatSchema()
 user_svc = UserAdminService()
 
 
@@ -83,6 +96,7 @@ def _check_bot_access_permission(user: User, bot_id: int) -> bool:
 
 @bp.route(CONTROLLER_PATH + "/chat", methods=["POST"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(json=ChatRequest, tags=["rag"], security={"BearerAuth": []})
 def chat():
     """Basic chat endpoint"""
     try:
@@ -92,7 +106,7 @@ def chat():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = chat_schema.load(data)
+        validated_data = ChatRequest.model_validate(data).model_dump()
 
         user_id = get_jwt_identity()
         user: User = user_svc.get_user_by_id(user_id)
@@ -113,7 +127,7 @@ def chat():
         return jsonify({"response": response}), HTTPStatus.OK
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         logger.error(f"Chat error: {exc}")
         return jsonify(
@@ -122,7 +136,8 @@ def chat():
 
 
 @bp.route(f"{CONTROLLER_PATH}/trigfirstmessage", methods=["GET"])
-@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE, IFRAME])
+@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(query=FirstMessageQuery, tags=["rag"], security={"BearerAuth": []})
 def trigfirstmessage():
     """Trigger first welcome message for a bot"""
     try:
@@ -189,7 +204,8 @@ def trigfirstmessage():
 
 
 @bp.route(f"{CONTROLLER_PATH}/streamchat", methods=["GET"])
-@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE, IFRAME])
+@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(query=StreamChatQuery, tags=["rag"], security={"BearerAuth": []})
 def streamchat():
     """Stream chat endpoint with real-time responses"""
     try:
@@ -251,6 +267,7 @@ def streamchat():
 
 @bp.route(f"{CONTROLLER_PATH}/transmit_to_alfred/<int:bot_id>", methods=["POST"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["rag"], security={"BearerAuth": []})
 def transmit_to_alfred(bot_id):
     """Transmit chapters to vector database"""
     try:
@@ -272,7 +289,8 @@ def transmit_to_alfred(bot_id):
 
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["GET"])
-@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE, IFRAME])
+@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["rag"], security={"BearerAuth": []})
 def get_session_history(bot_id: int):
     """Get session history for a bot"""
     try:
@@ -295,6 +313,7 @@ def get_session_history(bot_id: int):
 
 @bp.route(f"{CONTROLLER_PATH}", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["rag"], security={"BearerAuth": []})
 def delete_selected_bot_session_history():
     """Delete session history for the selected bot"""
     try:
@@ -318,7 +337,8 @@ def delete_selected_bot_session_history():
 
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["DELETE"])
-@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE, IFRAME])
+@role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["rag"], security={"BearerAuth": []})
 def delete_session_history(bot_id: int):
     """Delete session history for a bot"""
     try:

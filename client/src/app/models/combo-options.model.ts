@@ -6,6 +6,7 @@ export interface CustomOption{
 
 
 export interface ComboOptions {
+  answer_format: CustomOption[];
   answer_length: CustomOption[];
   answer_style: CustomOption[];
   behaviour: CustomOption[];
@@ -13,27 +14,27 @@ export interface ComboOptions {
   behaviour_when_ignore: CustomOption[];
   behaviour_with_language: CustomOption[];
   context_type: CustomOption[];
-  defauts: {
-    avarice: string[];
-    caractere_social: string[];
-    cruaute: string[];
-    egocentrisme: string[];
-    entetement: string[];
-    exces: string[];
-    instabilite: string[];
-    lachete: string[];
-    malhonnete: string[];
-    orgueil: string[];
-    paresse: string[];
+  flaws: {
+    greed: string[];
+    social_character: string[];
+    cruelty: string[];
+    egocentrism: string[];
+    stubbornness: string[];
+    excess: string[];
+    instability: string[];
+    cowardice: string[];
+    dishonesty: string[];
+    pride: string[];
+    laziness: string[];
   };
   goal: CustomOption[];
   quality: {
-    emotionnels: string[];
-    intellectuels: string[];
-    moraux: string[];
-    professionnels: string[];
-    sociaux: string[];
-    spirituels: string[];
+    emotional: string[];
+    intellectual: string[];
+    moral: string[];
+    professional: string[];
+    social: string[];
+    spiritual: string[];
   };
   used_sources: CustomOption[];
   interlocutor_identity:CustomOption[];
@@ -43,27 +44,21 @@ export interface ComboOptions {
 export function transformToCustomOptions(comboOptions: ComboOptions): CustomOption[] {
   const customOptions: CustomOption[] = [];
 
-  // Transform 'quality'
-  const qualityCategories = Object.keys(comboOptions.quality) as (keyof typeof comboOptions.quality)[];
-  qualityCategories.forEach(category => {
-    comboOptions.quality[category].forEach(item => {
-      customOptions.push({
-        description: item,
-        label: item,
-      });
-    });
-  });
+  // 'defauts' is the legacy key served by API instances started before the
+  // qualities_flaws.yaml rename; accept both until every server is restarted.
+  const quality = comboOptions.quality ?? {};
+  const flaws = comboOptions.flaws ?? (comboOptions as any).defauts ?? {};
 
-  // Transform 'defauts'
-  const defautsCategories = Object.keys(comboOptions.defauts) as (keyof typeof comboOptions.defauts)[];
-  defautsCategories.forEach(category => {
-    comboOptions.defauts[category].forEach(item => {
-      customOptions.push({
-        description: item,
-        label: item,
+  for (const group of [quality, flaws]) {
+    Object.values(group).forEach((items: string[]) => {
+      items.forEach(item => {
+        customOptions.push({
+          description: item,
+          label: item,
+        });
       });
     });
-  });
+  }
 
   return customOptions;
 }

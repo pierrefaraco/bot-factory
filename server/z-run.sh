@@ -5,10 +5,21 @@
 
 set -e
 
+# Ensure this dev container is on the same Docker network as the MySQL/Chroma
+# containers (db, chromadb), otherwise DATABASE_URL's "db" host won't resolve.
+DB_NETWORK="bot-factory_botfactory-network"
+DEV_CONTAINER="dev-container"
+if command -v docker &> /dev/null; then
+    if ! docker network inspect "$DB_NETWORK" --format '{{json .Containers}}' 2>/dev/null | grep -q "$DEV_CONTAINER"; then
+        echo "Connecting $DEV_CONTAINER to $DB_NETWORK..."
+        docker network connect "$DB_NETWORK" "$DEV_CONTAINER" 2>/dev/null || true
+    fi
+fi
+
 # Kill existing processes using the same port (safely)
 FLASK_PORT=444
 echo "Checking for processes using port $FLASK_PORT..."
-PORT_PID=$(lsof -ti:$FLASK_PORT 2>/dev/null || true)
+PORT_PID=$(ss -ltnp "sport = :$FLASK_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u || true)
 if [ -n "$PORT_PID" ]; then
     echo "Killing process(es) using port $FLASK_PORT: $PORT_PID"
     kill -TERM $PORT_PID 2>/dev/null || true

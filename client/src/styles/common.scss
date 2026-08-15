@@ -75,30 +75,25 @@
 
 // Classes pour les champs de formulaire personnalisés
 .custom_input_field {
-  margin: 0.5rem 0;
-  margin-bottom: 20px;
+  // Material's subscript area already provides ~24px below each field;
+  // extra margin here made forms look disjointed.
+  margin: 0;
 
   .custom-background {
     width: 100%;
     position: relative;
 
+    // Keep Material's own label layout (display/size); only tint it.
+    // Forcing display:block here pushed the required "*" onto its own line.
     .custom-label {
-      display: block;
-      margin-bottom: 0.375rem;
-      font-size: 0.675rem;
-      font-weight: 300;
       color: var(--text-secondary);
       transition: color var(--transition-fast);
     }
 
-
-
-
+    // No extra height/padding: Material's outline field already sizes
+    // its input; adding min-height + padding produced ~90px tall fields.
     .input-size {
       padding-right: 0 !important;
-      min-height: 56px;
-      padding-top: 16px;
-      padding-bottom: 16px;
     }
 
 

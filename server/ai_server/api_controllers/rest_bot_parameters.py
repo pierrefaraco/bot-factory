@@ -1,9 +1,12 @@
 thd = """Bot Parameters REST API Controller"""
+from typing import Optional
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
-from marshmallow import Schema, fields, ValidationError
+from pydantic import BaseModel, ValidationError
 
+from ai_server.config.openapi import api, pydantic_error_messages
 from ai_server.dao.database import User
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.services.bot_parameters_svc import BotParametersService
@@ -17,44 +20,50 @@ CONTROLLER_PATH = "/bot-parameters"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 
-class BotParametersSchema(Schema):
+class BotParametersRequest(BaseModel):
     """Schema for bot parameters validation"""
 
-    bot_id = fields.Integer(required=True)
-    answer_length = fields.String(required=False)
-    answer_style = fields.String(required=False)
-    behaviour_when_ignore = fields.String(required=False)
-    behaviour_with_language = fields.String(required=False)
-    bot_name = fields.String(required=False)
-    bot_type = fields.String(required=False)
-    context_type = fields.String(required=False)
-    goal = fields.String(required=False)
-    interlocutor_identity = fields.String(required=False)
-    interlocutor_type = fields.String(required=False)
-    localisation = fields.String(required=False)
-    main_personality_trait_1 = fields.String(required=False)
-    main_personality_trait_2 = fields.String(required=False)
-    main_personality_trait_3 = fields.String(required=False)
-    used_sources = fields.String(required=False)
+    bot_id: int
+    answer_length: Optional[str] = None
+    answer_style: Optional[str] = None
+    behaviour_when_ignore: Optional[str] = None
+    behaviour_with_language: Optional[str] = None
+    bot_name: Optional[str] = None
+    bot_type: Optional[str] = None
+    context_type: Optional[str] = None
+    goal: Optional[str] = None
+    interlocutor_identity: Optional[str] = None
+    interlocutor_type: Optional[str] = None
+    localisation: Optional[str] = None
+    main_personality_trait_1: Optional[str] = None
+    main_personality_trait_2: Optional[str] = None
+    main_personality_trait_3: Optional[str] = None
+    used_sources: Optional[str] = None
+    answer_format: Optional[str] = None
+    voice_output: Optional[bool] = None
+    persona_description: Optional[str] = None
 
 
-class BotParametersPatchSchema(Schema):
-    """Schema for bot parameters patch validation"""
+class BotParametersPatchRequest(BaseModel):
+    """Schema for bot parameters patch validation: any subset of the
+    BotParametersRequest fields (all optional)"""
 
-    parameters = fields.Dict(required=True)
+    class Config:
+        extra = "allow"
 
 
 # Services initialization
 bot_parameters_svc = BotParametersService()
 logger = BotFactoryLogger()
-bot_parameters_schema = BotParametersSchema()
-bot_parameters_patch_schema = BotParametersPatchSchema()
 
 
 @bp.route(CONTROLLER_PATH, methods=["POST", "PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(
+    json=BotParametersRequest, tags=["bot-parameters"], security={"BearerAuth": []}
+)
 def create_or_update_bot_parameters():
-    """Create or update bot parameters"""
+    """Create bot parameters and regenerate the bot's system prompt."""
     try:
         if not request.is_json:
             return jsonify(
@@ -62,7 +71,9 @@ def create_or_update_bot_parameters():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = bot_parameters_schema.load(data)
+        validated_data = BotParametersRequest.model_validate(data).model_dump(
+            exclude_unset=True
+        )
 
         user_id = get_jwt_identity()
         user: User = User.query.filter_by(id=user_id).first()
@@ -80,7 +91,7 @@ def create_or_update_bot_parameters():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         logger.error(f"Bot parameters create/update error: {e}")
         return jsonify(
@@ -90,8 +101,17 @@ def create_or_update_bot_parameters():
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["PATCH"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(
+    json=BotParametersPatchRequest,
+    tags=["bot-parameters"],
+    security={"BearerAuth": []},
+)
 def patch_bot_parameters_admin(bot_id):
-    """Patch bot parameters"""
+    """Partially update bot parameters and regenerate the bot's system prompt.
+
+    Empty-string values are ignored, except for the optional clearable fields
+    (persona_description, answer_format).
+    """
     try:
         if not request.is_json:
             return jsonify(
@@ -99,7 +119,7 @@ def patch_bot_parameters_admin(bot_id):
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = data  # bot_parameters_patch_schema.load(data)
+        validated_data = data
 
         user_id = get_jwt_identity()
         user: User = User.query.filter_by(id=user_id).first()
@@ -122,7 +142,7 @@ def patch_bot_parameters_admin(bot_id):
         return jsonify(bot_parameters_dto.to_dict()), HTTPStatus.OK
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
         logger.error(f"Bot parameters patch error: {exc}")
         return jsonify(
@@ -132,6 +152,7 @@ def patch_bot_parameters_admin(bot_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["bot-parameters"], security={"BearerAuth": []})
 def get_bot_parameters_by_bot_id(bot_id: int):
     """Get bot parameters by bot ID"""
     try:
@@ -150,6 +171,7 @@ def get_bot_parameters_by_bot_id(bot_id: int):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:bot_id>", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["bot-parameters"], security={"BearerAuth": []})
 def delete_bot_parameters(bot_id):
     """Delete bot parameters by bot ID"""
     try:

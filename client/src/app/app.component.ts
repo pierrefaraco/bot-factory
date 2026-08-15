@@ -104,7 +104,7 @@ export class AppComponent implements OnInit {
   // Méthode pour vérifier si la navbar doit être affichée
   private checkRoute(url: string) {
     // Masquer la navbar sur les pages landing et login
-    const hideNavbarRoutes = ['/landing', '/login', '/register', '/auth'];
+    const hideNavbarRoutes = ['/landing', '/auth'];
     this.showNavbar = !hideNavbarRoutes.some(route => url.startsWith(route));
   }
 

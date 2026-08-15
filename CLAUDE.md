@@ -139,13 +139,12 @@ Backend endpoints are organized by feature using Flask blueprints:
 - `/api/rag/*` - RAG ask/answer endpoints for chat
 - `/api/token-stats/*` - Token usage statistics and analytics
 - `/api/users-admin/*` - User management (admin only)
-- `/api/iframe-security/*` - Iframe embedding with frame tokens
 
 ### Database Models
 
 All models are defined in `server/ai_server/dao/database.py`. Key models:
 
-- **User** - User accounts with roles (Admin, User, Guest, Iframe)
+- **User** - User accounts with roles (Admin, User, Guest)
 - **Bot** - Bot definitions (one per user, contains personality/system prompts)
 - **BotParameters** - Extended bot configuration (communication style, capabilities, etc.)
 - **BotAvatar** - SVG-based avatar components (body, eyes, hat, mouth, colors)
@@ -350,9 +349,8 @@ npm test -- --include='**/auth.service.spec.ts'
 
 1. **JWT Secrets**: Use strong secrets in production
 2. **CORS**: Configured in `main.py` - update origins for production
-3. **Frame Tokens**: Iframe embedding uses separate token validation
-4. **Role Validation**: Always use `@role_required` on admin endpoints
-5. **Input Validation**: Use validators from `config/validator.py`
+3. **Role Validation**: Always use `@role_required` on admin endpoints
+4. **Input Validation**: Use validators from `config/validator.py`
 
 ## Debugging Tips
 

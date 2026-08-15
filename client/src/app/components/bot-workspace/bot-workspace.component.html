@@ -3,7 +3,7 @@
   <div class="dashboard-header">
     <div class="header-content">
       <div class="header-top">
-        <h1>Mon espace de travail</h1>
+        <h1>My workspace</h1>
 
         <div class="button-group">
 
@@ -13,12 +13,12 @@
       </div>
       <p class="subtitle">
         <span *ngIf="hasSelectedBot">
-          Bot actif : <strong>{{ botName }}</strong>
+          Active bot: <strong>{{ botName }}</strong>
           <span *ngIf="selectedBot.bot_parameters?.bot_type" class="bot-type"> - {{ selectedBot.bot_parameters.bot_type
             }}</span>
         </span>
         <span *ngIf="!hasSelectedBot">
-          Aucun bot sélectionné
+          No bot selected
         </span>
       </p>
     </div>
@@ -50,19 +50,19 @@
         <nav class="tabs-nav">
           <button class="tab-button" [class.active]="activeTab === 'overview'" (click)="setActiveTab('overview')">
             <span class="material-icons">dashboard</span>
-            <span>Vue d'ensemble</span>
+            <span>Overview</span>
           </button>
 
           <button class="tab-button" [class.active]="activeTab === 'settings'" (click)="setActiveTab('settings')"
             [disabled]="!hasSelectedBot">
             <span class="material-icons">tune</span>
-            <span>Paramètres</span>
+            <span>Settings</span>
           </button>
 
           <button class="tab-button" [class.active]="activeTab === 'knowledge'" (click)="setActiveTab('knowledge')"
             [disabled]="!hasSelectedBot">
             <span class="material-icons">auto_stories</span>
-            <span>Connaissances</span>
+            <span>Knowledge</span>
           </button>
 
 
@@ -86,7 +86,7 @@
               <div class="up-section">
                 <span class="material-icons">info</span>
                 <h2>
-                  Bot actif
+                  Active bot
                 </h2>
               </div>
 
@@ -96,31 +96,15 @@
                   Create a new bot
                 </button>
 
-
-
-                <button class="action-btn settings-btn" (click)="setActiveTab('settings')">
-                  <span class="material-icons">tune</span>
-                  Configurer
-                </button>
-
-                <button class="action-btn knowledge-btn" (click)="setActiveTab('knowledge')">
-                  <span class="material-icons">auto_stories</span>
-                  Gérer les connaissances
-                </button>
-
-                <button class="action-btn draw-btn" (click)="setActiveTab('draw')">
-                  <span class="material-icons">brush</span>
-                  Personnaliser l'avatar
-                </button>
                 <button class="action-btn init-btn" (click)="resetChat()" *ngIf="selectedBot">
                   <span class="material-icons">refresh</span>
                   Reset conversation
                 </button>
+
                 <button class="action-btn delete-btn" (click)="deleteBot(selectedBot.id)" *ngIf="selectedBot">
                   <span class="material-icons">delete</span>
                   Delete selected bot
                 </button>
-
               </div>
 
             </div>
@@ -130,11 +114,11 @@
             <div class="overview-section empty-section" *ngIf="!hasSelectedBot">
               <div class="empty-state">
                 <span class="material-icons">smart_toy</span>
-                <h3>Aucun bot sélectionné</h3>
-                <p>Sélectionnez un bot dans la liste ou créez-en un nouveau pour commencer</p>
+                <h3>No bot selected</h3>
+                <p>Select a bot from the list or create a new one to get started</p>
                 <button class="btn-create-first" (click)="onCreateBot()">
                   <span class="material-icons">add_circle</span>
-                  Créer mon premier bot
+                  Create my first bot
                 </button>
               </div>
             </div>
@@ -149,7 +133,7 @@
               <div class="up-section">
                 <span class="material-icons">chat</span>
                 <h2>
-                  Discussion avec {{ botName }}
+                  Chat with {{ botName }}
                 </h2>
                 <!-- <app-button [icon]="'refresh'" [label]="'Réinitialiser'" (buttonClickedEvent)="resetChat()"
                 [color]="'var(--text-warning)'" [backgroundColor]="'var(--btn-color1)'" [type]="'small-icon-button'"
@@ -171,7 +155,7 @@
               <div class="up-section">
                 <span class="material-icons">auto_stories</span>
                 <h2>
-                  Arbre des connaissances
+                  Knowledge tree
                 </h2>
               </div>
               <div class="knowledge-container">
@@ -182,7 +166,7 @@
               <div class="up-section">
                 <span class="material-icons">edit</span>
                 <h2>
-                  Connaissance
+                  Knowledge item
                 </h2>
               </div>
               <div class="knowledge-editor-container">
@@ -199,7 +183,7 @@
             <div class="up-section">
               <span class="material-icons">tune</span>
               <h2>
-                Configuration de {{ botName }}
+                Configuration of {{ botName }}
               </h2>
             </div>
             <div class="settings-container">
@@ -214,7 +198,7 @@
             <div class="up-section">
               <span class="material-icons">brush</span>
               <h2>
-                Avatar de {{ botName }}
+                Avatar of {{ botName }}
               </h2>
             </div>
             <div class="draw-container">

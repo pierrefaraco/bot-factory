@@ -58,6 +58,9 @@
     justify-content: space-between;
     align-items: center;
     position: relative;
+    // Bootstrap makes .navbar > .container a flex container, so this
+    // child must span it fully for space-between to have any effect
+    width: 100%;
   }
 
   .logo {
@@ -374,8 +377,8 @@
       }
 
       &.chat-bubble-1 {
-        top: 20%;
-        left: -20%;
+        top: 2%;
+        left: -22%;
         animation: float 3s ease-in-out infinite, fadeIn 0.8s ease-out 0.5s both;
 
         @media (max-width: 768px) {
@@ -389,8 +392,8 @@
       }
 
       &.chat-bubble-2 {
-        bottom: 20%;
-        right: -20%;
+        bottom: 2%;
+        right: -22%;
         animation: float 3s ease-in-out infinite 1.5s, fadeIn 0.8s ease-out 1s both;
 
         @media (max-width: 768px) {

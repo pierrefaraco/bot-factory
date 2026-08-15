@@ -12,6 +12,8 @@ help:
 	@echo "  make dev            Start development servers (Docker Compose)"
 	@echo "  make dev-client     Start only Angular dev server"
 	@echo "  make dev-server     Start only Flask dev server"
+	@echo "  make db-only        Start only Mysql"
+	@echo "  make chromadb-only  Start only Chroma db"
 	@echo ""
 	@echo "Docker:"
 	@echo "  make build          Build Docker images"

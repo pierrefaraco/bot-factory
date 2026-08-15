@@ -49,7 +49,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment creation fails
         """
-        result = self._safe_execute("_perform_create", self._perform_create, data)
+        result = self._perform_create(data)
         if result is None:
             raise ServiceError(
                 "Assignment creation failed, no BotAssignmentDto returned."
@@ -125,9 +125,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_id", self._perform_get_by_id, entity_id
-        )
+        result = self._perform_get_by_id(entity_id)
         if result is None:
             raise ServiceError(
                 "Get assignment by id failed, no BotAssignmentDto returned."
@@ -150,7 +148,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment retrieval fails
         """
-        result = self._safe_execute("_perform_get_all", self._perform_get_all)
+        result = self._perform_get_all()
         if result is None:
             raise ServiceError("Assignment get_all failed, no list returned.")
         return result
@@ -174,9 +172,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_parent", self._perform_get_by_parent, parent_user_id
-        )
+        result = self._perform_get_by_parent(parent_user_id)
         if result is None:
             raise ServiceError("Get assignments by parent failed.")
         return result
@@ -203,13 +199,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             ServiceError: When assignment retrieval fails
         """
         if all:
-            result = self._safe_execute(
-                "_perform_get_all_by_user", self._perform_get_all_by_user, user_id
-            )
+            result = self._perform_get_all_by_user(user_id)
         else:
-            result = self._safe_execute(
-                "_perform_get_by_user", self._perform_get_by_user, user_id
-            )
+            result = self._perform_get_by_user(user_id)
         if result is None:
             raise ServiceError("Get assignments by user failed.")
         return result
@@ -236,9 +228,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             List of bot IDs
         """
-        result = self._safe_execute(
-            "_perform_get_bot_ids", self._perform_get_bot_ids, user_id
-        )
+        result = self._perform_get_bot_ids(user_id)
         if result is None:
             return []
         return result
@@ -260,8 +250,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             True if the bot is assigned to the user, False otherwise
         """
-        result = self._safe_execute(
-            "_perform_check_assignment", self._perform_check_assignment, bot_id, user_id
+        result = self._perform_check_assignment(
+            bot_id,
+            user_id,
         )
         return bool(result)
 
@@ -285,8 +276,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment update fails
         """
-        result = self._safe_execute(
-            "_perform_update", self._perform_update, entity_id, data
+        result = self._perform_update(
+            entity_id,
+            data,
         )
         if result is None:
             raise ServiceError(
@@ -328,7 +320,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment deletion fails
         """
-        result = self._safe_execute("_perform_delete", self._perform_delete, entity_id)
+        result = self._perform_delete(entity_id)
         if result is None:
             raise ServiceError("Assignment delete failed, no assignment deleted.")
         return result
@@ -353,9 +345,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             True if removal was successful
         """
-        result = self._safe_execute(
-            "_perform_remove_assignment",
-            self._perform_remove_assignment,
+        result = self._perform_remove_assignment(
             bot_id,
             user_id,
         )
@@ -394,9 +384,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             True if an assigment exist with bot_id and user_id
         """
-        result = self._safe_execute(
-            "_perform_is_bot_assigned_to_user",
-            self._perform_is_bot_assigned_to_user,
+        result = self._perform_is_bot_assigned_to_user(
             bot_id,
             user_id,
         )

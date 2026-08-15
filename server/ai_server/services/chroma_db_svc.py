@@ -75,9 +75,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When collection building fails
         """
-        result = self._safe_execute(
-            "_perform_build", self._perform_build, collection_name
-        )
+        result = self._perform_build(collection_name)
 
     def _perform_build(self, collection_name: str) -> None:
         logger.info(f"Building ChromaDB collection: {collection_name}")
@@ -135,7 +133,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When document creation fails
         """
-        result = self._safe_execute("_perform_create", self._perform_create, data)
+        result = self._perform_create(data)
         if result is None:
             raise ServiceError("Document creation failed, no DocumentDto returned.")
         return result
@@ -168,9 +166,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When document saving fails
         """
-        result = self._safe_execute(
-            "_perform_save_documents",
-            self._perform_save_documents,
+        result = self._perform_save_documents(
             docs,
             collection_name,
         )
@@ -198,9 +194,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When PDF ingestion fails
         """
-        result = self._safe_execute(
-            "_perform_ingest_pdf",
-            self._perform_ingest_pdf,
+        result = self._perform_ingest_pdf(
             pdf_file_path,
             collection_name,
         )
@@ -237,9 +231,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When directory ingestion fails
         """
-        result = self._safe_execute(
-            "_perform_ingest_directory",
-            self._perform_ingest_directory,
+        result = self._perform_ingest_directory(
             directory_path,
             collection_name,
         )
@@ -273,8 +265,9 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When text ingestion fails
         """
-        result = self._safe_execute(
-            "_perform_ingest_text", self._perform_ingest_text, content, collection_name
+        result = self._perform_ingest_text(
+            content,
+            collection_name,
         )
         if result is None:
             raise ServiceError("Text ingestion failed.")
@@ -302,9 +295,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When document retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_id", self._perform_get_by_id, entity_id
-        )
+        result = self._perform_get_by_id(entity_id)
         if result is None:
             raise ServiceError("Get document by id failed, no DocumentDto returned.")
         return result
@@ -335,7 +326,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When document retrieval fails
         """
-        result = self._safe_execute("_perform_get_all", self._perform_get_all)
+        result = self._perform_get_all()
         if result is None:
             raise ServiceError("Document get_all failed, no list returned.")
         return result
@@ -373,8 +364,9 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When document update fails
         """
-        result = self._safe_execute(
-            "_perform_update", self._perform_update, entity_id, data
+        result = self._perform_update(
+            entity_id,
+            data,
         )
         if result is None:
             raise ServiceError("Document update failed, no DocumentDto returned.")
@@ -404,7 +396,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When document deletion fails
         """
-        result = self._safe_execute("_perform_delete", self._perform_delete, entity_id)
+        result = self._perform_delete(entity_id)
         if result is None:
             raise ServiceError("Document delete failed, no document deleted.")
         return result
@@ -429,9 +421,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When deletion fails
         """
-        result = self._safe_execute(
-            "_perform_delete_all", self._perform_delete_all, collection_name
-        )
+        result = self._perform_delete_all(collection_name)
         if result is None:
             return False
         return result
@@ -460,8 +450,9 @@ class ChromaDbService(BaseService[DocumentDto]):
         Raises:
             ServiceError: When deletion fails
         """
-        result = self._safe_execute(
-            "_perform_delete_by_ids", self._perform_delete_by_ids, collection_name, ids
+        result = self._perform_delete_by_ids(
+            collection_name,
+            ids,
         )
         if result is None:
             return False

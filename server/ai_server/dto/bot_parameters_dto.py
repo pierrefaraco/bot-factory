@@ -21,6 +21,9 @@ class BotParametersDto:
     behaviour_with_language: Optional[str] = None
     localisation: Optional[str] = None
     interlocutor_identity: Optional[str] = None
+    answer_format: Optional[str] = None
+    voice_output: bool = False
+    persona_description: Optional[str] = None
 
     def __init___(self):
         pass

@@ -46,7 +46,7 @@ export const jwtInterceptor:HttpInterceptorFn  = (req: HttpRequest<unknown>, nex
       if (error.status === 401) {
         console.log('401 error detected, logging out...'); // Debug log
         authService.logout();
-        router.navigate(['/login']);
+        router.navigate(['/auth']);
       }
       return throwError(() => error);
     })

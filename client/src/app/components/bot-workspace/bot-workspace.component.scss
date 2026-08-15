@@ -268,12 +268,16 @@ app-bot-list {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
+        &:focus-visible {
+          outline: 2px solid var(--border-accent);
+          outline-offset: 2px;
+        }
+
         &.add-btn {
           border-left: 4px solid var(--text-accent);
 
           span {
             color: var(--text-accent);
-            ;
           }
 
           &:hover {
@@ -281,26 +285,11 @@ app-bot-list {
           }
         }
 
-        &.delete-btn {
-          border-left: 4px solid var(--text-danger);
-          background-color: var(--bg-danger);
-
-          span {
-            color: var(--text-danger);
-            ;
-          }
-
-          &:hover {
-            background: var(--bg-danger);
-          }
-        }
         &.init-btn {
           border-left: 4px solid var(--text-warning);
-          background-color: var(--bg-warning);
 
           span {
             color: var(--text-warning);
-            ;
           }
 
           &:hover {
@@ -308,35 +297,15 @@ app-bot-list {
           }
         }
 
-        &.chat-btn {
-          border-left: 4px solid var(--text-primary);
+        &.delete-btn {
+          border-left: 4px solid var(--text-danger);
 
-          &:hover {
-            background: var(--bg-primary);
+          span {
+            color: var(--text-danger);
           }
-        }
-
-        &.knowledge-btn {
-          border-left: 4px solid var(--text-secondary);
 
           &:hover {
-            background: var(--bg-secondary);
-          }
-        }
-
-        &.settings-btn {
-          border-left: 4px solid var(--text-tertiary);
-
-          &:hover {
-            background: var(--bg-tertiary);
-          }
-        }
-
-        &.draw-btn {
-          border-left: 4px solid var(--text-primary);
-
-          &:hover {
-            background: var(--bg-primary);
+            background: var(--bg-danger);
           }
         }
       }

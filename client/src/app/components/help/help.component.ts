@@ -2,8 +2,8 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 interface HelpSection {
-  titre: string;
-  contenu: string;
+  title: string;
+  content: string;
   icon: string;
 }
 
@@ -17,23 +17,23 @@ interface HelpSection {
 export class HelpComponent {
   sections: HelpSection[] = [
     {
-      titre: 'Chat avec Alfred',
-      contenu: 'Pour discuter avec Alfred, rendez-vous dans la section Chat. Vous pouvez lui poser des questions et il vous répondra de manière naturelle et instantanée.<br><br>Utilisez les suggestions de prompts pour démarrer une conversation.',
+      title: 'Chat with Alfred',
+      content: 'To talk with Alfred, go to the Chat section. You can ask questions and get natural, instant answers.<br><br>Use the prompt suggestions to start a conversation.',
       icon: 'fas fa-comments'
     },
     {
-      titre: 'Gestion des données',
-      contenu: 'La section Data vous permet de visualiser et gérer les données disponibles dans le système.<br><br>Importez, exportez et analysez vos données en quelques clics.',
+      title: 'Data management',
+      content: 'The Data section lets you view and manage the data available in the system.<br><br>Import, export and analyze your data in a few clicks.',
       icon: 'fas fa-database'
     },
     {
-      titre: 'Administration',
-      contenu: 'Les administrateurs peuvent gérer les utilisateurs et leurs droits dans la section Admin.<br><br>Gérez les permissions et surveillez l\'activité du système en temps réel.',
+      title: 'Administration',
+      content: 'Administrators can manage users and their permissions in the Admin section.<br><br>Manage permissions and monitor system activity in real time.',
       icon: 'fas fa-user-shield'
     },
     {
-      titre: 'Profil utilisateur',
-      contenu: 'Vous pouvez modifier vos informations personnelles dans la section Profile, accessible depuis le menu utilisateur.<br><br>Personnalisez votre expérience et gérez vos préférences.',
+      title: 'User profile',
+      content: 'You can edit your personal information in the Profile section, available from the user menu.<br><br>Customize your experience and manage your preferences.',
       icon: 'fas fa-user-circle'
     }
   ];

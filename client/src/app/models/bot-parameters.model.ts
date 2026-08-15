@@ -17,4 +17,7 @@ export interface BotParameters {
     behaviour_with_language?:string;
     localisation?: string;
     interlocutor_identity?: string;
-  } 
+    answer_format?: string;
+    voice_output?: boolean;
+    persona_description?: string;
+  }

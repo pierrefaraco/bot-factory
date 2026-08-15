@@ -22,6 +22,8 @@ dependencies = [
     "Flask-CORS==4.0.0",
     "Flask-JWT-Extended==4.5.2",
     "Werkzeug==3.0.1",
+    "spectree>=1.2.10",
+    "pydantic[email]>=2.5",
 
     # Database
     "Flask-SQLAlchemy==3.1.1",
@@ -51,7 +53,6 @@ dependencies = [
     "unstructured>=0.10.0",
 
     # Schema Validation - Use 3.x for compatibility with current code
-    "marshmallow==3.20.1",
 
     # Authentication & Security
     "python-jose==3.3.0",

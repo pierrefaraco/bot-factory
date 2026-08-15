@@ -85,6 +85,13 @@ class BotParameters(db.Model):
         String(128), nullable=True
     )
     localisation: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    answer_format: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    voice_output: Mapped[bool] = mapped_column(
+        default=False, nullable=False, server_default=sqlalchemy.text("0")
+    )
+    persona_description: Mapped[Optional[str]] = mapped_column(
+        String(2048), nullable=True
+    )
 
     def __repr__(self) -> str:
         return (
@@ -120,6 +127,9 @@ class BotParameters(db.Model):
         behaviour_with_language: str = "",
         localisation: str = "",
         interlocutor_identity: str = InterlocutorIdentity.USER.value,
+        answer_format: str = "",
+        voice_output: bool = False,
+        persona_description: str = "",
     ):
 
         self.bot_id = bot_id
@@ -137,6 +147,9 @@ class BotParameters(db.Model):
         self.behaviour_when_ignore = behaviour_when_ignore
         self.behaviour_with_language = behaviour_with_language
         self.localisation = localisation
+        self.answer_format = answer_format
+        self.voice_output = voice_output
+        self.persona_description = persona_description
         if interlocutor_identity not in [e.value for e in InterlocutorIdentity]:
             raise ValueError(
                 f"interlocutor_identity '{interlocutor_identity}' is not valid. Allowed values: {[e.value for e in InterlocutorIdentity]}"
@@ -355,22 +368,6 @@ class BotAssignment(db.Model):
         self.assigned_by = assigned_by
         self.assigned_at = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
         self.is_active = is_active
-
-
-class IFrame(db.Model):
-    __tablename__ = "iframe"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    bot_id: Mapped[int] = mapped_column(ForeignKey("bot.id", ondelete="CASCADE"))
-    key: Mapped[str] = mapped_column(String(128))
-    allowed_origins: Mapped[str] = mapped_column(String(128))
-
-    def __repr__(self) -> str:
-        return f"IFrame(id={self.id!r}, bot_id={self.bot_id!r}, key={self.key!r}, key={self.allowed_origin!r})"
-
-    def __init__(self, bot_id: int, key: str, allowed_origin: str):
-        self.bot_id = bot_id
-        self.key = key
-        self.allowed_origin = allowed_origin
 
 
 class TokenUsage(db.Model):

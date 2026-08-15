@@ -3,7 +3,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
 from http import HTTPStatus
-from marshmallow import Schema, fields, ValidationError
+from pydantic import BaseModel, ValidationError
+
+from ai_server.config.openapi import api, pydantic_error_messages
 
 from ai_server.dao.database import User
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
@@ -18,29 +20,35 @@ CONTROLLER_PATH = "/bot-guest-assignment"
 bp = Blueprint(CONTROLLER_NAME, __name__)
 
 
-class BotGuestAssignmentSchema(Schema):
+class BotGuestAssignmentRequest(BaseModel):
     """Schema for bot guest assignment validation"""
 
-    bot_id = fields.Integer(required=True)
-    guest_user_id = fields.Integer(required=True)
-    is_active = fields.Boolean(required=False, load_default=True)
+    bot_id: int
+    guest_user_id: int
+    is_active: bool = True
 
 
-class BotGuestAssignmentUpdateSchema(Schema):
+class BotGuestAssignmentUpdateRequest(BaseModel):
     """Schema for updating bot guest assignment"""
 
-    is_active = fields.Boolean(required=True)
+    is_active: bool
+
+
+class BotGuestAssignmentRefRequest(BaseModel):
+    """Schema referencing an assignment by bot and guest user"""
+
+    bot_id: int
+    guest_user_id: int
 
 
 # Services initialization
 bot_assignment_svc = BotAssignmentService()
 logger = BotFactoryLogger()
-assignment_schema = BotGuestAssignmentSchema()
-assignment_update_schema = BotGuestAssignmentUpdateSchema()
 
 
 @bp.route(CONTROLLER_PATH, methods=["POST"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=BotGuestAssignmentRequest, tags=["bot-assignment"], security={"BearerAuth": []})
 def create_assignment():
     """Create a new bot guest assignment"""
     try:
@@ -50,7 +58,7 @@ def create_assignment():
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = assignment_schema.load(data)
+        validated_data = BotGuestAssignmentRequest.model_validate(data).model_dump()
 
         user_id = get_jwt_identity()
         user: User = User.query.filter_by(id=user_id).first()
@@ -69,7 +77,7 @@ def create_assignment():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         logger.error(f"Assignment creation error: {e}")
         return jsonify(
@@ -79,6 +87,7 @@ def create_assignment():
 
 @bp.route(f"{CONTROLLER_PATH}/parent/<int:parent_user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["bot-assignment"], security={"BearerAuth": []})
 def get_assignments_by_parent(parent_user_id):
     """Get all assignments created by a parent user"""
     try:
@@ -105,6 +114,7 @@ def get_assignments_by_parent(parent_user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["bot-assignment"], security={"BearerAuth": []})
 def get_assignments_by_guest(guest_user_id):
     """Get all assignments for a guest user"""
     try:
@@ -138,6 +148,7 @@ def get_assignments_by_guest(guest_user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_user_id>/bot-ids", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(tags=["bot-assignment"], security={"BearerAuth": []})
 def get_assigned_bot_ids(guest_user_id):
     """Get list of bot IDs assigned to a guest user"""
     try:
@@ -169,6 +180,7 @@ def get_assigned_bot_ids(guest_user_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:assignment_id>", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=BotGuestAssignmentUpdateRequest, tags=["bot-assignment"], security={"BearerAuth": []})
 def update_assignment(assignment_id):
     """Update a bot guest assignment"""
     try:
@@ -178,7 +190,7 @@ def update_assignment(assignment_id):
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
-        validated_data = assignment_update_schema.load(data)
+        validated_data = BotGuestAssignmentUpdateRequest.model_validate(data).model_dump()
 
         user_id = get_jwt_identity()
         user: User = User.query.filter_by(id=user_id).first()
@@ -194,7 +206,7 @@ def update_assignment(assignment_id):
         return jsonify(updated_assignment.to_dict()), HTTPStatus.OK
 
     except ValidationError as e:
-        return jsonify({"error": e.messages}), HTTPStatus.BAD_REQUEST
+        return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
         logger.error(f"Assignment update error: {e}")
         return jsonify(
@@ -204,6 +216,7 @@ def update_assignment(assignment_id):
 
 @bp.route(f"{CONTROLLER_PATH}/<int:assignment_id>", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["bot-assignment"], security={"BearerAuth": []})
 def delete_assignment(assignment_id):
     """Delete a bot guest assignment"""
     try:
@@ -232,6 +245,7 @@ def delete_assignment(assignment_id):
 
 @bp.route(f"{CONTROLLER_PATH}/remove", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(json=BotGuestAssignmentRefRequest, tags=["bot-assignment"], security={"BearerAuth": []})
 def remove_assignment():
     """Remove assignment between a bot and guest user"""
     try:
@@ -268,6 +282,7 @@ def remove_assignment():
 
 @bp.route(f"{CONTROLLER_PATH}/check", methods=["POST"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+@api.validate(json=BotGuestAssignmentRefRequest, tags=["bot-assignment"], security={"BearerAuth": []})
 def check_assignment():
     """Check if a bot is assigned to a guest user"""
     try:

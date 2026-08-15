@@ -15,10 +15,10 @@ from ai_server.api_controllers import (
     rest_users_admin,
     rest_avatar,
     rest_bot_parameters,
-    rest_iframe_security,
     rest_token_stats,
 )
 from ai_server.config.constant import ADMIN_ROLE
+from ai_server.config.openapi import api as openapi
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.log.log_manager import LogManager
@@ -108,7 +108,6 @@ def create_app():
             rest_avatar.bp,
             rest_bot_parameters.bp,
             rest_bot_assignment.bp,
-            rest_iframe_security.bp,
             rest_token_stats.bp,
         )
         for bp in blueprints:
@@ -116,6 +115,9 @@ def create_app():
 
         # Define global routing rules
         app.register_error_handler(ApiError, handle_invalid_usage)
+
+        # OpenAPI documentation (SpecTree): Swagger UI at /api/docs/swagger/
+        openapi.register(app)
 
         logger.info(f"{app_name} version {app_version} started and ready.")
 

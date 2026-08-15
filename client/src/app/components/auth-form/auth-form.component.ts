@@ -193,7 +193,7 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
       });
     } else {
       console.error('❌ Google SDK non chargé');
-      alert('Google Sign-In n\'est pas disponible. Veuillez rafraîchir la page.');
+      alert('Google Sign-In is not available. Please refresh the page.');
     }
   }
 
@@ -306,20 +306,20 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
     }
 
     if (control.errors['required']) {
-      return 'Ce champ est requis';
+      return 'This field is required';
     }
 
     if (control.errors['email']) {
-      return 'Email invalide';
+      return 'Invalid email';
     }
 
     if (control.errors['minlength']) {
       const minLength = control.errors['minlength'].requiredLength;
-      return `Minimum ${minLength} caractères requis`;
+      return `Minimum ${minLength} characters required`;
     }
 
     if (controlName === 'confirmPassword' && this.signupForm.errors?.['passwordMismatch']) {
-      return 'Les mots de passe ne correspondent pas';
+      return 'Passwords do not match';
     }
 
     return '';

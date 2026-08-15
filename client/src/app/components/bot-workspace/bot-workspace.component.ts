@@ -162,7 +162,7 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
   }
 
   get botName(): string {
-    return this.selectedBot?.bot_parameters?.bot_name || 'Aucun bot sélectionné';
+    return this.selectedBot?.bot_parameters?.bot_name || 'No bot selected';
   }
 
   get totalBots(): number {

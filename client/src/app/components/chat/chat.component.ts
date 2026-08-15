@@ -113,7 +113,7 @@ export class ChatComponent implements OnInit, OnChanges, ChatServiceUser {
           if (error.status === 403) {
             this.addMessage({
               type: 'assistant',
-              content: 'Accès refusé. Vous n\'avez pas les permissions nécessaires pour accéder à cet historique de conversation.',
+              content: 'Access denied. You do not have the required permissions to access this conversation history.',
               timestamp: new Date()
             });
           } else {
@@ -227,7 +227,7 @@ export class ChatComponent implements OnInit, OnChanges, ChatServiceUser {
         if (error.status === 403) {
           this.addMessage({
             type: 'assistant',
-            content: 'Accès refusé. Vous n\'avez pas les permissions nécessaires pour supprimer cet historique de conversation.',
+            content: 'Access denied. You do not have the required permissions to delete this conversation history.',
             timestamp: new Date()
           });
         } else {

@@ -87,14 +87,11 @@ class BotService(BaseService[BotDto]):
         Returns:
             True if the bot belongs to the user, False otherwise
         """
-        return bool(
-            self._safe_execute(
-                "check_bot_ownership",
-                self._check_bot_ownership,
-                bot_id,
-                user_account_id,
-            )
+        result = self._check_bot_ownership(
+            bot_id,
+            user_account_id,
         )
+        return bool(result)
 
     def _check_bot_ownership(self, bot_id: int, user_account_id: int) -> bool:
         bot: Bot = Bot.query.get(bot_id)
@@ -128,7 +125,7 @@ class BotService(BaseService[BotDto]):
         Raises:
             ServiceError: When bot creation fails
         """
-        result = self._safe_execute("_perform_create", self._perform_create, data)
+        result = self._perform_create(data)
         if result is None:
             raise ServiceError("Bot creation failed, no BotDto returned.")
         return result
@@ -156,8 +153,9 @@ class BotService(BaseService[BotDto]):
             Bot instance if found, None otherwise
         """
         self.logger.info(f"get_dto_by_id {view}")
-        result = self._safe_execute(
-            "_perform_get_by_id", self._perform_get_by_id, entity_id, view
+        result = self._perform_get_by_id(
+            entity_id,
+            view,
         )
         if result is None:
             raise ServiceError("Get bot by id failed, no BotDto returned.")
@@ -190,7 +188,7 @@ class BotService(BaseService[BotDto]):
         Returns:
             List of Bot instances
         """
-        result = self._safe_execute("_perform_get_all", self._perform_get_all)
+        result = self._perform_get_all()
         if result is None:
             raise ServiceError("Bot get_all failed, no list returned.")
         return result
@@ -210,8 +208,9 @@ class BotService(BaseService[BotDto]):
         Returns:
             Updated BotDto instance or None if update fails
         """
-        result = self._safe_execute(
-            "_perform_update", self._perform_update, entity_id, data
+        result = self._perform_update(
+            entity_id,
+            data,
         )
         if result is None:
             raise ServiceError("Update Bot failed, no list returned.")
@@ -243,13 +242,12 @@ class BotService(BaseService[BotDto]):
             - Chapter
             - Session
             - BotAssignment
-            - IFrame
         """
 
         # Delete context manually (not managed by database CASCADE)
         self.context_svc.delete_all(entity_id)
 
-        result = self._safe_execute("_perform_delete", self._perform_delete, entity_id)
+        result = self._perform_delete(entity_id)
         if result is None:
             raise ServiceError("Bot delete failed, no bot deleted.")
         return result
@@ -273,7 +271,7 @@ class BotService(BaseService[BotDto]):
         Returns:
             User instance if found, None otherwise
         """
-        return self._safe_execute("get_bot_owner", self._perform_get_bot_owner, bot_id)
+        return self._perform_get_bot_owner(bot_id)
 
     def _perform_get_bot_owner(self, bot_id: int) -> Optional[User]:
         bot = Bot.query.get(bot_id)
@@ -291,9 +289,7 @@ class BotService(BaseService[BotDto]):
         Returns:
             List of Bot instances belonging to the user
         """
-        result = self._safe_execute(
-            "_perform_get_by_user", self._perform_get_by_user, user_account_id
-        )
+        result = self._perform_get_by_user(user_account_id)
         if result is None:
             raise ServiceError("Bot delete failed, no bot deleted.")
         return result
@@ -315,9 +311,7 @@ class BotService(BaseService[BotDto]):
         bots_assigments: List[BotAssignmentDto] = (
             self.bot_assignment_svc.get_assignments_by_user(user_id)
         )
-        bots_dto: List[BotDto] = self._safe_execute(
-            "_perform_get_all", self._perform_get_assigned_bots, bots_assigments
-        )
+        bots_dto: List[BotDto] = self._perform_get_assigned_bots(bots_assigments)
         if bots_dto is None:
             raise ServiceError("Bot get_all failed, no list returned.")
         return bots_dto
@@ -343,9 +337,7 @@ class BotService(BaseService[BotDto]):
         Returns:
             Count of bots belonging to the user
         """
-        return self._safe_execute(
-            "count_bots_by_user", self._count_bots_by_user, user_account_id
-        )
+        return self._count_bots_by_user(user_account_id)
 
     def _count_bots_by_user(self, user_account_id: int) -> int:
         return Bot.query.filter_by(user_account_id=user_account_id).count()

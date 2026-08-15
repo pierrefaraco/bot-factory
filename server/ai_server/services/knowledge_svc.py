@@ -84,9 +84,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge saving fails
         """
-        result = self._safe_execute(
-            "_perform_save_knowledges_dto",
-            self._perform_save_knowledges_dto,
+        result = self._perform_save_knowledges_dto(
             bot_id,
             knowledges_dto,
         )
@@ -128,9 +126,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge saving fails
         """
-        result = self._safe_execute(
-            "_perform_save_imported_knowledges",
-            self._perform_save_imported_knowledges,
+        result = self._perform_save_imported_knowledges(
             bot_id,
             imported_knowledges,
         )
@@ -187,9 +183,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge saving fails
         """
-        result = self._safe_execute(
-            "_perform_save_knowledge",
-            self._perform_save_knowledge,
+        result = self._perform_save_knowledge(
             pdf_file,
             bot_id,
             knowledge_id,
@@ -266,9 +260,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge creation fails
         """
-        result = self._safe_execute(
-            "_perform_create_knowledge",
-            self._perform_create_knowledge,
+        result = self._perform_create_knowledge(
             bot_id,
             knowledge_name,
             knowledge_content,
@@ -345,7 +337,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge creation fails
         """
-        result = self._safe_execute("_perform_create", self._perform_create, data)
+        result = self._perform_create(data)
         if result is None:
             raise ServiceError("Chapter creation failed, no ChapterDto returned.")
         return result
@@ -411,9 +403,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge update fails
         """
-        result = self._safe_execute(
-            "_perform_update_knowledge",
-            self._perform_update_knowledge,
+        result = self._perform_update_knowledge(
             bot_id,
             knowledge,
             new_name,
@@ -464,9 +454,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_by_id", self._perform_get_by_id, entity_id
-        )
+        result = self._perform_get_by_id(entity_id)
         if result is None:
             raise ServiceError("Get knowledge by id failed, no ChapterDto returned.")
         return result
@@ -487,7 +475,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge retrieval fails
         """
-        result = self._safe_execute("_perform_get_all", self._perform_get_all)
+        result = self._perform_get_all()
         if result is None:
             raise ServiceError("Chapter get_all failed, no list returned.")
         return result
@@ -509,9 +497,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_knowledges", self._perform_get_knowledges, bot_id
-        )
+        result = self._perform_get_knowledges(bot_id)
         if result is None:
             raise ServiceError("Get knowledges failed.")
         return result
@@ -535,8 +521,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge retrieval fails
         """
-        result = self._safe_execute(
-            "_perform_get_knowledge", self._perform_get_knowledge, bot_id, knowledge_id
+        result = self._perform_get_knowledge(
+            bot_id,
+            knowledge_id,
         )
         if result is None:
             raise ServiceError("Get knowledge failed.")
@@ -563,13 +550,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Returns:
             Chapter entity if found, None otherwise
         """
-        result = self._safe_execute(
-            "_perform_get_knowledge_if_exist",
-            self._perform_get_knowledge_if_exist,
+        return self._perform_get_knowledge_if_exist(
             bot_id,
             knowledge_id,
         )
-        return result
 
     def _perform_get_knowledge_if_exist(
         self, bot_id: int, knowledge_id: int
@@ -590,8 +574,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge update fails
         """
-        result = self._safe_execute(
-            "_perform_update", self._perform_update, entity_id, data
+        result = self._perform_update(
+            entity_id,
+            data,
         )
         if result is None:
             raise ServiceError("Chapter update failed, no ChapterDto returned.")
@@ -623,7 +608,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When knowledge deletion fails
         """
-        result = self._safe_execute("_perform_delete", self._perform_delete, entity_id)
+        result = self._perform_delete(entity_id)
         if result is None:
             raise ServiceError("Chapter delete failed, no knowledge deleted.")
         return result
@@ -693,9 +678,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Returns:
             True if deletion was successful, False otherwise
         """
-        result = self._safe_execute(
-            "_perform_delete_all", self._perform_delete_all, bot_id
-        )
+        result = self._perform_delete_all(bot_id)
         if result is None:
             return False
         return result
@@ -732,9 +715,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Raises:
             ServiceError: When recording fails
         """
-        result = self._safe_execute(
-            "_perform_record_knowledges", self._perform_record_knowledges, bot_id
-        )
+        result = self._perform_record_knowledges(bot_id)
 
     def _perform_record_knowledges(self, bot_id: int) -> None:
         knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()

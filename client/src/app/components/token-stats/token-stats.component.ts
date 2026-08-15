@@ -239,17 +239,17 @@ export class TokenStatsComponent implements OnInit, OnDestroy {
    */
   private getErrorMessage(error: any): string {
     if (error.status === 401) {
-      return 'Vous devez être connecté pour voir vos statistiques';
+      return 'You must be signed in to view your statistics';
     } else if (error.status === 403) {
-      return 'Vous n\'avez pas les permissions nécessaires';
+      return 'You do not have the required permissions';
     } else if (error.status === 404) {
-      return 'Aucune statistique trouvée';
+      return 'No statistics found';
     } else if (error.status === 0) {
       return 'Impossible de contacter le serveur';
     } else if (error.error?.error) {
       return error.error.error;
     } else {
-      return 'Une erreur est survenue lors du chargement des statistiques';
+      return 'An error occurred while loading statistics';
     }
   }
 }

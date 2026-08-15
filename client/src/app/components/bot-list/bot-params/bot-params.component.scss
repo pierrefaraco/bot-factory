@@ -151,3 +151,18 @@
     overflow: visible;
     z-index: 0 !important;
 }
+.voice-output-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 4px;
+    color: var(--text-primary);
+    cursor: pointer;
+
+    input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--text-accent);
+        cursor: pointer;
+    }
+}

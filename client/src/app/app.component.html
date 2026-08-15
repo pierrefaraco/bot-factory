@@ -22,9 +22,11 @@
       <ul class="navbar-nav ms-auto">
 
         <li class="nav-item dropdown" *ngIf="isLoggedIn">
-          <a class="nav-link" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown"
+          <a class="nav-link user-menu-trigger" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown"
             aria-expanded="false">
-            {{ mail }}
+            <span class="material-icons user-icon">account_circle</span>
+            <span class="user-mail">{{ mail }}</span>
+            <span class="material-icons caret-icon">expand_more</span>
           </a>
           <app-custom-dropdown-menu [items]="parameterItemList" aria-labelledby="navbarDropdown" class="user-menu">
             <li>
