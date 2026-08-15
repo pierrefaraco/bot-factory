@@ -24,14 +24,14 @@ app-bot-list {
 // Sidebar avec la liste des bots
 .sidebar-bots {
   flex: 0 0 auto;
-  width: 160px;
-  min-width: 160px;
+  width: 220px;
+  min-width: 220px;
   min-height: 100%;
 
   @media (max-width: 1023px) {
     width: 100%;
     min-width: 100%;
-    height: 200px;
+    height: 220px;
   }
 }
 
@@ -106,8 +106,8 @@ app-bot-list {
     }
 
     &.active {
-      background: var(--btn-color1);
-      color: var(--text-accent);
+      background: var(--btn-primary-bg);
+      color: var(--text-on-accent);
       font-weight: 600;
 
       &::before {
@@ -264,8 +264,8 @@ app-bot-list {
         }
 
         &:hover {
-          transform: translateX(5px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
         }
 
         &:focus-visible {
@@ -366,8 +366,13 @@ app-bot-list {
         }
 
         &:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+          transform: translateY(-3px);
+          box-shadow: var(--shadow-lg);
+        }
+
+        &:focus-visible {
+          outline: 3px solid rgba(99,102,241,0.18);
+          outline-offset: 2px;
         }
       }
     }
@@ -378,14 +383,14 @@ app-bot-list {
 
 .buttons-and-chat {
   display: flex;
-  align-items: center;
-  justify-content: left;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 1rem;
 
-  .status-section {}
+  .status-section { width: 30%; max-width: 340px; }
 
   .chat-section {
-    width: 75%;
+    width: 70%;
   }
 
 }
