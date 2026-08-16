@@ -1,4 +1,4 @@
-import { Component, Input ,OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import {AVATAR_COLORS} from '../../../../constants/color.constants'
 import { CommonModule } from '@angular/common';
 const CSS_CLASS_BACKGROUND = '.background-eyes';
@@ -11,7 +11,7 @@ const CSS_CLASS_DRAW = '.draw-eyes';
   templateUrl: './svg-eyes.component.html',
   styleUrl: './svg-eyes.component.scss'
 })
-export class SvgEyesComponent implements OnInit {
+export class SvgEyesComponent implements OnInit, OnChanges {
 @Input() choosenColorIndice = 0;
   @Input() choosenItemIndice = 0;
   @Input() height:number = 64.0;
@@ -29,6 +29,12 @@ export class SvgEyesComponent implements OnInit {
 
   ngOnInit(): void {
     this.initPositionsArray()
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['height'] || changes['offset']) {
+      this.initPositionsArray()
+    }
   }
 
   initPositionsArray(): void {
@@ -65,7 +71,6 @@ export class SvgEyesComponent implements OnInit {
 
 
   getColor(): string {
-    this.initPositionsArray()
     return AVATAR_COLORS[this.choosenColorIndice];
   }
 

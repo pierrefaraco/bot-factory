@@ -70,7 +70,7 @@
           Guest management
         </h2>
         <div class="table-container">
-          <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize">
+          <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize" [emptyMessage]="'No guests yet — create one to get started'">
             <tr appLine *ngFor="let user of paginatedUsers">
               <td appColumn>
                 <app-button *ngIf="user.id !==-1" (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
@@ -115,7 +115,7 @@
           All users
         </h2>
         <div class="table-container">
-          <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize">
+          <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize" [emptyMessage]="'No guests yet — create one to get started'">
             <tr appLine *ngFor="let user of paginatedUsers">
               <td appColumn>
                 <app-button *ngIf="user.id !==-1" (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"

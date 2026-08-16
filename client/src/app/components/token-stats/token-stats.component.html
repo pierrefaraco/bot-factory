@@ -1,7 +1,7 @@
 <div class="token-stats-container">
   <!-- En-tête avec titre et bouton de rafraîchissement -->
   <div class="header">
-    <h2>Statistiques de consommation de tokens</h2>
+    <h2>Token consumption statistics</h2>
     <div class="header-actions">
       <div class="time-period-toggle">
         <button
@@ -15,7 +15,7 @@
           class="toggle-btn"
           [class.active]="!showLast24h"
           (click)="toggleTimePeriod()">
-           Tout le temps
+           All time
         </button>
       </div>
       <app-button
@@ -59,7 +59,7 @@
           <span class="material-icons">assessment</span>
         </div>
         <div class="card-content">
-          <h3>Total de tokens</h3>
+          <h3>Total tokens</h3>
           <p class="stat-value">{{ formatNumber(getDisplayedTotal()) }}</p>
           <span class="stat-subtitle">{{ showLast24h ? 'tokens (24h)' : 'tokens consumed' }}</span>
         </div>
@@ -81,9 +81,9 @@
           <span class="material-icons">edit_note</span>
         </div>
         <div class="card-content">
-          <h3>Tokens de prompt</h3>
+          <h3>Prompt tokens</h3>
           <p class="stat-value">{{ formatNumber(stats.total_prompt_tokens) }}</p>
-          <span class="stat-subtitle">{{ getPromptPercentage() }}% du total</span>
+          <span class="stat-subtitle">{{ getPromptPercentage() }}% of total</span>
         </div>
       </div>
 
@@ -94,7 +94,7 @@
         <div class="card-content">
           <h3>Response tokens</h3>
           <p class="stat-value">{{ formatNumber(stats.total_completion_tokens) }}</p>
-          <span class="stat-subtitle">{{ getCompletionPercentage() }}% du total</span>
+          <span class="stat-subtitle">{{ getCompletionPercentage() }}% of total</span>
         </div>
       </div>
     </div>
@@ -104,7 +104,7 @@
       <div class="history-header">
         <h3>Recent history</h3>
         <div class="history-controls">
-          <label for="history-limit">Afficher:</label>
+          <label for="history-limit">Show:</label>
           <select id="history-limit" [(ngModel)]="historyLimit" (change)="loadHistory()">
             <option [value]="10">Last 10</option>
             <option [value]="25">Last 25</option>

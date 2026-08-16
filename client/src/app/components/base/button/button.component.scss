@@ -39,8 +39,23 @@
     transform: none !important;
   }
 
+  &:focus-visible,
+  &.cdk-keyboard-focused {
+    outline: 2px solid var(--text-accent);
+    outline-offset: 2px;
+  }
+
   .material-icons {
     font-size: 1.25rem;
+  }
+}
+
+.custom-icon-button,
+.field-icon-button {
+  &:focus-visible,
+  &.cdk-keyboard-focused {
+    outline: 2px solid var(--text-accent);
+    outline-offset: 2px;
   }
 }
 .custom-icon-button {

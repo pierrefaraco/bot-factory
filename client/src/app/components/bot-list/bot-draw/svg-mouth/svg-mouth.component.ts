@@ -1,4 +1,4 @@
-import { Component, Input ,OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import {AVATAR_COLORS} from '../../../../constants/color.constants'
 import { CommonModule } from '@angular/common';
 
@@ -12,7 +12,7 @@ const CSS_CLASS_DRAW = '.draw-mouth';
   templateUrl: './svg-mouth.component.html',
   styleUrl: './svg-mouth.component.scss'
 })
-export class SvgMouthComponent implements OnInit {
+export class SvgMouthComponent implements OnInit, OnChanges {
  @Input() choosenColorIndice = 0;
   @Input() choosenItemIndice = 0;
   @Input() height:number = 64.0;
@@ -31,6 +31,12 @@ export class SvgMouthComponent implements OnInit {
 
   ngOnInit(): void {
     this.initPositionsArray()
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['height'] || changes['offset']) {
+      this.initPositionsArray()
+    }
   }
 
   initPositionsArray(): void {
@@ -63,7 +69,6 @@ export class SvgMouthComponent implements OnInit {
   }
 
   getColor(): string {
-    this.initPositionsArray()
     return AVATAR_COLORS[this.choosenColorIndice];
   }
 

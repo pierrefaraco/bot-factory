@@ -1,5 +1,40 @@
 // Bot Workspace Styles
 
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// Le conteneur global `.dashboard` (défini globalement avec min-height: 100vh)
+// est surchargé ici pour occuper exactement la hauteur restante sous la navbar,
+// sans jamais dépasser la zone visible.
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  // 1-2px de marge volontaire : sur certains affichages (mise à l'échelle
+  // Windows non entière, ex. 125%/150%), les calculs de hauteur en cascade
+  // (vh, %, flex) peuvent arrondir à 1px près et faire apparaître, à tort,
+  // l'ascenseur natif de `.main-section` sur le bord droit de la page.
+  height: calc(100% - 2px);
+  min-height: 0;
+  max-height: calc(100% - 2px);
+  overflow: hidden;
+  padding: 0.75rem 1rem;
+}
+
+// Header et navigation compactés pour laisser un maximum de hauteur
+// à `.workspace-layout`, quitte à réduire un peu les marges.
+.dashboard-header {
+  flex: 0 0 auto;
+  margin-bottom: 0.5rem;
+
+  .header-content {
+    margin-bottom: 0.5rem;
+  }
+}
 
 app-bot-list {
   flex: 1 1 auto;
@@ -13,7 +48,9 @@ app-bot-list {
 // Layout principal avec sidebar
 .workspace-layout {
   display: flex;
-  min-height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
   gap: 1rem;
 
   @media (max-width: 1023px) {
@@ -26,35 +63,37 @@ app-bot-list {
   flex: 0 0 auto;
   width: 220px;
   min-width: 220px;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 
   @media (max-width: 1023px) {
+    flex: 0 0 auto;
     width: 100%;
     min-width: 100%;
-    height: 220px;
+    // Hauteur réduite au strict nécessaire (une seule rangée d'avatars),
+    // pour laisser un maximum de place à `.main-content` (chat, etc.)
+    // sur les fenêtres à la fois étroites et peu hautes.
+    height: auto;
+    max-height: 130px;
   }
 }
 
 // Contenu principal
 .main-content {
   flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-
-  @media (max-width: 1023px) {
-    height: auto;
-    max-height: none;
-  }
 }
 
 // Navigation par onglets
 .tabs-container {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
   background: var(--bg-primary);
   border-radius: 12px;
-  padding: 0.5rem;
+  padding: 0.375rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
 }
@@ -69,7 +108,7 @@ app-bot-list {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    padding: 0.875rem 1rem;
+    padding: 0.625rem 1rem;
     background: transparent;
     border: none;
     border-radius: 8px;
@@ -174,6 +213,7 @@ app-bot-list {
   // Style pour la section bots dans la sidebar
   &.bots-section {
     height: 100%;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -181,21 +221,30 @@ app-bot-list {
     h2 {
       flex: 0 0 auto;
       min-height: fit-content;
+      margin: 0 0 0.5rem 0;
     }
 
     .bots-list-container {
       flex: 1 1 auto;
       overflow: hidden;
-      min-height: 200px;
+      min-height: 120px;
       display: flex;
       flex-direction: column;
 
+      // Avatars réduits pour que la liste tienne sans défilement
+      // sur les hauteurs d'écran plus modestes (ex: fenêtre ~1280x720).
       ::ng-deep app-bot-list {
+        --avatar-width: 44px;
+        --avatar-height: 52px;
         flex: 1 1 auto;
         height: 100%;
         display: flex;
         flex-direction: column;
         overflow: hidden;
+
+        .container.layout-vertical {
+          gap: 0.375rem;
+        }
 
         .container {
           flex: 1 1 auto;
@@ -383,9 +432,12 @@ app-bot-list {
 
 .buttons-and-chat {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: flex-start;
   gap: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 
   .status-section { width: 30%; max-width: 340px; }
 
@@ -397,9 +449,12 @@ app-bot-list {
 
 .knowledges-panel  {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: left;
   gap: 1rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 
    .knowledge-section {
      width: 60%;
@@ -421,8 +476,14 @@ app-bot-list {
   &.draw-section {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    min-height: 65vh;
+    // auto (et non hidden) : sur les fenêtres extrêmement basses, le
+    // contenu qui ne rentrerait vraiment pas reste accessible au scroll
+    // au lieu d'être invisible ; la barre elle-même reste masquée ci-dessous.
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
 
 
     // Empêcher tout scrollbar dans les sections
@@ -498,24 +559,27 @@ app-bot-list {
   &.knowledge-section {
     .knowledge-container {
       width: 100%;
-      height: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
       margin: 0px;
 
       ::ng-deep app-knowledges {
         display: block;
-        height: 100%;
       }
     }
   }
-  &.knowledge-editor-section{ 
+  &.knowledge-editor-section{
     .knowledge-editor-container {
       width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
       margin: 0px;
 
 
       ::ng-deep app-knowledges {
         display: block;
-        height: 100%;
       }
     }
   }
@@ -523,7 +587,9 @@ app-bot-list {
   &.settings-section {
     .settings-container {
       width: 100%;
-      height: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
 
       ::ng-deep app-bot-params {
         display: block;
@@ -534,11 +600,12 @@ app-bot-list {
   &.draw-section {
     .draw-container {
       width: 100%;
-      height: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
 
       ::ng-deep app-bot-draw {
         display: block;
-        height: 100%;
       }
     }
   }
@@ -548,10 +615,12 @@ app-bot-list {
 @media (max-width: 1023px) {
   .sidebar-bots {
     .overview-section.bots-section {
-      height: 200px;
-      max-height: 200px;
+      height: auto;
+      max-height: 130px;
 
       .bots-list-container {
+        min-height: 0;
+
         ::ng-deep app-bot-list {
           height: 100%;
 
@@ -564,6 +633,26 @@ app-bot-list {
           }
         }
       }
+    }
+  }
+
+  .buttons-and-chat {
+    flex-direction: column;
+
+    .status-section,
+    .chat-section {
+      width: 100%;
+      max-width: none;
+    }
+  }
+
+  .knowledges-panel {
+    flex-direction: column;
+    align-items: stretch;
+
+    .knowledge-section,
+    .knowledge-editor-section {
+      width: 100%;
     }
   }
 }

@@ -143,6 +143,11 @@
     &:focus {
       outline: none;
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--text-accent);
+      outline-offset: 2px;
+    }
   }
 
   .mode-indicator {
@@ -306,6 +311,11 @@
 
         &:focus {
           outline: none;
+        }
+
+        &:focus-visible {
+          outline: 2px solid var(--text-accent);
+          outline-offset: 2px;
         }
       }
     }

@@ -3,7 +3,11 @@
 :host {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  // Une petite marge est laissée en bas : sous Windows, la barre des
+  // tâches peut recouvrir le bas de la fenêtre même en plein écran,
+  // et 100vh ne tient pas compte de ce chevauchement.
+  height: calc(100vh - 16px);
+  overflow: hidden;
   background-color: var(--bg-secondary);
 }
 
@@ -188,6 +192,7 @@
 
 .main-section {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;

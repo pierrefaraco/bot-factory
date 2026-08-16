@@ -1,0 +1,23 @@
+.no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  height: 100%;
+}
+
+.no-data .material-icons {
+  font-size: 4rem;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  margin-bottom: 1rem;
+}
+
+.no-data p {
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  max-width: 20rem;
+  margin: 0;
+}

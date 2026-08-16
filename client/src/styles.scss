@@ -30,7 +30,12 @@ html,
 body {
   height: 100%;
   width: 100%;
-  overflow-x: hidden;
+  // L'appli se comporte comme un shell à viewport fixe : app-root occupe
+  // exactement la hauteur de l'écran et chaque page gère son propre
+  // défilement interne (.main-section). Aucun scroll ne doit donc jamais
+  // apparaître au niveau de la page elle-même (évite aussi l'ascenseur
+  // "fantôme" causé par des arrondis de sous-pixel sur certains écrans).
+  overflow: hidden;
 }
 
 body {
@@ -150,6 +155,11 @@ button {
   &:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--text-accent);
+    outline-offset: 2px;
   }
 }
 

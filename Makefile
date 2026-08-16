@@ -69,7 +69,7 @@ install-deps:
 dev: up
 	@echo "✓ All services running. Access:"
 	@echo "  Frontend: http://localhost:4200"
-	@echo "  API: http://localhost:444"
+	@echo "  API: http://localhost:4444"
 	@echo "  Database: localhost:3306"
 
 dev-client:

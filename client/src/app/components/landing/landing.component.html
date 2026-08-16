@@ -18,9 +18,9 @@
 
         <!-- Navigation Links -->
         <div class="nav-links" [class.mobile-open]="mobileMenuOpen">
-          <a (click)="scrollToSection('features')" class="nav-link">Features</a>
-          <a (click)="scrollToSection('how-it-works')" class="nav-link">How It Works</a>
-          <a (click)="scrollToSection('stats')" class="nav-link">Stats</a>
+          <a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link" class="nav-link">Features</a>
+          <a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link" class="nav-link">How It Works</a>
+          <a (click)="scrollToSection('stats')" (keydown.enter)="scrollToSection('stats')" tabindex="0" role="link" class="nav-link">Stats</a>
           <div class="nav-buttons">
             <app-button [label]="'Login / Signup'" [type]="'custom-button'" [color]="'var(--text-on-accent)'"
               [backgroundColor]="'var(--text-accent)'" [disabled]="false"
@@ -156,17 +156,17 @@
         <div class="footer-section">
           <h4 class="footer-title">Product</h4>
           <ul class="footer-links">
-            <li><a (click)="scrollToSection('features')">Features</a></li>
-            <li><a (click)="scrollToSection('how-it-works')">How It Works</a></li>
-            <li><a (click)="navigateToAuth()">Pricing</a></li>
+            <li><a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link">Features</a></li>
+            <li><a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link">How It Works</a></li>
+            <li><a (click)="navigateToAuth()" (keydown.enter)="navigateToAuth()" tabindex="0" role="link">Pricing</a></li>
           </ul>
         </div>
         <div class="footer-section">
           <h4 class="footer-title">Company</h4>
           <ul class="footer-links">
-            <li><a (click)="navigateToAuth()">About</a></li>
-            <li><a (click)="navigateToAuth()">Contact</a></li>
-            <li><a (click)="navigateToAuth()">Policies</a></li>
+            <li><a (click)="navigateToAuth()" (keydown.enter)="navigateToAuth()" tabindex="0" role="link">About</a></li>
+            <li><a (click)="navigateToAuth()" (keydown.enter)="navigateToAuth()" tabindex="0" role="link">Contact</a></li>
+            <li><a (click)="navigateToPolicies()" (keydown.enter)="navigateToPolicies()" tabindex="0" role="link">Policies</a></li>
           </ul>
         </div>
         <div class="footer-section">

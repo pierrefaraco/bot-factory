@@ -16,6 +16,7 @@ export class ArrayComponent {
  @Input() columns_names: string[] = [];
  @Input() records: any [] = [];
  @Input() pageSize: number = 0;
+ @Input() emptyMessage: string = 'No records found';
  currentPage: number = 1;
  totalPages: number = 0;
 

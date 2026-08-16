@@ -9,10 +9,18 @@
       <ng-content>
 
       </ng-content>
+      <tr *ngIf="records.length === 0" class="empty-row">
+        <td [attr.colspan]="columns_names.length">
+          <div class="empty-state">
+            <span class="material-icons">inbox</span>
+            <p>{{ emptyMessage }}</p>
+          </div>
+        </td>
+      </tr>
     </tbody>
   </table>
 
-  <div class="pagination-controls">
+  <div class="pagination-controls" *ngIf="records.length > 0">
 
     <app-button  class="pagination-item" [icon]="'chevron_left'" [label]="'previous'" [color]="'var(--text-primary)'"
       [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color3)'"

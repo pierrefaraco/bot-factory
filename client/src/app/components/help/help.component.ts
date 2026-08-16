@@ -19,22 +19,22 @@ export class HelpComponent {
     {
       title: 'Chat with Alfred',
       content: 'To talk with Alfred, go to the Chat section. You can ask questions and get natural, instant answers.<br><br>Use the prompt suggestions to start a conversation.',
-      icon: 'fas fa-comments'
+      icon: 'forum'
     },
     {
       title: 'Data management',
       content: 'The Data section lets you view and manage the data available in the system.<br><br>Import, export and analyze your data in a few clicks.',
-      icon: 'fas fa-database'
+      icon: 'storage'
     },
     {
       title: 'Administration',
       content: 'Administrators can manage users and their permissions in the Admin section.<br><br>Manage permissions and monitor system activity in real time.',
-      icon: 'fas fa-user-shield'
+      icon: 'admin_panel_settings'
     },
     {
       title: 'User profile',
       content: 'You can edit your personal information in the Profile section, available from the user menu.<br><br>Customize your experience and manage your preferences.',
-      icon: 'fas fa-user-circle'
+      icon: 'account_circle'
     }
   ];
 }

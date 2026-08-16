@@ -1,10 +1,17 @@
-<div class="help-container">
-  <h1>Centre d'aide</h1>
-  
-  <div class="sections">
-    <div class="section" *ngFor="let section of sections">
+<div class="dashboard">
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="header-top">
+        <h1>Help Center</h1>
+      </div>
+      <p class="subtitle">Find your way around the Chat, Data, Admin and Profile sections</p>
+    </div>
+  </div>
+
+  <div class="sections-grid">
+    <div class="section-card" *ngFor="let section of sections">
       <div class="section-icon">
-        <i [class]="section.icon"></i>
+        <span class="material-icons">{{ section.icon }}</span>
       </div>
       <h2>{{ section.title }}</h2>
       <p [innerHTML]="section.content"></p>

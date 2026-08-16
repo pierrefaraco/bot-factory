@@ -70,7 +70,7 @@ services:
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-a}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
     ports:
-      - "444:444"
+      - "4444:444"
     volumes:
       # HOST_PROJECT_PATH: absolute path of this project as seen by the Docker
       # daemon. Needed when compose runs inside a dev-container whose paths

@@ -102,3 +102,7 @@ temp/
 # Lock files (optional - include for production consistency)
 # package-lock.json
 # poetry.lock
+
+# Claude Code / Playwright MCP local state
+.claude/
+.playwright-mcp/

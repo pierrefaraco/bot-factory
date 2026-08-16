@@ -24,7 +24,8 @@
          (keydown.space)="onSelectBot(bot.id); $event.preventDefault()"
          tabindex="0"
          role="button"
-         [attr.aria-label]="'Select bot ' + bot.id">
+         [title]="bot.bot_parameters?.bot_name || ('Bot ' + bot.id)"
+         [attr.aria-label]="'Select bot ' + (bot.bot_parameters?.bot_name || bot.id)">
       <app-svg-avatar *ngIf="bot.avatar" [avatar]="bot.avatar" ></app-svg-avatar>
     </div>
 

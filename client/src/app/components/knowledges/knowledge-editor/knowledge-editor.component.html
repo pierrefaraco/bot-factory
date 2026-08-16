@@ -1,3 +1,8 @@
+<div class="no-data" *ngIf="!selectedKnowledge">
+    <span class="material-icons">description</span>
+    <p>Select an item in the knowledge tree to view and edit its content</p>
+</div>
+
 <form [formGroup]="knowledgeForm" *ngIf="selectedKnowledge">
 
 

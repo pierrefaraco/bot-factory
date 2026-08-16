@@ -1,4 +1,4 @@
-import { Component, Input ,OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import {AVATAR_COLORS} from '../../../../constants/color.constants'
 import { CommonModule } from '@angular/common';
 
@@ -12,7 +12,7 @@ const CSS_CLASS_DRAW = '.draw-hat';
   templateUrl: './svg-hat.component.html',
   styleUrl: './svg-hat.component.scss'
 })
-export class SvgHatComponent implements OnInit {
+export class SvgHatComponent implements OnInit, OnChanges {
   @Input() choosenColorIndice = 0;
   @Input() choosenItemIndice = 0;
   @Input() height:number = 64.0;
@@ -30,6 +30,12 @@ export class SvgHatComponent implements OnInit {
 
   ngOnInit(): void {
     this.initPositionsArray()
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['height'] || changes['offset']) {
+      this.initPositionsArray()
+    }
   }
 
   initPositionsArray(): void {
@@ -63,7 +69,6 @@ export class SvgHatComponent implements OnInit {
   }
   
   getColor(): string {
-    this.initPositionsArray()
     return AVATAR_COLORS[this.choosenColorIndice];
   }
 

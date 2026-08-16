@@ -11,8 +11,8 @@ const CSS_CLASS_DRAW = '.draw-bot';
   templateUrl: './svg-bot.component.html',
   styleUrl: './svg-bot.component.scss'
 })
-export class SvgBotComponent implements OnInit {
- 
+export class SvgBotComponent implements OnInit, OnChanges {
+
 
   @Input() choosenColorIndice = 0;
   @Input() choosenItemIndice = 0;
@@ -28,8 +28,13 @@ export class SvgBotComponent implements OnInit {
 
   hatPositions : Array<{ top: string, left: string }> = [];
   ngOnInit(): void {
-    console.log('SVG Bot component initialized with height:', this.height, 'and offset:', this.offset);
     this.initPositionsArray()
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['height'] || changes['offset']) {
+      this.initPositionsArray()
+    }
   }
 
   initPositionsArray(): void {
@@ -65,7 +70,6 @@ export class SvgBotComponent implements OnInit {
 
 
   getColor(): string {
-    this.initPositionsArray()
     return AVATAR_COLORS[this.choosenColorIndice];
   }
 

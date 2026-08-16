@@ -116,6 +116,10 @@ def create_app():
         # Define global routing rules
         app.register_error_handler(ApiError, handle_invalid_usage)
 
+        @app.route(f"{main_url_subdirectory}/health")
+        def health_check() -> Response:
+            return jsonify({"status": "ok"})
+
         # OpenAPI documentation (SpecTree): Swagger UI at /api/docs/swagger/
         openapi.register(app)
 

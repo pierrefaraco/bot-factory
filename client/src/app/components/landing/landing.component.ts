@@ -81,6 +81,10 @@ export class LandingComponent {
     this.router.navigate(['/auth']);
   }
 
+  navigateToPolicies() {
+    this.router.navigate(['/policies']);
+  }
+
   scrollToSection(sectionId: string) {
     const element = document.getElementById(sectionId);
     if (element) {
