@@ -103,6 +103,10 @@ temp/
 # package-lock.json
 # poetry.lock
 
+# Root-level Node artifacts (the real app lives in client/)
+/package.json
+/package-lock.json
+
 # Claude Code / Playwright MCP local state
 .claude/
 .playwright-mcp/
