@@ -144,8 +144,32 @@
   padding: 0.25rem !important;
 }
 
-// Flèche du select, alignée sur les autres icônes de champ (--text-secondary
-// au repos, cf. .clear-button/.material-icons ailleurs dans ce fichier).
+// Flèche du select : le triangle SVG plein de Material (couleur imposée à
+// rgba(255,255,255,.7), mesuré — le recolorer seul ne suffisait pas, cf.
+// spécificité) détonne aussi par sa forme à côté des chevrons de la police
+// "Material Icons" utilisés partout ailleurs dans l'app (ex. "expand_more"
+// du menu utilisateur). Remplacée par ce même glyphe, pour une flèche
+// identique où qu'elle apparaisse dans l'app.
 ::ng-deep .mat-mdc-select-arrow {
-  color: var(--text-secondary);
+  svg {
+    display: none;
+  }
+
+  &::before {
+    content: 'expand_more';
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+    font-size: 1.25rem;
+    color: var(--text-secondary) !important;
+  }
 }
