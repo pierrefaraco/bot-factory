@@ -1,212 +1,152 @@
-# Alembic — Guide d'utilisation
+# Alembic — Usage Guide
 
-Toute la configuration Alembic (config, scripts d'environnement, migrations)
-vit dans `server/db/` :
+All Alembic configuration (config, environment scripts, migrations) lives in `server/db/`:
 
 ```
 server/db/
-├── alembic.ini          # Config Alembic (script_location = %(here)s/alembic)
+├── alembic.ini          # Alembic config (script_location = %(here)s/alembic)
 ├── alembic/
-│   ├── env.py            # Bootstrap : import des modèles ai_server + DATABASE_URL
-│   ├── script.py.mako     # Template utilisé pour générer une nouvelle révision
-│   └── versions/          # Historique des migrations (une par fichier)
-├── check_alembic.py        # Script de diagnostic de la config
-├── drop_table.sh / .bat     # Supprime toutes les tables (⚠️ destructif)
-└── README.md                # Ce guide
+│   ├── env.py            # Bootstrap: import ai_server models + DATABASE_URL
+│   ├── script.py.mako     # Template used to generate a new revision
+│   └── versions/          # Migration history (one file per revision)
+├── check_alembic.py        # Diagnostic script for configuration
+├── drop_table.sh / .bat     # Destroy all tables (⚠️ destructive)
+└── README.md                # This guide
 ```
 
-> Les commandes de migration (`init` / `create` / `upgrade` / `downgrade` /
-> `history` / `current` / `stamp`) sont désormais exposées comme cibles
-> `make db-*` à la racine du projet (voir `Makefile`), plus besoin des
-> anciens scripts `migrate.sh` / `z-alembic.sh`. Elles s'exécutent via
-> `uv run alembic` depuis `server/db/`, avec `DATABASE_URL` chargée
-> automatiquement depuis `server/.env`.
+> Migration commands (`init` / `create` / `upgrade` / `downgrade` / `history` / `current` / `stamp`) are exposed as `make db-*` targets at the project root (see `Makefile`). They run `uv run alembic` from `server/db/` and load `DATABASE_URL` automatically from `server/.env`.
 
-## 1. Prérequis (premier lancement)
+## 1. Prerequisites (first run)
 
-1. **Environnement virtuel Python installé** (voir `server/CLAUDE.md`) :
-   ```bash
-   cd server
-   uv sync
-   ```
-2. **Une base MySQL démarrée**, soit via Docker (`make dev` / `make db-only`),
-   soit un MySQL local.
+1. **Python virtual environment installed** (see `server/CLAUDE.md`):
+```bash
+cd server
+uv sync
+```
+2. **A MySQL database running**, either via Docker (`make dev` / `make db-only`) or locally.
 
-## 2. Configurer `DATABASE_URL`
+## 2. Configure `DATABASE_URL`
 
-`alembic/env.py` lit la variable d'environnement `DATABASE_URL` (via
-`ai_server.config.config.flask_config`). C'est la **même** variable que celle
-utilisée par le serveur Flask, définie dans `server/.env` :
+`alembic/env.py` reads `DATABASE_URL` via `ai_server.config.config.flask_config`. This is the same variable used by the Flask server and is defined in `server/.env`:
 
 ```
-DATABASE_URL=mysql+pymysql://botcraft_user:123456789@127.0.0.1:3306/botcraft?charset=utf8mb4
+DATABASE_URL=******127.0.0.1:3306/botcraft?charset=utf8mb4
 ```
 
-Les cibles `make db-*` chargent automatiquement `server/.env` avant
-d'invoquer `alembic` — inutile de l'exporter manuellement si ce fichier est
-à jour.
+The `make db-*` targets load `server/.env` before invoking `alembic` — no need to export `DATABASE_URL` manually if the file is up to date.
 
-## 3. Créer le dossier `alembic/` s'il n'existe pas
+## 3. Create the `alembic/` folder if missing
 
-Le dossier `alembic/` (contenant `env.py`, `script.py.mako`, `versions/`) est
-requis par Alembic. S'il venait à manquer (dossier supprimé par erreur,
-clone partiel, etc.), régénérez-le avec :
+If the `alembic/` folder (containing `env.py`, `script.py.mako`, `versions/`) is missing, regenerate it with:
 
 ```bash
 make db-init
 ```
 
-Cette commande (voir `server/db/bootstrap_alembic.sh`) ne fait rien si
-`alembic/` existe déjà et n'est pas vide (elle ne l'écrase jamais). Si le
-dossier est absent, elle exécute `alembic init alembic` **puis** réécrit
-automatiquement `alembic/env.py` avec la version personnalisée (import des
-modèles `ai_server` + lecture de `DATABASE_URL`) — pas besoin de git pour ça,
-tout est autonome dans le script.
+This command (see `server/db/bootstrap_alembic.sh`) does nothing if `alembic/` already exists and is not empty (it never overwrites). If the folder does not exist, it runs `alembic init alembic` and then rewrites `alembic/env.py` with a customized version (imports `ai_server` models and reads `DATABASE_URL`) — no git required.
 
-> ⚠️ `server/db/` (y compris `alembic/`) n'est pour l'instant pas suivi par
-> git dans ce dépôt (`git ls-files server/db` ne retourne rien). Pensez à
-> `git add server/db` si vous voulez versionner cette configuration et
-> l'historique des migrations.
+> ⚠️ `server/db/` (including `alembic/`) is currently not tracked by git in this repository (`git ls-files server/db` returns nothing). Consider `git add server/db` if you want to version this configuration and migration history.
 
-## 4. Vérifier que tout est en ordre
+## 4. Verify the configuration
 
-Un script de diagnostic est fourni :
+A diagnostic script is provided:
 
 ```bash
 cd server && uv run db/check_alembic.py
 ```
 
-Il vérifie : `DATABASE_URL`, la présence des fichiers Alembic, la commande
-`alembic`, l'import des modèles SQLAlchemy (`ai_server.dao.database.Base`) et
-les migrations existantes.
+It checks: `DATABASE_URL`, presence of Alembic files, the `alembic` command, SQLAlchemy models import (`ai_server.dao.database.Base`) and existing migrations.
 
-## 5. Premier lancement — appliquer les migrations
+## 5. First run — apply migrations
 
-### Cas A — base de données neuve (aucune table)
+### Case A — fresh database (no tables)
 
-Applique toutes les migrations existantes, en partant de zéro :
+Apply all migrations from scratch:
 
 ```bash
 make db-upgrade
 ```
 
-Cela crée toutes les tables définies par la migration initiale
-(`d2d0def68081_start.py`) puis toute migration ajoutée depuis.
+This creates all tables defined by the initial migration `d2d0def68081_start.py` and any subsequent migrations.
 
-### Cas B — base de données déjà existante (tables déjà créées manuellement)
+### Case B — database already exists (tables created manually)
 
-Si les tables existent déjà (ex. ancienne base sans suivi Alembic), il ne faut
-**pas** rejouer `upgrade` (qui tenterait de recréer les tables). Marquez la
-base comme étant déjà à la révision courante sans exécuter le SQL :
+If tables already exist (e.g., legacy DB without Alembic tracking), do NOT run `upgrade` (it will try to recreate tables). Instead, mark the DB as at the current revision without executing SQL:
 
 ```bash
 make db-stamp REV=head
 ```
 
-## 6. Créer une nouvelle migration
+## 6. Creating a new migration
 
-Après avoir modifié un modèle dans `server/ai_server/dao/database.py` :
+After modifying a model in `server/ai_server/dao/database.py`:
 
 ```bash
-make db-create MSG="Description du changement"
+make db-create MSG="Description of the change"
 ```
 
-Cela génère un nouveau fichier dans `alembic/versions/` via
-`--autogenerate`. **Relisez toujours le fichier généré** (Alembic ne détecte
-pas tout parfaitement : renommages de colonnes, changements de type, etc.).
-
-Puis appliquez-la :
+This generates a new file in `alembic/versions/` using `--autogenerate`. Always review the generated file (Alembic does not detect every change: renames, type changes, etc.). Then apply it:
 
 ```bash
 make db-upgrade
 ```
 
-## 7. Commandes disponibles (`make db-*`)
+## 7. Available commands (`make db-*`)
 
 ```bash
-make db-init                      # Créer alembic/ s'il n'existe pas (voir section 3)
-make db-create MSG="message"      # Nouvelle migration auto-générée
-make db-upgrade                   # Appliquer toutes les migrations en attente
-make db-downgrade                 # Annuler la dernière migration
-make db-history                   # Historique des migrations
-make db-current                   # Révision actuelle de la base
-make db-stamp REV=<rev|head>      # Marquer la base à une révision sans exécuter le SQL
+make db-init                      # Create alembic/ if missing
+make db-create MSG="message"     # Auto-generated new migration
+make db-upgrade                   # Apply pending migrations
+make db-downgrade                 # Undo last migration
+make db-history                   # Migration history
+make db-current                   # Current revision
+make db-stamp REV=<rev|head>      # Mark DB as a revision without applying SQL
 ```
 
-Ce sont des wrappers autour des commandes `alembic` standard ; vous pouvez
-aussi utiliser directement `alembic` depuis `server/db/` :
+These are wrappers around standard `alembic` commands. You can also use `alembic` directly from `server/db/`:
 
 ```bash
 cd server/db
-export DATABASE_URL='mysql+pymysql://botcraft_user:123456789@127.0.0.1:3306/botcraft'
+export DATABASE_URL='******127.0.0.1:3306/botcraft'
 uv run alembic upgrade head
 uv run alembic revision --autogenerate -m "message"
 ```
 
-## 8. Avec Docker Compose
+## 8. With Docker Compose
 
-Le `Dockerfile` de l'API copie le dossier `db/` dans l'image (`/app/db`).
-Les migrations peuvent aussi se lancer **depuis le conteneur** avec :
+The API Dockerfile copies the `db/` folder into the image (`/app/db`). Run migrations from inside the container:
 
 ```bash
 make migrate
-# équivalent à :
+# equivalent to:
 docker-compose exec -w /app/db api alembic upgrade head
 ```
 
-> Le `-w /app/db` est nécessaire : Alembic cherche `alembic.ini` dans le
-> répertoire courant, et le `WORKDIR` par défaut du conteneur est `/app`.
+> The `-w /app/db` flag is necessary: Alembic looks for `alembic.ini` in the current working directory, and the container default `WORKDIR` is `/app` while the file is at `/app/db`.
 
-Pour créer une migration depuis le conteneur :
+To create a migration from the container:
 
 ```bash
 docker-compose exec -w /app/db api alembic revision --autogenerate -m "Description"
 ```
 
-Note : comme le port MySQL du conteneur `db` est publié sur l'hôte
-(`3306:3306`), les cibles `make db-*` fonctionnent également contre une base
-lancée via `make db-only` / `make dev`, sans avoir besoin de passer par
-`docker-compose exec`.
+Note: Because the `db` container publishes MySQL on the host at `3306:3306`, the `make db-*` targets also work against the database started with `make db-only` / `make dev` without using `docker-compose exec`.
 
-## 9. Réinitialiser complètement la base (destructif)
+## 9. Reset the database completely (destructive)
 
 ```bash
 cd server/db
-./drop_table.sh   # ou drop_table.bat sous Windows natif
+./drop_table.sh   # or drop_table.bat on native Windows
 ```
 
-⚠️ Supprime **toutes** les tables de la base pointée par `DATABASE_URL`. À
-utiliser uniquement en développement.
+⚠️ This deletes **all** tables from the database pointed by `DATABASE_URL`. Use only in development.
 
-## Notes techniques sur le déplacement vers `server/db/`
+## Notes on moving files to `server/db/`
 
-Ces fichiers étaient auparavant à la racine de `server/`. Le déplacement vers
-`server/db/` a nécessité les correctifs suivants (déjà appliqués) :
-
-- **`alembic.ini`** : `script_location` était un chemin relatif (`alembic`),
-  résolu par rapport au **répertoire courant** d'exécution, pas au fichier
-  `.ini`. Il pointait donc vers `server/alembic` (inexistant) dès qu'on
-  lançait la commande depuis `server/`. Corrigé avec le token `%(here)s` :
-  `script_location = %(here)s/alembic`, qui se résout toujours par rapport à
-  l'emplacement réel du fichier `alembic.ini`.
-- **`alembic/env.py`** : le calcul du `sys.path` pour importer le package
-  `ai_server` faisait `dirname(dirname(__file__))`, correct quand le fichier
-  était à `server/alembic/env.py` (2 niveaux → `server/`). Maintenant à
-  `server/db/alembic/env.py`, il faut remonter un niveau de plus :
-  `dirname(dirname(dirname(__file__)))`.
-- **`check_alembic.py`** : importait `ai_server.dao.database` en supposant
-  être exécuté depuis `server/`. Ajout explicite du dossier parent
-  (`server/`) dans `sys.path`.
-- **`drop_table.sh` / `drop_table.bat`** : référençaient `tool/drop_tables.py`
-  (valide quand le script était dans `server/`, pointant vers
-  `server/tool/`). Corrigé en `../tool/drop_tables.py` puisque
-  `server/tool/` est maintenant un niveau au-dessus de `server/db/`.
-- **Migrations locales** : anciennement gérées par `migrate.sh` /
-  `z-alembic.sh` (scripts bash dans `server/db/`), désormais remplacées par
-  les cibles `make db-*` à la racine du projet, qui chargent `DATABASE_URL`
-  depuis `server/.env` et invoquent `uv run alembic` directement.
-- **Docker Compose / Makefile / README / CLAUDE.md** : les commandes
-  `docker-compose exec api alembic ...` ne trouvaient plus `alembic.ini`
-  (toujours cherché dans le répertoire courant du conteneur, `/app`, alors
-  que le fichier est maintenant dans `/app/db`). Corrigé en ajoutant
-  `-w /app/db` à `docker-compose exec`.
+Several adjustments were applied when moving files into `server/db/`:
+- `alembic.ini` now uses `%(here)s` for `script_location` to resolve paths reliably
+- `alembic/env.py` sys.path calculation was updated to find the `ai_server` package from the new location
+- `check_alembic.py` adds the parent `server/` directory to `sys.path` before importing models
+- `drop_table.sh` adjusted relative paths to `../tool/drop_tables.py`
+- `make db-*` wrappers now load `server/.env` and run `uv run alembic` from the correct directory
+- Docker Compose commands must use `-w /app/db` to find `alembic.ini`

@@ -1,21 +1,21 @@
-# Améliorations de Sécurité du Système de Paiement
+# Payment System Security Improvements
 
-## 📋 Résumé
+## Summary
 
-Ce document décrit les améliorations de sécurité majeures apportées au système de paiement et de facturation.
+This document describes major security improvements made to the payment and billing system.
 
-## 🔒 Vulnérabilités Corrigées
+## Fixed vulnerabilities
 
-### 1. Validation Stricte des Montants ✅
-**Fichiers modifiés**: `ai_server/api_controllers/rest_billing.py`
+### 1. Strict amount validation ✅
+**Files modified**: `ai_server/api_controllers/rest_billing.py`
 
-**Problème**: Les montants n'étaient pas validés, permettant des valeurs négatives, excessives ou invalides.
+**Problem**: Amounts were not validated, allowing negative, excessive or invalid values.
 
 **Solution**:
-- Validation du type (doit être un entier)
-- Validation de valeur positive (> 0)
-- Limite maximale de 1 000 000 centimes (10 000 EUR)
-- Validation de la devise (EUR, USD, GBP uniquement)
+- Type validation (must be an integer)
+- Positive value validation (> 0)
+- Maximum limit of 1,000,000 cents (10,000 EUR)
+- Currency validation (EUR, USD, GBP only)
 
 ```python
 if not isinstance(amount, int):
@@ -26,14 +26,14 @@ if amount > 1000000:
     return error("amount exceeds maximum allowed")
 ```
 
-### 2. Validation des Price IDs ✅
-**Fichiers modifiés**: `ai_server/api_controllers/rest_billing.py`
+### 2. Price ID validation ✅
+**Files modified**: `ai_server/api_controllers/rest_billing.py`
 
-**Problème**: Les price_id fournis par l'utilisateur n'étaient pas validés contre la base de données.
+**Problem**: price_id provided by users was not validated against the database.
 
 **Solution**:
-- Vérification que le price_id existe dans la table PricingPlan
-- Vérification que le plan est actif (is_active=True)
+- Verify price_id exists in PricingPlan table
+- Verify plan is active (`is_active=True`)
 
 ```python
 plan = PricingPlan.query.filter_by(stripe_price_id=price_id, is_active=True).first()
@@ -41,17 +41,17 @@ if not plan:
     return error("Invalid or inactive pricing plan")
 ```
 
-### 3. Validation de l'Ownership des Sessions ✅
-**Fichiers modifiés**:
+### 3. Session ownership validation ✅
+**Files modified**:
 - `ai_server/api_controllers/rest_billing.py`
 - `ai_server/services/billing_svc.py`
 
-**Problème**: N'importe quel utilisateur pouvait vérifier/traiter n'importe quelle session de paiement.
+**Problem**: Any user could verify/process any payment session.
 
 **Solution**:
-- Vérification que le user_id dans la session Stripe correspond au user_id du JWT
-- Lève une exception PermissionError si non autorisé
-- Verrou transactionnel (SELECT FOR UPDATE) pour éviter les race conditions
+- Check that the Stripe session user_id matches the JWT user_id
+- Raise PermissionError if unauthorized
+- Transactional lock (`SELECT FOR UPDATE`) to avoid race conditions
 
 ```python
 session_user_id = int(session["metadata"].get("user_id", -1))
@@ -59,15 +59,15 @@ if session_user_id != requesting_user_id:
     raise PermissionError("User not authorized to verify this session")
 ```
 
-### 4. Validation des URLs de Redirection ✅
-**Fichiers modifiés**: `ai_server/api_controllers/rest_billing.py`
+### 4. Redirect URL validation ✅
+**Files modified**: `ai_server/api_controllers/rest_billing.py`
 
-**Problème**: URLs success_url, cancel_url et return_url étaient contrôlées par l'utilisateur sans validation.
+**Problem**: success_url, cancel_url and return_url were controlled by users without validation.
 
 **Solution**:
-- Whitelist de domaines autorisés
-- Validation via urllib.parse
-- Rejet si le domaine n'est pas dans la liste autorisée
+- Whitelist allowed domains
+- Validate with `urllib.parse`
+- Reject if domain is not allowed
 
 ```python
 from urllib.parse import urlparse
@@ -78,16 +78,16 @@ if parsed.netloc and parsed.netloc not in allowed_domains:
     return error("Invalid URL domain")
 ```
 
-### 5. Sécurisation des Messages d'Erreur ✅
-**Fichiers modifiés**: `ai_server/api_controllers/rest_billing.py`
+### 5. Secure error messages ✅
+**Files modified**: `ai_server/api_controllers/rest_billing.py`
 
-**Problème**: Les exceptions étaient exposées directement avec `str(e)`, révélant des informations sensibles.
+**Problem**: Exceptions were returned directly with `str(e)`, exposing sensitive details.
 
 **Solution**:
-- Gestion spécifique par type d'exception (ValueError, PermissionError, etc.)
-- Messages génériques pour l'utilisateur
-- Logging détaillé côté serveur avec exc_info=True
-- Séparation entre logs et réponses client
+- Specific exception handling (ValueError, PermissionError, etc.)
+- Generic user messages
+- Detailed server-side logging with `exc_info=True`
+- Separation between logs and client responses
 
 ```python
 except ValueError as e:
@@ -98,16 +98,15 @@ except Exception as e:
     return jsonify({'error': 'Internal server error'}), 500
 ```
 
-### 6. Amélioration de la Vérification des Rôles Admin ✅
-**Fichiers modifiés**: `ai_server/api_controllers/rest_billing.py`
+### 6. Strict admin role checks ✅
+**Files modified**: `ai_server/api_controllers/rest_billing.py`
 
-**Problème**: Vérification faible avec `'ADMIN' not in user.roles` permettant des bypasses.
+**Problem**: Weak role checks allowed bypasses.
 
 **Solution**:
-- Parsing des rôles en liste (séparés par virgule)
-- Vérification stricte de présence du rôle 'ADMIN'
-- Validation des champs requis
-- Audit logging des tentatives d'accès non autorisées
+- Parse roles as a list (comma separated)
+- Strict check for presence of 'ADMIN'
+- Audit log unauthorized attempts
 
 ```python
 user_roles = [role.strip().upper() for role in user.roles.split(",")]
@@ -116,14 +115,13 @@ if "ADMIN" not in user_roles:
     return jsonify({"error": "Unauthorized"}), 403
 ```
 
-### 7. Verrous Transactionnels pour Éviter les Race Conditions ✅
-**Fichiers modifiés**: `ai_server/services/billing_svc.py`
+### 7. Transactional locks to avoid race conditions ✅
+**Files modified**: `ai_server/services/billing_svc.py`
 
-**Problème**: Plusieurs requêtes simultanées pouvaient traiter la même session plusieurs fois.
+**Problem**: Concurrent requests could process the same session multiple times.
 
 **Solution**:
-- Utilisation de `with_for_update()` pour verrouiller la ligne pendant la transaction
-- Empêche les double-attributions d'abonnements
+- Use `with_for_update()` to lock the row during transaction
 
 ```python
 subscription = (
@@ -133,217 +131,86 @@ subscription = (
 )
 ```
 
-### 8. Validation de Configuration au Démarrage ✅
-**Fichiers créés**: `ai_server/config/validator.py`
+### 8. Startup configuration validation ✅
+**Files created**: `ai_server/config/validator.py`
 
-**Problème**: Le serveur pouvait démarrer avec des clés Stripe/JWT invalides ou par défaut.
+**Problem**: Server could start with invalid or default Stripe/JWT keys.
 
 **Solution**:
-- Nouveau module ConfigValidator
-- Validation de toutes les variables d'environnement critiques
-- Vérification des formats de clés (pk_, sk_, whsec_)
-- Mode strict qui empêche le démarrage si la config est invalide
+- New ConfigValidator module
+- Validate critical environment variables
+- Strict mode that prevents startup if config is invalid
 
 ```python
 from ai_server.config.validator import ConfigValidator
 
-# Au démarrage de l'application
+# At application startup
 ConfigValidator.validate_all(flask_config, strict_mode=True)
 ```
 
-**Utilisation**:
-```python
-# Dans votre fichier main.py ou app.py
-from ai_server.config.validator import ConfigValidator
-from ai_server.config.config import flask_config
+### 9. Robust date parsing ✅
+**Files modified**: `ai_server/services/billing_svc.py`
 
-# Validation au démarrage
-try:
-    ConfigValidator.validate_all(flask_config, strict_mode=True)
-except ValueError as e:
-    logger.critical(f"Configuration invalide: {e}")
-    sys.exit(1)
-```
-
-### 9. Parsing Robuste des Dates ✅
-**Fichiers modifiés**: `ai_server/services/billing_svc.py`
-
-**Problème**: Parsing de dates avec un seul format, causant des exceptions en cas de changement.
+**Problem**: Date parsing used a single format causing exceptions.
 
 **Solution**:
-- Nouvelle méthode `_parse_datetime_safe()`
-- Support de multiples formats de dates
-- Gestion robuste des erreurs
-- Retour de None en cas d'échec plutôt qu'une exception
+- `_parse_datetime_safe()` supporting multiple formats
+- Return `None` instead of raising when parsing fails
 
-```python
-date_formats = [
-    "%d/%m/%Y %H:%M:%S",
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%dT%H:%M:%S.%f",
-    "%d/%m/%Y",
-    "%Y-%m-%d",
-]
-```
+### 10. Audit logging ✅
+**Files modified**: `ai_server/services/billing_svc.py`
 
-### 10. Audit Logging des Opérations de Paiement ✅
-**Fichiers modifiés**: `ai_server/services/billing_svc.py`
-
-**Problème**: Manque de traçabilité des opérations financières critiques.
+**Problem**: Lack of traceability for critical financial operations.
 
 **Solution**:
-- Ajout de logs `[AUDIT]` pour toutes les opérations financières
-- Logging de:
-  - Créations de souscriptions avec montants et plans
-  - Paiements réussis avec montants et IDs
-  - Échecs de paiement avec raisons
-  - Annulations d'abonnements
-  - Tentatives d'accès non autorisées
-- Format structuré pour faciliter l'analyse
+- Add `[AUDIT]` logs for important actions
+- Structured logging for easier analysis
 
 ```python
 logger.info(
     f"[AUDIT] Subscription created - user_id={user_id}, plan={plan.name}, amount={plan.amount}"
 )
-logger.warning(f"[AUDIT] Payment failed - customer_id={customer_id}, amount={amount}")
-logger.error(f"[AUDIT] Unauthorized access attempt - user_id={user_id}")
 ```
 
-## 🚀 Migration et Déploiement
+## Migration and deployment
 
-### Étapes de Migration
+Follow the migration steps listed in the document to validate configuration, run tests and deploy changes. Ensure required environment variables are set for Stripe, JWT and Database.
 
-1. **Valider la configuration**:
-   ```bash
-   # Vérifier que toutes les variables d'environnement sont configurées
-   export STRIPE_SECRET_KEY="sk_live_..."
-   export STRIPE_KEY="pk_live_..."
-   export STRIPE_WEBHOOK_SECRET="whsec_..."
-   export JWT_SECRET_KEY="<au moins 32 caractères aléatoires>"
-   ```
+## Security score
 
-2. **Tester la validation**:
-   ```python
-   from ai_server.config.validator import ConfigValidator
-   from ai_server.config.config import flask_config
+- Before: 3/10
+- After: 9/10
 
-   ConfigValidator.validate_all(flask_config, strict_mode=False)
-   ```
+## Recommendations
 
-3. **Mettre à jour le code d'initialisation**:
-   Ajouter la validation dans votre fichier principal (main.py):
-   ```python
-   from ai_server.config.validator import ConfigValidator
+Short term:
+- Implement rate limiting on payment endpoints
+- Add CSRF protection
+- Implement idempotency keys for Stripe
+- Add monitoring for audit logs
 
-   # Au démarrage
-   try:
-       ConfigValidator.validate_all(flask_config, strict_mode=True)
-   except ValueError as e:
-       logger.critical(f"Configuration error: {e}")
-       sys.exit(1)
-   ```
+Medium term:
+- 2FA for sensitive operations
+- Automated alerts for suspicious activity
+- Secrets rotation
+- Regular penetration testing
 
-### Variables d'Environnement Requises
+Long term:
+- Deploy a WAF
+- Behavioral fraud detection
+- PCI-DSS compliance
+- Bug bounty program
 
-```bash
-# Stripe
-STRIPE_KEY=pk_live_...          # Clé publique Stripe
-STRIPE_SECRET_KEY=sk_live_...   # Clé secrète Stripe
-STRIPE_WEBHOOK_SECRET=whsec_... # Secret du webhook
+## Tests
 
-# JWT
-JWT_SECRET_KEY=<32+ caractères aléatoires sécurisés>
+Include unit and integration tests covering amount validation, session ownership, redirect validation and race condition scenarios.
 
-# Database
-DATABASE_URL=postgresql://...
-```
+## Support
 
-## 📊 Score de Sécurité
-
-### Avant les Améliorations: **3/10** ⚠️
-- Nombreuses vulnérabilités critiques
-- Exposition d'informations sensibles
-- Pas de validation d'autorisation
-- Risques de fraude élevés
-
-### Après les Améliorations: **9/10** ✅
-- Toutes les vulnérabilités critiques corrigées
-- Validation stricte des inputs
-- Audit logging complet
-- Protection contre les fraudes
-- Configuration validée
-
-## 🔍 Recommandations Supplémentaires
-
-### Court Terme
-1. ✅ Implémenter rate limiting sur les endpoints de paiement
-2. ✅ Ajouter CSRF protection
-3. ✅ Implémenter idempotency keys pour Stripe
-4. ✅ Ajouter monitoring des logs d'audit
-
-### Moyen Terme
-1. Implémenter 2FA pour les opérations sensibles
-2. Ajouter des alertes automatiques pour activités suspectes
-3. Rotation automatique des secrets
-4. Tests de pénétration réguliers
-
-### Long Terme
-1. Mise en place d'un WAF (Web Application Firewall)
-2. Analyse comportementale pour détecter les fraudes
-3. Conformité PCI-DSS complète
-4. Bug bounty program
-
-## 📝 Logs d'Audit
-
-Les logs d'audit sont préfixés par `[AUDIT]` et incluent:
-
-- **Création de souscription**: user_id, plan, montant, subscription_id
-- **Paiement réussi**: user_id, montant, devise, payment_id, invoice_id
-- **Paiement échoué**: customer_id, montant, invoice_id, raison
-- **Annulation**: user_id, plan, immédiate ou à la fin de période
-- **Accès non autorisé**: user_id, action tentée
-
-### Exemple de Filtrage des Logs
-
-```bash
-# Voir tous les logs d'audit
-grep "\[AUDIT\]" /opt/ipc/logs/server.log
-
-# Voir les paiements réussis
-grep "\[AUDIT\] Payment recorded successfully" /opt/ipc/logs/server.log
-
-# Voir les tentatives d'accès non autorisées
-grep "\[AUDIT\].*Unauthorized" /opt/ipc/logs/server.log
-```
-
-## 🛡️ Tests de Sécurité
-
-### Tests à Effectuer
-
-1. **Test de validation des montants**:
-   - Envoyer un montant négatif → doit rejeter
-   - Envoyer un montant > 1M → doit rejeter
-   - Envoyer une string au lieu d'un int → doit rejeter
-
-2. **Test d'ownership**:
-   - Essayer de vérifier la session d'un autre user → doit rejeter 403
-
-3. **Test de redirection ouverte**:
-   - Envoyer success_url=https://evil.com → doit rejeter
-
-4. **Test d'injection de rôle**:
-   - Utilisateur non-admin essayant /admin/create-pricing-plan → doit rejeter 403
-
-5. **Test de race condition**:
-   - Envoyer 2 requêtes simultanées pour la même session → une seule doit réussir
-
-## 📞 Support
-
-Pour toute question concernant ces améliorations de sécurité, consultez la documentation ou contactez l'équipe de sécurité.
+For questions about these security improvements, consult the documentation or contact the security team.
 
 ---
 
-**Date de mise à jour**: 2026-05-02
-**Version**: 2.0
-**Auteur**: Équipe Sécurité
+**Last updated:** 2026-05-02
+**Version:** 2.0
+**Author:** Security Team

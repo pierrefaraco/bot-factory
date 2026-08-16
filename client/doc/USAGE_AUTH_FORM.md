@@ -1,29 +1,29 @@
-# Guide d'utilisation du composant AuthForm
+# AuthForm Component Usage Guide
 
-## Vue d'ensemble
+## Overview
 
-Le composant `auth-form` est un composant Angular standalone moderne qui fournit une interface élégante et animée pour l'authentification des utilisateurs avec deux modes : **Login** et **Signup**.
+The `auth-form` component is a modern standalone Angular component that provides an elegant and animated UI for user authentication with two modes: Login and Signup.
 
-## Caractéristiques principales
+## Key features
 
-- ✨ Design moderne inspiré des tendances actuelles
-- 🎨 Cohérent avec la palette de couleurs de l'application (Indigo #6366f1)
-- 🔄 Animations fluides lors du passage entre Login et Signup
-- 📱 Responsive et adaptatif
-- ♿ Accessible avec support du clavier
-- 🎭 Support complet des thèmes dark/light
-- ✅ Validation de formulaire avec messages d'erreur personnalisés
-- 🔐 Validation de correspondance des mots de passe
+- ✨ Modern design inspired by current trends
+- 🎨 Consistent with the app color palette (Indigo #6366f1)
+- 🔄 Smooth animations when switching between Login and Signup
+- 📱 Responsive and adaptive
+- ♿ Accessible with keyboard support
+- 🎭 Full dark/light theme support
+- ✅ Form validation with custom error messages
+- 🔐 Password match validation
 
-## Import du composant
+## Importing the component
 
 ```typescript
 import { AuthFormComponent, LoginData, SignupData } from './components/auth-form/auth-form.component';
 ```
 
-## Utilisation basique
+## Basic usage
 
-### Dans votre composant parent
+### In your parent component
 
 ```typescript
 import { Component } from '@angular/core';
@@ -59,7 +59,7 @@ export class AuthPageComponent {
         },
         error: (error) => {
           console.error('Login error:', error);
-          // Gérer l'erreur (afficher un message, etc.)
+          // Handle error (display message, etc.)
         }
       });
   }
@@ -75,19 +75,19 @@ export class AuthPageComponent {
     ).subscribe({
       next: (response) => {
         console.log('Signup successful:', response);
-        // Rediriger vers la page de login ou directement vers le workspace
+        // Redirect to login page or directly to workspace
         this.router.navigate(['/workspace']);
       },
       error: (error) => {
         console.error('Signup error:', error);
-        // Gérer l'erreur (afficher un message, etc.)
+        // Handle error (display message, etc.)
       }
     });
   }
 }
 ```
 
-## Interfaces de données
+## Data interfaces
 
 ### LoginData
 
@@ -110,15 +110,15 @@ interface SignupData {
 }
 ```
 
-## Événements
+## Events
 
 ### @Output loginSubmitted
 
-Émis lorsque l'utilisateur soumet le formulaire de connexion.
+Emitted when the user submits the login form.
 
 **Type:** `EventEmitter<LoginData>`
 
-**Exemple:**
+**Example:**
 ```typescript
 onLogin(data: LoginData) {
   console.log('Email:', data.email);
@@ -128,11 +128,11 @@ onLogin(data: LoginData) {
 
 ### @Output signupSubmitted
 
-Émis lorsque l'utilisateur soumet le formulaire d'inscription.
+Emitted when the user submits the signup form.
 
 **Type:** `EventEmitter<SignupData>`
 
-**Exemple:**
+**Example:**
 ```typescript
 onSignup(data: SignupData) {
   console.log('First Name:', data.firstName);
@@ -143,22 +143,22 @@ onSignup(data: SignupData) {
 }
 ```
 
-## Validation des formulaires
+## Form validation
 
-### Formulaire de connexion
+### Login form
 
-- **Email:** Requis, format email valide
-- **Mot de passe:** Requis, minimum 6 caractères
+- **Email:** Required, valid email format
+- **Password:** Required, minimum 6 characters
 
-### Formulaire d'inscription
+### Signup form
 
-- **Prénom:** Requis, minimum 2 caractères
-- **Nom:** Requis, minimum 2 caractères
-- **Email:** Requis, format email valide
-- **Mot de passe:** Requis, minimum 6 caractères
-- **Confirmation mot de passe:** Requis, doit correspondre au mot de passe
+- **First name:** Required, minimum 2 characters
+- **Last name:** Required, minimum 2 characters
+- **Email:** Required, valid email format
+- **Password:** Required, minimum 6 characters
+- **Confirm password:** Required, must match the password
 
-## Ajout à vos routes
+## Adding to your routes
 
 ```typescript
 // app.routes.ts
@@ -170,15 +170,15 @@ export const routes: Routes = [
     path: 'auth',
     component: AuthPageComponent
   },
-  // ... autres routes
+  // ... other routes
 ];
 ```
 
-## Personnalisation
+## Customization
 
-### Thèmes
+### Themes
 
-Le composant utilise automatiquement les variables CSS définies dans vos fichiers de thème:
+The component automatically uses the CSS variables defined in your theme files:
 
 - `--btn-primary-bg`
 - `--btn-primary-text`
@@ -189,15 +189,15 @@ Le composant utilise automatiquement les variables CSS définies dans vos fichie
 - `--input-focus-border`
 - Etc.
 
-### Bouton de connexion sociale (optionnel)
+### Social sign-in button (optional)
 
-Le composant inclut un bouton "Continuer avec Google" que vous pouvez personnaliser ou étendre pour d'autres providers :
+The component includes a "Continue with Google" button you can customize or extend for other providers:
 
 ```typescript
-// Dans votre composant parent, vous pouvez ajouter des gestionnaires pour l'authentification sociale
+// In your parent component, add handlers for social authentication
 ```
 
-## Exemple complet avec gestion d'erreurs
+## Full example with error handling
 
 ```typescript
 import { Component } from '@angular/core';
@@ -212,7 +212,7 @@ import { AuthService } from './services/auth.service';
   imports: [CommonModule, AuthFormComponent],
   template: `
     <div class="auth-page-wrapper">
-      <!-- Message d'erreur global -->
+      <!-- Global error message -->
       <div *ngIf="errorMessage" class="error-banner">
         {{ errorMessage }}
       </div>
@@ -271,7 +271,7 @@ export class AuthPageComponent {
           this.router.navigate(['/workspace']);
         },
         error: (error) => {
-          this.errorMessage = error.error?.message || 'Identifiants invalides';
+          this.errorMessage = error.error?.message || 'Invalid credentials';
           this.clearErrorAfterDelay();
         }
       });
@@ -290,7 +290,7 @@ export class AuthPageComponent {
         this.router.navigate(['/workspace']);
       },
       error: (error) => {
-        this.errorMessage = error.error?.message || 'Erreur lors de l\'inscription';
+        this.errorMessage = error.error?.message || 'Error during signup';
         this.clearErrorAfterDelay();
       }
     });
@@ -304,54 +304,54 @@ export class AuthPageComponent {
 }
 ```
 
-## Intégration avec le AuthService existant
+## Integration with existing AuthService
 
-Le composant est compatible avec votre `AuthService` actuel. Assurez-vous simplement que votre service a les méthodes suivantes :
+The component is compatible with your current `AuthService`. Just ensure the service exposes these methods:
 
 ```typescript
 // auth.service.ts
 export class AuthService {
   login(email: string, password: string): Observable<any> {
-    // Votre implémentation
+    // Your implementation
   }
 
   register(email: string, password: string, firstName: string, lastName: string): Observable<any> {
-    // Votre implémentation
+    // Your implementation
   }
 }
 ```
 
-## Accessibilité
+## Accessibility
 
-Le composant est conçu avec l'accessibilité à l'esprit :
+The component is built with accessibility in mind:
 
-- Support complet du clavier
-- Focus visible pour la navigation au clavier
-- Messages d'erreur associés aux champs de formulaire
-- Labels appropriés pour tous les champs
-- Contraste de couleurs conforme aux normes WCAG
+- Full keyboard support
+- Visible focus for keyboard navigation
+- Field-level error messages
+- Proper labels for all fields
+- Color contrast following WCAG guidelines
 
-## Support des navigateurs
+## Browser support
 
-Le composant fonctionne sur tous les navigateurs modernes :
+The component works on modern browsers:
 
-- Chrome/Edge (dernières versions)
-- Firefox (dernières versions)
-- Safari (dernières versions)
-- Opera (dernières versions)
+- Chrome/Edge (latest)
+- Firefox (latest)
+- Safari (latest)
+- Opera (latest)
 
-## Notes importantes
+## Important notes
 
-1. Les animations utilisent l'API Angular Animations, assurez-vous d'avoir `@angular/animations` dans vos dépendances
-2. Le composant utilise les composants de base existants (`FormFieldComponent` et `ButtonComponent`)
-3. Le design s'adapte automatiquement aux thèmes dark/light de votre application
-4. Les formulaires sont réinitialisés automatiquement lors du changement de mode
+1. Animations use the Angular Animations API; ensure `@angular/animations` is present in your dependencies
+2. The component relies on existing base components (`FormFieldComponent` and `ButtonComponent`)
+3. The design adapts automatically to your app's dark/light themes
+4. Forms are reset automatically when switching modes
 
-## Dépannage
+## Troubleshooting
 
-### Les animations ne fonctionnent pas
+### Animations not working
 
-Assurez-vous que `provideAnimations()` est bien présent dans votre configuration d'application :
+Ensure `provideAnimations()` is included in your application configuration:
 
 ```typescript
 // app.config.ts
@@ -360,18 +360,18 @@ import { provideAnimations } from '@angular/platform-browser/animations';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideAnimations(),
-    // ... autres providers
+    // ... other providers
   ]
 };
 ```
 
-### Les styles ne s'appliquent pas correctement
+### Styles not applying correctly
 
-Vérifiez que vos variables CSS de thème sont bien définies dans `src/styles/dark-theme.scss` et `src/styles/light-theme.scss`.
+Verify your theme CSS variables are defined in `src/styles/dark-theme.scss` and `src/styles/light-theme.scss`.
 
-### Problème avec FormFieldComponent
+### Problem with FormFieldComponent
 
-Si vous rencontrez des problèmes avec le `FormFieldComponent`, vérifiez que le composant accepte bien les inputs suivants :
+If you encounter issues with `FormFieldComponent`, ensure it accepts the following inputs:
 - `[control]` - FormControl
 - `name` - string
 - `label` - string
