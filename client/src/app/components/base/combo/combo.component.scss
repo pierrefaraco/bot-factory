@@ -150,7 +150,31 @@
 // "Material Icons" utilisés partout ailleurs dans l'app (ex. "expand_more"
 // du menu utilisateur). Remplacée par ce même glyphe, pour une flèche
 // identique où qu'elle apparaisse dans l'app.
+//
+// Material dimensionne .mat-mdc-select-arrow en 10x5px (la taille exacte de
+// son triangle SVG, recentré dedans via position absolute top/left 50%) et
+// translateY(-8px) sur le wrapper pour compenser. Notre glyphe de police
+// (1.25rem, donc bien plus grand que 10x5px) héritait de ces deux réglages
+// taillés pour l'ancien triangle et débordait de sa boîte sans être centré
+// dedans — d'où un rendu mal placé (mesuré). On redimensionne la boîte à la
+// taille du glyphe et on annule la compensation, qui n'a plus de raison
+// d'être une fois la boîte correctement dimensionnée.
+::ng-deep .mat-mdc-select-arrow-wrapper {
+  transform: none !important;
+  // Le padding-right natif du champ outlined (16px, cf. mdc-text-field--outlined)
+  // n'atteint pas la flèche, mesuré à 0 : elle touchait le bord droit du champ
+  // sans aucune respiration. Marge explicite, alignée sur le rythme du bouton
+  // clear (.clear-button { right: 0.75rem }) plus haut dans ce fichier.
+  margin-right: 0.75rem !important;
+}
+
 ::ng-deep .mat-mdc-select-arrow {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+
   svg {
     display: none;
   }
