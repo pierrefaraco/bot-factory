@@ -9,6 +9,62 @@
   background-color: var(--bg-secondary);
 }
 
+// Header minimisé, même format que bot-workspace.component : titre,
+// sous-titre et action tiennent sur une seule ligne. Reprend les mêmes
+// tokens (échelle d'espacement de styles/common.scss, clamp() h3 existant
+// dans styles.scss, bordure 1px déjà utilisée par .summary-card/.card).
+.dashboard-header {
+  margin-bottom: 0.5rem; // mb-2
+  border-bottom-width: 1px;
+
+  .header-content {
+    margin-bottom: 0.25rem; // mb-1
+  }
+
+  .header-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 0.75rem; // gap-3
+    row-gap: 0.25rem; // gap-1, si repli sur mobile
+    margin-bottom: 0;
+
+    h1 {
+      // Token h3 existant (clamp(1.25rem, 3.5vw, 1.75rem)) au lieu du
+      // 2rem/700 fixe global : cohérent avec le même choix fait sur
+      // bot-workspace pour un titre moins dominant.
+      font-size: clamp(1.25rem, 3.5vw, 1.75rem);
+      margin: 0;
+    }
+
+    .subtitle {
+      // Absorbe l'espace disponible entre le titre et le bouton : pousse
+      // ce dernier à l'extrémité sans avoir besoin d'un wrapper de mise
+      // en page supplémentaire.
+      flex: 1 1 auto;
+      font-size: 0.875rem; // même "petit texte" que .alert/.dropdown-menu
+      margin: 0;
+    }
+
+    .create-user-btn {
+      flex: 0 0 auto;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    margin-bottom: 0.25rem; // mb-1
+
+    .header-content {
+      margin-bottom: 0.25rem; // mb-1
+    }
+
+    .header-top .create-user-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+}
+
 .create-user-btn {
   display: flex;
   align-items: center;

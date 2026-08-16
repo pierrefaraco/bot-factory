@@ -3,10 +3,18 @@
 :host {
   display: flex;
   flex-direction: column;
-  // Une petite marge est laissée en bas : sous Windows, la barre des
-  // tâches peut recouvrir le bas de la fenêtre même en plein écran,
-  // et 100vh ne tient pas compte de ce chevauchement.
-  height: calc(100vh - 16px);
+  // `html, body` sont déjà à `height: 100%` (cf. styles.scss) et portent le
+  // contrat "app-root occupe exactement la hauteur de l'écran, chaque page
+  // gère son propre scroll interne". Utiliser ici une unité `vh` avec un
+  // offset fixe (`calc(100vh - 16px)`) cassait ce contrat : sur un écran
+  // sans barre des tâches ni autre chevauchement, ces 16px ne correspondent
+  // à rien de réel et laissaient un bandeau vide en bas de page, dans la
+  // couleur du <body> (--bg-primary) contrastant avec celle de l'app
+  // (--bg-secondary). `height: 100%` hérite de la taille déjà correcte de
+  // `body`, sans offset arbitraire, et reste valide y compris sur mobile
+  // (où `vh` est notoirement peu fiable à cause des barres d'adresse
+  // dynamiques — `%` n'a pas ce problème ici).
+  height: 100%;
   overflow: hidden;
   background-color: var(--bg-secondary);
 }

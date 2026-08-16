@@ -4,12 +4,6 @@
     <div class="header-content">
       <div class="header-top">
         <h1>My workspace</h1>
-
-        <div class="button-group">
-
-
-        </div>
-
       </div>
       <p class="subtitle">
         <span *ngIf="hasSelectedBot">
@@ -33,10 +27,20 @@
     <!-- Section liste des bots - toujours visible à gauche -->
     <div class="sidebar-bots">
       <div class="overview-section bots-section">
-        <h2 *ngIf="hasAvatar">
-          <span class="material-icons">smart_toy</span>
-          <span> Bots</span>
-        </h2>
+        <div class="bots-section-header">
+          <h2 *ngIf="hasAvatar">
+            <span class="material-icons">smart_toy</span>
+            <span> Bots</span>
+          </h2>
+          <!-- Action de niveau page (créer un bot), rattachée à l'en-tête
+               de la liste plutôt qu'au header de page : elle reste ainsi
+               visible en permanence à côté de la liste qu'elle alimente,
+               peu importe l'onglet actif ou qu'un bot soit sélectionné. -->
+          <button type="button" class="create-bot-btn" (click)="onCreateBot()"
+            aria-label="Create a new bot" title="Create a new bot">
+            <span class="material-icons">add_circle</span>
+          </button>
+        </div>
         <div class="bots-list-container">
           <app-bot-list [layout]="botListLayout"></app-bot-list>
         </div>
@@ -82,34 +86,6 @@
           <!-- Section état du bot actif -->
 
           <div class="buttons-and-chat ">
-            <div class="overview-section status-section" *ngIf="hasSelectedBot">
-              <div class="up-section">
-                <span class="material-icons">info</span>
-                <h2>
-                  Active bot
-                </h2>
-              </div>
-
-              <div class="quick-actions">
-                <button class="action-btn add-btn" (click)="onCreateBot()">
-                  <span class="material-icons">add_circle</span>
-                  Create a new bot
-                </button>
-
-                <button class="action-btn init-btn" (click)="resetChat()" *ngIf="selectedBot">
-                  <span class="material-icons">refresh</span>
-                  Reset conversation
-                </button>
-
-                <button class="action-btn delete-btn" (click)="deleteBot(selectedBot.id)" *ngIf="selectedBot">
-                  <span class="material-icons">delete</span>
-                  Delete selected bot
-                </button>
-              </div>
-
-            </div>
-
-
             <!-- Section état vide -->
             <div class="overview-section empty-section" *ngIf="!hasSelectedBot">
               <div class="empty-state">
@@ -135,11 +111,36 @@
                 <h2>
                   Chat with {{ botName }}
                 </h2>
-                <!-- <app-button [icon]="'refresh'" [label]="'Réinitialiser'" (buttonClickedEvent)="resetChat()"
-                [color]="'var(--text-warning)'" [backgroundColor]="'var(--btn-color1)'" [type]="'small-icon-button'"
-                [size]="'small'" class="reset-chat-btn" [tabindex]="0" [focusOnTab]="true" [disabled]="false">
-              </app-button> -->
 
+                <!-- Reset/Delete remontés depuis l'ex-.status-section : ce sont des
+                     actions sur le bot actif, donc rattachées au titre de la carte
+                     qui le désigne ("Chat with {{ botName }}") plutôt qu'isolées dans
+                     une carte à part. "Reset" reste une icône directe (usage courant),
+                     "Delete" (destructif, rare) reste dans un menu "⋮" secondaire —
+                     même hiérarchie et mêmes classes qu'avant, juste relocalisées. -->
+                <div class="section-actions" *ngIf="selectedBot">
+                  <button type="button" class="quick-action-btn" (click)="resetChat()"
+                    aria-label="Reset conversation" title="Reset conversation">
+                    <span class="material-icons">refresh</span>
+                  </button>
+
+                  <div class="dropdown quick-actions-menu">
+                    <button type="button" id="botActionsMenuTrigger" class="quick-actions-trigger"
+                      data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true"
+                      aria-label="More actions for {{ botName }}" title="More actions">
+                      <span class="material-icons">more_vert</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="botActionsMenuTrigger">
+                      <li>
+                        <button type="button" class="dropdown-item dropdown-item-danger"
+                          (click)="deleteBot(selectedBot.id)">
+                          <span class="material-icons">delete</span>
+                          Delete selected bot
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </div>
               <div class="chat-container">
                 <app-chat [bot]="selectedBot"></app-chat>
