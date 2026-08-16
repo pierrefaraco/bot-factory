@@ -39,17 +39,20 @@
   border-bottom-width: 1px;
 
   .header-content {
-    // Titre + sous-titre sur une seule ligne (au lieu de deux empilées) :
-    // c'est le principal gain de hauteur. `baseline` aligne le texte du
-    // sous-titre sur la ligne de base du h1 comme s'ils appartenaient à
-    // la même ligne typographique ; `flex-wrap` permet un repli propre
-    // en dessous si la largeur manque (mobile / bot au nom long).
+    margin-bottom: 0.25rem; // mb-1
+  }
+
+  // Titre, sous-titre et action "Create a new bot" sur une seule ligne :
+  // même structure que `.header-top` de admin.component (h1 + spacer +
+  // bouton), pour que le bouton de création reprenne exactement le même
+  // format et la même place que "Create a guest" côté admin.
+  .header-top {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     flex-wrap: wrap;
     column-gap: 0.75rem; // gap-3
     row-gap: 0.25rem; // gap-1, si repli sur mobile
-    margin-bottom: 0.25rem; // mb-1
+    margin-bottom: 0;
 
     // Le h1 global (.dashboard-header h1) est fixé à 2rem/700 dans
     // styles.scss ; ici on réutilise le token h3 existant
@@ -59,20 +62,19 @@
     // sans dominer un contenu désormais très compact.
     h1 {
       font-size: clamp(1.25rem, 3.5vw, 1.75rem);
-      margin: 0; // plus de marge basse : rien n'est empilé dessous
+      margin: 0;
     }
 
-    .header-top {
-      // Ce conteneur (h1 + button-group, vide pour l'instant) n'est plus
-      // une ligne à lui seul : on retire la marge globale de 0.75rem qui
-      // supposait un empilement vertical avec le sous-titre.
-      margin-bottom: 0;
-    }
-
-    // 0.875rem : même valeur de "petit texte" déjà utilisée ailleurs
-    // dans le projet (.alert, .dropdown-menu span, body en mobile).
+    // Absorbe l'espace disponible entre le titre et le bouton : pousse ce
+    // dernier à l'extrémité, comme `.subtitle` dans admin.component.
     .subtitle {
-      font-size: 0.875rem;
+      flex: 1 1 auto;
+      font-size: 0.875rem; // même "petit texte" que .alert/.dropdown-menu
+      margin: 0;
+    }
+
+    .create-bot-btn {
+      flex: 0 0 auto;
     }
   }
 
@@ -82,34 +84,33 @@
     .header-content {
       margin-bottom: 0.25rem; // mb-1
     }
+
+    .header-top .create-bot-btn {
+      width: 100%;
+      justify-content: center;
+    }
   }
 }
 
-// Bouton "Create a new bot" de la sidebar (voir .bots-section-header
-// ci-dessous) : icon button mis en évidence (fond --text-accent, même
-// couleur d'accent que .btn-create-first plus bas dans ce fichier pour les
-// actions "créer"). Gabarit (48px / icône 1.5rem) et hover (translateY +
-// shadow-md) repris tels quels du bouton icon-button partagé du projet
-// (components/base/button/button.component.scss), pour rester au-dessus,
-// en taille, des icônes utilitaires .quick-action-btn (36px / 1.25rem)
-// utilisées ailleurs dans ce composant.
+// Bouton "Create a new bot" du header de page — même format que
+// "Create a guest" (.create-user-btn) dans admin.component : icône + label,
+// fond --text-accent, mêmes tokens (padding, border-radius, poids de texte).
 .create-bot-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 3rem; // 48px, cf. .icon-button (button.component.scss)
-  height: 3rem;
-  padding: 0;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
   background: var(--text-accent);
   color: white;
   border: none;
   border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  flex: 0 0 auto;
 
   .material-icons {
-    font-size: 1.5rem; // cf. .icon-button / .btn-create-first
+    font-size: 1.25rem;
   }
 
   &:hover {
@@ -153,8 +154,19 @@ app-bot-list {
 // Sidebar avec la liste des bots
 .sidebar-bots {
   flex: 0 0 auto;
-  width: 220px;
-  min-width: 220px;
+  // Largeur réduite au strict nécessaire. Deux contraintes en présence,
+  // la plus large gagne :
+  //  - le contenu de `.bots-section-header` (h2 "My" + icône), ~44px ;
+  //  - la colonne d'avatars (--avatar-width: 44px, cf. .bots-list-container
+  //    plus bas) + padding de `.container.layout-vertical`
+  //    (bot-list.component.scss, 0.5rem de chaque côté) + ascenseur (8px).
+  // C'est la colonne d'avatars qui domine ici. On y ajoute le padding de
+  // `.bots-section` (.overview-section, 1rem de chaque côté + bordure 1px)
+  // et le padding propre de `.sidebar-bots` ci-dessous. Avant ce
+  // resserrement, chaque avatar flottait centré dans ~90px de vide de
+  // chaque côté.
+  width: 112px;
+  min-width: 112px;
   // Même hauteur que la colonne principale (`.tab-content`) : la carte
   // "Bots" a le même gabarit visuel que la carte active à droite. Avec
   // beaucoup de bots, `.bots-list-container` prend le relais en scroll
@@ -346,18 +358,31 @@ app-bot-list {
     flex-direction: column;
     overflow: hidden;
 
-    // Titre + action de création sur une même ligne : même pattern que
-    // `.up-section` plus bas dans ce fichier (titre à gauche, actions
-    // collées à droite), pour que "Create a new bot" reste toujours
-    // accessible depuis la sidebar, indépendamment de la sélection en
-    // cours ou de l'onglet actif.
     .bots-section-header {
       flex: 0 0 auto;
       display: flex;
+      // Icône et h2 frères (plutôt qu'icône imbriquée dans le h2) + centrage
+      // flex : même structure que `.up-section` plus bas dans ce fichier,
+      // où cet alignement rend déjà bien. L'imbrication précédente laissait
+      // l'icône flotter au-dessus de la ligne de base de "My Bots" (flux
+      // inline standard, pas de contrôle flex sur l'alignement vertical).
       align-items: center;
-      justify-content: space-between;
       gap: 0.5rem; // gap-2
+      // Filet de séparation avec la liste, même traitement que
+      // `.up-section` (border 2px + margin-bottom) plus bas dans ce
+      // fichier, pour un repère cohérent entre sidebar et cartes du
+      // contenu principal. `padding-bottom` ajouté pour que ce filet
+      // retombe exactement au même niveau que le bas de `.tabs-nav`
+      // (mesuré empiriquement : sans cet ajout, le filet de la sidebar est
+      // ~6-7px plus haut, la ligne d'icône+texte étant plus basse que la
+      // rangée de boutons d'onglets).
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border-primary);
       margin-bottom: 0.5rem; // mb-2
+
+      .material-icons {
+        font-size: 1.5rem; // cf. .up-section .material-icons
+      }
 
       h2 {
         min-width: 0;
@@ -372,13 +397,6 @@ app-bot-list {
         // ci-dessous) : token h4 existant, clamp(1.125rem, 3vw, 1.5rem).
         font-size: clamp(1.125rem, 3vw, 1.5rem);
         font-weight: 600;
-      }
-
-      // Bouton toujours présent (voir .html) : quand le h2 est masqué
-      // (*ngIf="hasAvatar" côté template), il reste seul sur la ligne,
-      // poussé à droite par `justify-content: space-between`.
-      .create-bot-btn {
-        margin-left: auto;
       }
     }
 
@@ -441,6 +459,25 @@ app-bot-list {
           height: 100%;
           overflow-y: visible;
           overflow-x: hidden;
+        }
+
+        // Le bot actif utilise `background-color: var(--btn-color4/5)`
+        // (bot-list.component.scss) : ces tokens ne sont définis dans
+        // aucun thème, et de toute façon la couleur de fond serait masquée
+        // par `.avatar-container` qui recouvre exactement le même espace.
+        // Résultat : aucune indication visuelle de sélection dans cette
+        // liste verticale. Corrigé ici par un anneau plein contraste sur
+        // `--text-accent`, déjà utilisé partout ailleurs dans ce composant
+        // pour signaler l'état actif/accent (icônes de `.up-section`,
+        // soulignement des onglets, scrollbar).
+        .selected .avatar-container {
+          border-width: 2px;
+          border-color: var(--text-accent);
+          box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--text-accent);
+        }
+
+        .not-selected .avatar-container {
+          border-color: var(--border-primary);
         }
       }
     }
@@ -824,20 +861,9 @@ app-bot-list {
       max-height: 130px;
 
       // Budget vertical très contraint (130px au total, avatars compris) :
-      // la ligne titre + bouton est resserrée au maximum, et le bouton
-      // repasse au gabarit compact .quick-action-btn (36px) plutôt que
-      // 48px, pour laisser le plus de place possible à la rangée d'avatars.
+      // la ligne de titre est resserrée au maximum.
       .bots-section-header {
         margin-bottom: 0.25rem; // mb-1
-
-        .create-bot-btn {
-          width: 2.25rem; // 36px, cf. .quick-action-btn
-          height: 2.25rem;
-
-          .material-icons {
-            font-size: 1.25rem; // cf. .quick-action-btn
-          }
-        }
       }
 
       .bots-list-container {

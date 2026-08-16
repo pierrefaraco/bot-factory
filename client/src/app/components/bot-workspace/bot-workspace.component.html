@@ -4,19 +4,22 @@
     <div class="header-content">
       <div class="header-top">
         <h1>My workspace</h1>
+        <p class="subtitle">
+          <span *ngIf="hasSelectedBot">
+            Active bot: <strong>{{ botName }}</strong>
+            <span *ngIf="selectedBot.bot_parameters?.bot_type" class="bot-type"> - {{ selectedBot.bot_parameters.bot_type
+              }}</span>
+          </span>
+          <span *ngIf="!hasSelectedBot">
+            No bot selected
+          </span>
+        </p>
+        <button type="button" class="create-bot-btn" (click)="onCreateBot()">
+          <span class="material-icons">add_circle</span>
+          <span>Create a new bot</span>
+        </button>
       </div>
-      <p class="subtitle">
-        <span *ngIf="hasSelectedBot">
-          Active bot: <strong>{{ botName }}</strong>
-          <span *ngIf="selectedBot.bot_parameters?.bot_type" class="bot-type"> - {{ selectedBot.bot_parameters.bot_type
-            }}</span>
-        </span>
-        <span *ngIf="!hasSelectedBot">
-          No bot selected
-        </span>
-      </p>
     </div>
-
   </div>
 
 
@@ -28,18 +31,8 @@
     <div class="sidebar-bots">
       <div class="overview-section bots-section">
         <div class="bots-section-header">
-          <h2 *ngIf="hasAvatar">
-            <span class="material-icons">smart_toy</span>
-            <span> Bots</span>
-          </h2>
-          <!-- Action de niveau page (créer un bot), rattachée à l'en-tête
-               de la liste plutôt qu'au header de page : elle reste ainsi
-               visible en permanence à côté de la liste qu'elle alimente,
-               peu importe l'onglet actif ou qu'un bot soit sélectionné. -->
-          <button type="button" class="create-bot-btn" (click)="onCreateBot()"
-            aria-label="Create a new bot" title="Create a new bot">
-            <span class="material-icons">add_circle</span>
-          </button>
+          <h2 aria-label="My Bots">My</h2>
+          <span class="material-icons" aria-hidden="true">smart_toy</span>
         </div>
         <div class="bots-list-container">
           <app-bot-list [layout]="botListLayout"></app-bot-list>

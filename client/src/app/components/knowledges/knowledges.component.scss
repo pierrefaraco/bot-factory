@@ -14,7 +14,15 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
-  min-height: 640px;
+  // `min-height: 640px;` (avant) entrait en conflit avec `max-height: 100%`
+  // juste en dessous — en CSS, min-height gagne toujours sur max-height.
+  // Sur les résolutions plus faibles (ex. 1366×768), la carte dépassait
+  // alors son propre conteneur (`.knowledge-container`), créant un
+  // débordement à un niveau au-dessus du scroll interne de `.tree-wrapper`
+  // (donc sans son padding-bottom ni sa scrollbar stylée) — et ce même
+  // avec très peu de connaissances, puisque la contrainte était fixe et
+  // sans rapport avec la quantité réelle de contenu.
+  height: 100%;
   max-height: 100%;
   overflow: hidden;
   transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -26,49 +34,6 @@
   .add-btn {
     position: absolute;
     right: 12rem;
-  }
-
-  ::ng-deep .mat-mdc-card-header {
-    padding: 1.5rem 1.75rem;
-    background: var(--bg-primary);
-    border-bottom: 2px solid var(--border-primary);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    backdrop-filter: blur(8px);
-  }
-
-  ::ng-deep .mat-mdc-card-content {
-    flex: 1 1 auto;
-    padding: 0 !important;
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    // Modern scrollbar styling
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-primary) transparent;
-
-    &::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: transparent;
-      border-radius: 4px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--border-primary);
-      border-radius: 4px;
-      transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-
-      &:hover {
-        background: var(--text-secondary);
-      }
-    }
   }
 }
 
@@ -104,8 +69,44 @@
 .tree-wrapper {
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  // Défilement interne + scrollbar visible : avec `overflow: hidden`, un
+  // arbre de connaissances plus haut que l'espace disponible se retrouvait
+  // simplement rogné, sans aucun moyen (ni scroll, ni indicateur visuel)
+  // d'atteindre les éléments en trop. Style repris de l'ancienne règle
+  // `::ng-deep .mat-mdc-card-content` (ci-dessus) : elle ciblait une classe
+  // Material Card qui n'existe plus dans ce template (ce composant utilise
+  // un simple mat-tree, pas de <mat-card>), donc n'avait jamais d'effet.
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
+  // Le dernier nœud arrivait flush avec le bas de ce conteneur (qui suit
+  // lui-même le bord inférieur arrondi de `.chapters-mat-card`, 12px de
+  // border-radius) : une fois tout en bas du scroll, ses coins étaient
+  // visuellement rognés par cet arrondi. Cette marge lui garde de l'air en
+  // toute circonstance.
+  padding-bottom: 0.75rem;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-primary) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-primary);
+    border-radius: 4px;
+    transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &:hover {
+      background: var(--text-secondary);
+    }
+  }
 }
 
 .custom_input_field {
