@@ -138,7 +138,12 @@ app-bot-list {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  gap: 1rem;
+  // Écart visuel carte-à-carte (bord droit de `.bots-section` → bord gauche
+  // de la carte active) = padding-right de `.sidebar-bots` + ce gap +
+  // padding-left de `.main-content` = 0.25 + 0.25 + 0.25 = 0.75rem, pour
+  // retomber sur le même écart que `.tabs-container` → carte active
+  // (0.75rem de margin-bottom, seule source de cet écart-là).
+  gap: 0.25rem;
 
   @media (max-width: 1023px) {
     flex-direction: column;
@@ -150,13 +155,24 @@ app-bot-list {
   flex: 0 0 auto;
   width: 220px;
   min-width: 220px;
+  // Même hauteur que la colonne principale (`.tab-content`) : la carte
+  // "Bots" a le même gabarit visuel que la carte active à droite. Avec
+  // beaucoup de bots, `.bots-list-container` prend le relais en scroll
+  // interne (overflow-y: auto, cf. plus bas) plutôt que de dépasser cette
+  // hauteur.
   height: 100%;
   overflow: hidden;
   // La carte à l'intérieur (.bots-section) remplit ce conteneur à 100 %,
   // sans cette marge son `box-shadow` (--card-shadow) n'aurait aucune
   // place pour se dégrader avant d'être tronqué par `overflow: hidden` —
-  // d'où l'ombre "cassée" nette sur les coins bas.
+  // d'où l'ombre "cassée" nette sur les coins bas. Coté gauche excepté :
+  // pas de padding là, pour que le bord de la carte s'aligne avec le titre
+  // "My workspace" au-dessus (même repère que `.dashboard-header h1`).
   padding: 0.5rem; // p-2
+  padding-left: 0;
+  // Côté droit (face à `.workspace-layout`'s gap) resserré : cf. commentaire
+  // sur `.workspace-layout` pour le calcul de l'écart visuel ciblé.
+  padding-right: 0.25rem;
 
   @media (max-width: 1023px) {
     flex: 0 0 auto;
@@ -185,6 +201,13 @@ app-bot-list {
   min-width: 0;
   overflow: hidden;
   padding: 0.5rem; // p-2
+  // Côté gauche (face à `.sidebar-bots`) resserré : cf. commentaire sur
+  // `.workspace-layout` pour le calcul de l'écart visuel ciblé.
+  padding-left: 0.25rem;
+  // Côté droit : pas de padding, pour que le bord droit de `.tabs-container`
+  // et de la carte active s'alignent avec celui de `.dashboard-header`
+  // (même repère hérité du padding de `.dashboard`, sans inset local en plus).
+  padding-right: 0;
 }
 
 // Navigation par onglets
@@ -361,10 +384,36 @@ app-bot-list {
 
     .bots-list-container {
       flex: 1 1 auto;
-      overflow: hidden;
+      // Ascenseur ici plutôt que sur `.container` interne d'app-bot-list :
+      // ce dernier ne se contraint pas toujours à la hauteur disponible
+      // (reste à sa taille naturelle), donc un simple `overflow: hidden`
+      // ici rendrait les bots en trop simplement invisibles, sans aucun
+      // moyen d'y accéder. Style repris tel quel de `.container.layout-
+      // vertical::-webkit-scrollbar` (bot-list.component.scss), pour rester
+      // visuellement cohérent avec le scrollbar déjà utilisé dans la liste.
+      overflow-y: auto;
+      overflow-x: hidden;
       min-height: 120px;
       display: flex;
       flex-direction: column;
+
+      &::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: var(--bg-secondary);
+        border-radius: 4px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: var(--text-accent);
+        border-radius: 4px;
+
+        &:hover {
+          background: var(--text-primary);
+        }
+      }
 
       // Avatars réduits pour que la liste tienne sans défilement
       // sur les hauteurs d'écran plus modestes (ex: fenêtre ~1280x720).
@@ -375,7 +424,13 @@ app-bot-list {
         height: 100%;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
+        // visible (pas hidden) : `.container` ci-dessous ne se contraint pas
+        // toujours à 100% de cette hauteur (reste à sa taille naturelle) —
+        // avec `hidden` ici, le surplus était juste rogné en silence, sans
+        // jamais atteindre l'ascenseur de `.bots-list-container` ci-dessus.
+        // En laissant déborder jusque-là, c'est cet ascenseur qui prend le
+        // relais.
+        overflow: visible;
 
         .container.layout-vertical {
           gap: 0.5rem; // gap-2, aligné sur l'échelle d'espacement
@@ -384,7 +439,7 @@ app-bot-list {
         .container {
           flex: 1 1 auto;
           height: 100%;
-          overflow-y: auto;
+          overflow-y: visible;
           overflow-x: hidden;
         }
       }
@@ -747,6 +802,12 @@ app-bot-list {
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
+      // L'éditeur d'avatar a une taille intrinsèque bien plus petite que la
+      // carte : centré plutôt que collé en haut-gauche, pour ne pas laisser
+      // un vide disproportionné à droite/en dessous.
+      display: flex;
+      align-items: center;
+      justify-content: center;
 
       ::ng-deep app-bot-draw {
         display: block;

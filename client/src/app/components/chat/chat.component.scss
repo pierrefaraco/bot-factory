@@ -29,6 +29,11 @@
   padding-bottom: 0;
   display: flex;
   flex-direction: column;
+  // Ancre la conversation en bas : avec peu de messages, ils restent collés
+  // à la zone de saisie au lieu de flotter en haut avec un grand vide en
+  // dessous. Une fois le contenu plus grand que le conteneur, ce vide
+  // disparaît et le scroll reprend son comportement normal.
+  justify-content: flex-end;
   gap: 1rem;
   scroll-behavior: smooth;
   min-height: 0;
