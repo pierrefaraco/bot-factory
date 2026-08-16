@@ -61,6 +61,10 @@ def create_app():
 
     # Apply configuration
     app.config.from_object("ai_server.config.config.AppConfig")
+    # Standardize flask-jwt-extended's built-in error responses (missing/
+    # expired/invalid/revoked token, etc.) on the same {"error": "..."} shape
+    # used everywhere else, instead of its default {"msg": "..."}.
+    app.config["JWT_ERROR_MESSAGE_KEY"] = "error"
     app_name = app.config.get("APP_NAME")
     app_version = app.config.get("APP_VERSION")
     main_url_subdirectory = app.config.get("URL_SUBDIRECTORY")

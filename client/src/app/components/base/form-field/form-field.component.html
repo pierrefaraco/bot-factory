@@ -57,7 +57,7 @@
     </mat-error>
  </mat-form-field>
 
-  <mat-form-field *ngSwitchCase="'text-with-button'" appearance="outline" class="custom-background"
+  <mat-form-field *ngSwitchCase="'text-with-button'" appearance="outline" class="custom-background field-with-send-button"
     style="width: 100%; flex: 1;">
     <mat-label class="custom-label"> {{ label }}</mat-label>
     <input class="input-size" matInput [type]="'text'" [formControl]="control" [name]="name" required (input)="onInputChange()"
@@ -70,9 +70,9 @@
       </app-button>
 
       <app-button *ngIf="buttonIcon" [icon]="buttonIcon" [label]="buttonLabel" (buttonClickedEvent)="onButtonClick()"
-        [focusOnTab]="false" [onlyOnMouseClick]="true" class="se-button-inline"
+        [focusOnTab]="false" [onlyOnMouseClick]="true" class="send-button-inline"
         [color]="'var(--text-seconday)'" [type]="'field-button'" [backgroundColor]="buttonBackgroundColor"
-        [disabled]="disabled" [size]="'big'" >
+        [disabled]="disabled || !control?.value" [size]="'big'" >
       </app-button>
     </div>
 

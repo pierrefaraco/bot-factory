@@ -45,7 +45,7 @@
     <app-form-field #inputField [type]="'text-with-button'" [errorMessage]="'wrong'" [control]="messageToSendCtrl"
       [name]="'input-message'" [label]="'Write your message here'" errorMessage="" backgroundColor="red"
       [disabled]=isLoading [buttonIcon]="'send'" [buttonLabel]="'Send'" (buttonClick)="onSubmit()"
-      buttonBackgroundColor="var(--background-elevated)">
+      buttonBackgroundColor="var(--bg-elevated)">
     </app-form-field>
     <div class="top-reset-bar">
       <!-- <app-button [icon]="'refresh'" [label]="'Réinitialiser'" (buttonClickedEvent)="resetChat()"

@@ -12,22 +12,22 @@ class ApiError(Exception):
             self.status_code = ApiError.DEFAULT_STATUS_CODE
 
         self.data = {}
-        self.data["message"] = ""
+        self.data["error"] = ""
 
         if payload is not None:
             self.data["payload"] = ""
 
         if isinstance(message, str) and message.strip():
-            self.data["message"] = message
+            self.data["error"] = message
         elif isinstance(message, Exception):
-            self.data["message"] = "Exception: " + str(message)
+            self.data["error"] = "Exception: " + str(message)
         elif message is not None:
-            self.message = str(message)
+            self.data["error"] = str(message)
 
         self.payload = payload
 
     def __str__(self):
-        return self.data["message"]
+        return self.data["error"]
 
     def to_dict(self):
         return self.data

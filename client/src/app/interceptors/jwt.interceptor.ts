@@ -5,14 +5,22 @@ import { throwError,Observable } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { JwtService } from '../services/jwt.service';
 import { Router } from '@angular/router';
+import { ErrorNotificationService } from '../services/error-notification.service';
 
 
 export function errorInterceptor(req: HttpRequest<unknown>, next: HttpHandlerFn): Observable<HttpEvent<unknown>> {
+  const errorNotificationService = inject(ErrorNotificationService);
+
   return next(req).pipe(
-    
     catchError((error: HttpErrorResponse) => {
       console.error('Erreur de la requête:', error);
-      return throwError(error);
+      // Le 401 est déjà géré par jwtInterceptor (déconnexion + redirection
+      // vers /auth) : un popup d'erreur en plus serait juste du bruit
+      // pendant cette redirection.
+      if (error.status !== 401) {
+        errorNotificationService.showError(error);
+      }
+      return throwError(() => error);
     })
   );
 }

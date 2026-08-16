@@ -6,89 +6,13 @@
   // margin-bottom: 1rem;
 }
 
-
-.form-field-wrapper {
-  position: relative;
-  width: 100%;
+// Le texte saisi partait pile au ras du bord gauche du champ (0 padding
+// mesuré). Même token que le padding horizontal des cartes du projet
+// (.overview-section, cf. bot-workspace.component.scss).
+.input-size {
+  padding-left: 1rem;
 }
 
-.form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: color var(--transition-fast);
-}
-
-.input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.form-input {
-  flex: 1;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  color: var(--input-text);
-  background-color: var(--input-bg);
-  border: 1px solid var(--input-border);
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  transition: all var(--transition-fast);
-  outline: none;
-  width: 100%;
-
-  &::placeholder {
-    color: var(--input-placeholder);
-  }
-
-  &:focus {
-    border-color: var(--input-focus-border);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    background-color: var(--bg-tertiary);
-  }
-
-  &.error {
-    border-color: var(--error-color);
-
-    &:focus {
-      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
-    }
-  }
-}
-
-.form-input[type="password"] {
-  padding-right: 3rem;
-}
-
-.text-with-button {
-  .form-input {
-    padding-right: 3.5rem;
-  }
-
-  .input-button-wrapper {
-    position: absolute;
-    right: 0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-}
-
-.error-message {
-  display: block;
-  margin-top: 0.375rem;
-  font-size: 0.8125rem;
-  color: var(--error-color);
-  animation: fadeIn 0.2s ease-out;
-}
 
 .clear-button,
 .toggle-password-button {
@@ -119,14 +43,75 @@
   right: 3.5rem;
 }
 
-// Container pour les boutons dans le suffix
+// Container pour les boutons dans le suffix, et habillage visuel du champ
+// Material lui-même. Angular Material (MDC) expose en théorie des custom
+// properties (--mdc-outlined-text-field-outline-color etc.) pour ce genre
+// de personnalisation, mais elles n'ont ici aucun effet mesuré (testé) —
+// on cible donc directement les pièces du contour "notché" via ::ng-deep,
+// seule approche qui fonctionne sur cette version. `--input-border` et
+// `--input-focus-border` existent déjà dans les deux thèmes (dark/light)
+// mais n'étaient jusqu'ici jamais branchés sur ces champs, qui utilisaient
+// la couleur par défaut de Material (blanc à 38% d'opacité, sans lien
+// avec le thème). Le rayon (8px) reprend celui déjà utilisé pour les
+// boutons/onglets du projet (.create-bot-btn, .tab-button).
 .custom-background {
   ::ng-deep .mat-mdc-text-field-wrapper {
     padding-right: 0 !important;
+    border-radius: 8px;
   }
 
   ::ng-deep .mat-mdc-form-field-infix {
     padding-right: 0 !important;
+  }
+
+  ::ng-deep .mdc-notched-outline__leading {
+    border-radius: 8px 0 0 8px;
+    // Sans ce min-width, ce segment ne fait qu'1px de large (mesuré) : un
+    // rayon de 8px ne peut pas s'y dessiner (la courbe est écrasée), d'où
+    // le coin gauche resté visuellement carré alors que le droit (segment
+    // "trailing", bien plus large) s'arrondit correctement.
+    min-width: 0.75rem;
+  }
+
+  ::ng-deep .mdc-notched-outline__trailing {
+    border-radius: 0 8px 8px 0;
+  }
+
+  ::ng-deep .mdc-notched-outline__leading,
+  ::ng-deep .mdc-notched-outline__notch,
+  ::ng-deep .mdc-notched-outline__trailing {
+    border-color: var(--input-border);
+    transition: border-color var(--transition-fast);
+  }
+
+  ::ng-deep .mat-mdc-text-field-wrapper.mdc-text-field--focused {
+    // Même anneau de focus que le token déjà utilisé ailleurs dans le
+    // projet pour les champs natifs (styles.scss, règle globale
+    // input/textarea/select:focus).
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--input-focus-border);
+      border-width: 2px;
+    }
+  }
+}
+
+// Champ avec bouton d'envoi (chat) : la bordure reste sur --input-border
+// même au focus (pas de bascule vers --input-focus-border comme les
+// autres champs) — c'est l'état du bouton lui-même (grisé/actif selon la
+// présence de texte, cf. .send-button-inline plus bas) qui porte l'état,
+// pas la couleur de la bordure.
+.field-with-send-button {
+  ::ng-deep .mat-mdc-text-field-wrapper.mdc-text-field--focused {
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--input-border);
+      border-width: 1px;
+    }
   }
 }
 
@@ -149,17 +134,27 @@
   .send-button-inline {
     display: flex;
     align-items: stretch;
-    height: calc(100% + 2px);
-    margin-top: 1px;
-    margin-bottom: -1px;
-
-    margin-right: 1px ;
+    // Pas de bordure propre au bouton (border: none sur le bouton
+    // ci-dessous) : il doit entièrement recouvrir la bordure du champ à
+    // cet endroit plutôt que d'en laisser un bout visible, sans pour
+    // autant déborder du champ. `height: 100%` fait exactement la même
+    // hauteur que le contour du champ (mesuré : les deux en border-box,
+    // 56px pile) — donc aucun débordement — et `z-index` supérieur à celui
+    // du contour (.mdc-notched-outline, z-index: 1) garantit que le fond
+    // plein du bouton peint bien par-dessus le trait de bordure à cet
+    // endroit, au lieu d'un recouvrement ambigu selon l'ordre du DOM.
+    height: 100%;
+    position: relative;
+    z-index: 2;
     overflow: hidden;
     ::ng-deep button {
       height: 100%;
       min-width: 60px;
       padding: 0 20px;
-      border-radius: 0 4px 4px 0 !important;
+      // 8px : même rayon que le champ lui-même (cf. .custom-background
+      // ci-dessous), pour que ce bouton flush-right raccorde proprement
+      // le coin arrondi du champ au lieu de le contredire (4px avant).
+      border-radius: 0 8px 8px 0 !important;
       transition: all 0.3s ease;
       border: none;
       margin: 0;
@@ -177,13 +172,24 @@
         filter: brightness(0.9);
       }
 
+      // Grisé tant qu'il n'y a pas de texte à envoyer (cf. [disabled] dans
+      // le .html : disabled || !control?.value), plutôt qu'un changement
+      // de couleur de bordure — même valeur d'opacité que les autres
+      // boutons d'icône désactivés du champ (.password-suffix-buttons
+      // ci-dessous).
+      &:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        filter: none;
+      }
+
       .mat-mdc-button-touch-target {
         height: 100%;
       }
     }
 
     ::ng-deep .mat-mdc-button-persistent-ripple {
-      border-radius: 0 4px 4px 0 !important;
+      border-radius: 0 8px 8px 0 !important;
     }
 
     ::ng-deep .material-icons {
@@ -224,12 +230,3 @@
   }
 }
 
-// Style pour les champs avec icône
-.has-icon {
-  .form-input {
-    padding-left: 2.75rem;
-    padding-bottom: 0rem;
-  }
-
-
-}

@@ -1,0 +1,17 @@
+<div class="error-dialog">
+  <div class="error-dialog-icon">
+    <span class="material-icons">error_outline</span>
+  </div>
+
+  <h2 class="error-dialog-title">{{ data.title }}</h2>
+
+  <p class="error-dialog-message">{{ data.message }}</p>
+
+  <span class="error-dialog-status" *ngIf="data.status">Error {{ data.status }}</span>
+
+  <div class="error-dialog-actions">
+    <app-button [icon]="'close'" [label]="'Close'" (buttonClickedEvent)="close()" [color]="'white'"
+      [type]="'custom-button'" [backgroundColor]="'var(--text-danger)'" [disabled]="false" [submit]="true">
+    </app-button>
+  </div>
+</div>

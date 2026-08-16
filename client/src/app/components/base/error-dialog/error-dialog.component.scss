@@ -1,0 +1,102 @@
+// Erreur backend affichée en popup — taille bien plus réduite que
+// .custom-dialog (pensé pour des formulaires, 800-1400px de large) puisque
+// ce dialog n'affiche qu'un message court à accuser réception.
+:host {
+  display: block;
+}
+
+// Le conteneur natif de Material Dialog (rendu dans un overlay, hors de
+// l'encapsulation de ce composant) n'a par défaut aucun style lié au thème
+// de l'app — d'où le fond gris générique déjà visible sur .custom-dialog
+// (jamais recouvert). Repris ici avec les tokens de carte du projet
+// (.overview-section : border-radius 12px, --card-shadow, bordure 1px).
+::ng-deep .mat-mdc-dialog-container {
+  --mdc-dialog-container-color: var(--bg-primary);
+  border-radius: 12px !important;
+  box-shadow: var(--shadow-lg) !important;
+  border: 1px solid var(--border-primary);
+  min-width: 320px !important;
+  max-width: 420px !important;
+  width: 90vw !important;
+}
+
+::ng-deep .mdc-dialog__surface {
+  border-radius: 12px !important;
+  background: var(--bg-primary) !important;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2rem 1.5rem 1.5rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+.error-dialog-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: var(--bg-danger);
+  margin-bottom: 1rem;
+
+  .material-icons {
+    font-size: 2rem;
+    color: var(--text-danger);
+  }
+}
+
+.error-dialog-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem;
+}
+
+.error-dialog-message {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: break-word;
+}
+
+.error-dialog-status {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.error-dialog-actions {
+  margin-top: 1.5rem;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 480px) {
+  ::ng-deep .mat-mdc-dialog-container {
+    min-width: 88vw !important;
+  }
+}

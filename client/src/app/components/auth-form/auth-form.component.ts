@@ -158,7 +158,7 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
             this.loginSubmitting = false;
           },
           error: error => {
-            console.log(error.error?.message || 'Identifiants invalides');
+            console.log(error.error?.error || 'Identifiants invalides');
             this.loginSubmitting = false;
           }
         });
@@ -210,7 +210,7 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
         },
         error: error => {
           console.error('❌ Erreur de connexion:', error);
-          const errorMessage = error.error?.message || 'Échec de la connexion avec Google';
+          const errorMessage = error.error?.error || 'Échec de la connexion avec Google';
           alert(errorMessage);
           this.loginSubmitting = false;
         }

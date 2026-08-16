@@ -8,7 +8,12 @@
 
 
 
-// Style harmonisé avec FormFieldComponent
+// Style harmonisé avec FormFieldComponent — dupliqué plutôt que partagé :
+// `::ng-deep` reste scopé au composant qui l'écrit (l'attribut
+// d'encapsulation Angular n'est retiré qu'APRÈS `::ng-deep` dans le
+// sélecteur compilé, pas avant), donc les règles écrites dans
+// form-field.component.scss ne s'appliquent qu'aux champs rendus par ce
+// composant-là, même si ce combo partage la même classe `.custom-background`.
 .custom-background {
 
 
@@ -19,10 +24,43 @@
     padding-bottom: 16px;
   }
 
+  ::ng-deep .mat-mdc-text-field-wrapper {
+    border-radius: 8px;
+  }
 
+  ::ng-deep .mdc-notched-outline__leading {
+    border-radius: 8px 0 0 8px;
+    // Sans ce min-width, ce segment ne fait qu'1px de large : un rayon de
+    // 8px ne peut pas s'y dessiner (cf. form-field.component.scss).
+    min-width: 0.75rem;
+  }
 
+  ::ng-deep .mdc-notched-outline__trailing {
+    border-radius: 0 8px 8px 0;
+  }
 
+  ::ng-deep .mdc-notched-outline__leading,
+  ::ng-deep .mdc-notched-outline__notch,
+  ::ng-deep .mdc-notched-outline__trailing {
+    border-color: var(--input-border);
+    transition: border-color var(--transition-fast);
+  }
 
+  ::ng-deep .mat-mdc-text-field-wrapper.mdc-text-field--focused {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+
+    .mdc-notched-outline__leading,
+    .mdc-notched-outline__notch,
+    .mdc-notched-outline__trailing {
+      border-color: var(--input-focus-border);
+      border-width: 2px;
+    }
+  }
+
+  ::ng-deep .mat-mdc-select-value,
+  ::ng-deep input {
+    padding-left: 1rem;
+  }
 }
 
 // Style pour le bouton clear (autocomplete)
@@ -51,20 +89,63 @@
   }
 }
 
-// Style des options
+// Style des options — même repère que .dropdown-item (styles/common.scss,
+// menu utilisateur) : hover sur --bg-hover, sélection accentuée sur
+// --text-accent plutôt que l'overlay blanc générique de Material
+// (rgba(255,255,255,.12), sans lien avec le thème).
 ::ng-deep .option {
   font-size: 0.9375rem;
   color: var(--text-primary);
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 
+  // !important : la surcouche de survol par défaut de Material (overlay
+  // blanc translucide via .mat-mdc-option-ripple, cf. mesuré : 4% blanc au
+  // lieu de --bg-hover) a une spécificité plus forte qu'un simple
+  // `.option:hover` et gagnait sinon.
   &:hover {
-    background-color: var(--bg-hover);
+    background-color: var(--bg-hover) !important;
+  }
+
+  &.mdc-list-item--selected,
+  &.mat-mdc-option-active {
+    background-color: var(--bg-hover) !important;
+    color: var(--text-accent);
+    font-weight: 600;
+  }
+
+  ::ng-deep .mat-mdc-option-pseudo-checkbox,
+  ::ng-deep .mat-pseudo-checkbox,
+  ::ng-deep .mat-mdc-option-checkmark-container svg {
+    fill: var(--text-accent);
+    color: var(--text-accent);
   }
 }
 
-// Style du panel autocomplete
+// Style du panel autocomplete — !important sur bg/radius : Material impose
+// ici son propre gris (rgb(66,66,66)) et un rayon de 0 avec une spécificité
+// plus forte que ce bloc (mesuré ; seule la bordure passait jusqu'ici).
 ::ng-deep .mat-mdc-autocomplete-panel {
-  background-color: var(--bg-primary);
+  background-color: var(--bg-primary) !important;
   border: 1px solid var(--border-primary);
-  border-radius: 0.5rem;
-  box-shadow: var(--shadow-lg);
+  border-radius: 0.5rem !important;
+  box-shadow: var(--shadow-lg) !important;
+  padding: 0.25rem !important;
+}
+
+// Style du panel des dropdowns simples (mat-select, sans autocomplete) —
+// mêmes tokens que .mat-mdc-autocomplete-panel juste au-dessus : jusqu'ici
+// non stylé, il gardait le fond gris et l'ombre par défaut de Material
+// (rgb(66,66,66), sans lien avec le thème de l'app — mesuré).
+::ng-deep .mat-mdc-select-panel {
+  background-color: var(--bg-primary) !important;
+  border: 1px solid var(--border-primary);
+  border-radius: 0.5rem !important;
+  box-shadow: var(--shadow-lg) !important;
+  padding: 0.25rem !important;
+}
+
+// Flèche du select, alignée sur les autres icônes de champ (--text-secondary
+// au repos, cf. .clear-button/.material-icons ailleurs dans ce fichier).
+::ng-deep .mat-mdc-select-arrow {
+  color: var(--text-secondary);
 }
