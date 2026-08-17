@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 from ai_server.config.openapi import api, pydantic_error_messages
 from ai_server.exceptions.api_error import ApiError
+from ai_server.exceptions.service_exceptions import AuthenticationError, NotFoundError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.authent_svc import AuthenticationService
 from ai_server.dao.database import db, User
@@ -68,6 +69,14 @@ def login():
 
     except ValidationError as e:
         return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
+    except (AuthenticationError, NotFoundError) as exc:
+        # Même message générique pour les deux cas (mauvais mot de passe vs
+        # utilisateur inexistant), pour ne pas permettre l'énumération des
+        # comptes existants.
+        app_logger.warning(f"Failed login attempt: {exc}")
+        return jsonify(
+            {"error": "Invalid email or password"}
+        ), HTTPStatus.UNAUTHORIZED
     except Exception as exc:
         app_logger.error(f"Login error: {exc}")
         return jsonify(
