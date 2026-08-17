@@ -23,6 +23,7 @@ from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.log.log_manager import LogManager
 from ai_server.dao.database import db
+from ai_server.services.chroma_db_svc import ChromaDbService
 from ai_server.services.user_admin_svc import UserAdminService
 
 logger = BotFactoryLogger()
@@ -130,6 +131,10 @@ def create_app():
         logger.info(f"{app_name} version {app_version} started and ready.")
 
         db.init_app(app)
+
+        # Fail fast if the vector store RAG depends on isn't reachable,
+        # instead of starting up and only failing later on the first chat.
+        ChromaDbService().check_connection()
 
         user_admin_svc = UserAdminService()
         super_admin_login = os.getenv("SUPER_ADMIN_LOGIN")

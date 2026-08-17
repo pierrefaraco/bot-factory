@@ -149,6 +149,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             )
             db.session.add(knowledge_entity)
         db.session.commit()
+        self.recordChaptersToVectorDB(bot_id)
 
         knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
         return [self._knowledge_to_dto(ch) for ch in knowledges]
@@ -305,6 +306,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         created_knowledge: Knowledge = Knowledge.query.filter_by(
             name=knowledge_name, bot_id=bot_id
         ).first()
+        self.recordChaptersToVectorDB(bot_id)
         return self._knowledge_to_dto(created_knowledge)
 
     def create_empty_knowledge(self, bot_id, knowledge_dad_id) -> KnowledgeDto:
@@ -322,6 +324,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         )
         db.session.add(knowledge)
         db.session.commit()
+        self.recordChaptersToVectorDB(bot_id)
         return self._knowledge_to_dto(knowledge)
 
     def create(self, data: Dict[str, Any]) -> KnowledgeDto:
@@ -439,6 +442,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         knowledge.indice = indice
         knowledge.pdf_file = pdf_file
         db.session.commit()
+        self.recordChaptersToVectorDB(bot_id)
         return self._knowledge_to_dto(knowledge)
 
     def get_dto_by_id(self, entity_id: int) -> KnowledgeDto:
@@ -618,7 +622,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         if not knowledge:
             raise NotFoundError("Chapter", str(entity_id))
 
+        bot_id = knowledge.bot_id
         self._delete_knowledge(knowledge)
+        self.recordChaptersToVectorDB(bot_id)
         return True
 
     def compare_fn(self, knowledge: Knowledge) -> int:
@@ -742,10 +748,6 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
                 pdf_file_paths.append(
                     os.path.join(self.upload_folder, sch["knowledge"].pdf_file)
                 )
-
-        fichier = open("data_for_alfred.md", "a")
-        fichier.write(to_save_in_vector_db)
-        fichier.close()
 
         self.rag_svc.db_service.delete_all(f"Collection{bot_id}")
         if to_save_in_vector_db:

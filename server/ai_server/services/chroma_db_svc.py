@@ -65,6 +65,29 @@ class ChromaDbService(BaseService[DocumentDto]):
             collection_name=collection_name,
         )
 
+    def check_connection(self) -> None:
+        """
+        Verify that the configured ChromaDB backend is reachable.
+
+        Raises:
+            Exception: If ChromaDB cannot be reached. Left to propagate so
+            the app fails to start rather than silently serving RAG
+            requests against a dead vector store.
+        """
+        logger.info("Checking ChromaDB connectivity...")
+        if self.config.CHROMA_CONTAINER:
+            client = chromadb.HttpClient(
+                host=self.config.CHROMA_HOST,
+                port=self.config.CHROMA_PORT,
+                settings=Settings(allow_reset=True),
+            )
+        elif self.config.PERSIST:
+            client = chromadb.PersistentClient(settings=Settings(allow_reset=True))
+        else:
+            client = chromadb.EphemeralClient()
+        client.heartbeat()
+        logger.info("ChromaDB connection OK.")
+
     def build_collection(self, collection_name: str) -> None:
         """
         Build and initialize a collection.
