@@ -220,6 +220,13 @@ app-bot-list {
   // et de la carte active s'alignent avec celui de `.dashboard-header`
   // (même repère hérité du padding de `.dashboard`, sans inset local en plus).
   padding-right: 0;
+  // Bas : pas d'inset ici non plus. Ce padding ne servait à rien (aucune
+  // ombre ne se dégrade dans cet espace, `.tab-content` clippe déjà plus
+  // bas avec son propre `overflow: hidden`) — le même budget de 0.5rem est
+  // maintenant porté par `.tab-pane` ci-dessous, là où il profite réellement
+  // à l'ombre de la carte active, sans changer la position finale de son
+  // bord bas (qui reste alignée sur celle de `.bots-section`).
+  padding-bottom: 0;
 }
 
 // Navigation par onglets
@@ -318,10 +325,14 @@ app-bot-list {
     // visible en bas) n'a donc aucune place pour se dégrader avant d'être
     // tronqué net par cet `overflow: hidden` — d'où l'ombre "cassée" sur les
     // coins bas. Le padding sur `.main-content` ne suffit pas : le clip se
-    // fait ici, un niveau plus bas. Même fix que `.sidebar-bots` plus haut.
+    // fait ici, un niveau plus bas. Même fix que `.sidebar-bots` plus haut,
+    // même valeur (0.5rem) : ce budget vient d'être déplacé depuis le
+    // padding-bottom de `.main-content` (cf. commentaire là-bas), pas ajouté
+    // en plus — la position finale du bord bas de la carte ne change donc
+    // pas, elle reste alignée sur celle de `.bots-section`.
     // Gauche/droite non touchés : ces bords sont volontairement à 0 pour
     // rester alignés avec `.dashboard-header` (cf. `.main-content`).
-    padding-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
 
     &.active {
       display: flex;
