@@ -1,0 +1,71 @@
+version: '3.9'
+
+# Overlay for the HTTP regression suite (server/test/). Reuses the real db and
+# chromadb services from docker-compose.yml, adds a deterministic stand-in
+# for the Mistral API, and points the api service at it.
+#
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+
+services:
+  mock-llm:
+    build:
+      context: ./server/test/mock_llm
+    container_name: botfactory-mock-llm
+    networks:
+      - botfactory-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9999/v1/health')"]
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  api:
+    depends_on:
+      mock-llm:
+        condition: service_healthy
+    environment:
+      MISTRAL_BASE_URL: http://mock-llm:9999/v1
+
+  # Runs server/test/ as its own container on botfactory-network, so it
+  # reaches db/api by service name -- no host-networking ambiguity, works
+  # the same from a bare host or a nested dev-container. Not started by
+  # `docker-compose up`; run explicitly, e.g.:
+  #   docker-compose -f docker-compose.yml -f docker-compose.test.yml \
+  #     run --rm test-runner
+  #
+  # To test an API already running in dev mode (e.g. `make dev-server` /
+  # z-run.sh) on a different port instead of the containerized api service,
+  # use `make test-server-http-dev PORT=444` -- it probes both
+  # host.docker.internal (the dev server runs on the real host machine, or
+  # a container whose port is published there) and this shell's own
+  # hostname (the dev server runs in the same container this Makefile
+  # invocation is itself running in, and that container happens to already
+  # be attached to botfactory-network -- true for this project's own
+  # sandboxed dev-container, whose port 444 is NOT published to the real
+  # host, so host.docker.internal alone doesn't reach it). If neither
+  # works, set TEST_API_BASE_URL directly to wherever it's reachable from.
+  # (MISTRAL_BASE_URL isn't set for a manually-started dev server, so
+  # test_rag.py will call the real Mistral API in that case unless you
+  # export MISTRAL_BASE_URL=http://<mock-llm-host>:9999/v1 yourself before
+  # starting it.)
+  test-runner:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.test
+    container_name: botfactory-test-runner
+    networks:
+      - botfactory-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+      mock-llm:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      TEST_API_BASE_URL: ${TEST_API_BASE_URL:-http://api:444/api}
+      TEST_DATABASE_URL: ${TEST_DATABASE_URL:-mysql+pymysql://botcraft_user:123456789@db:3306/botcraft?charset=utf8mb4}

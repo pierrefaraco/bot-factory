@@ -275,7 +275,7 @@ def select_bot(bot_id: int):
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
         user.selected_bot_id = bot_id
-        user.save()
+        db.session.commit()
         return "", HTTPStatus.NO_CONTENT
     except Exception as e:
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR

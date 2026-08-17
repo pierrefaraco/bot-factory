@@ -511,7 +511,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         db.session.commit()
         return [self._knowledge_to_dto(ch) for ch in knowledges]
 
-    def get_knowledge(self, bot_id: int, knowledge_id: int) -> KnowledgeDto:
+    def get_knowledge(self, bot_id: int, knowledge_id: int) -> Optional[KnowledgeDto]:
         """
         Get a specific knowledge by bot and knowledge ID.
 
@@ -520,25 +520,21 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             knowledge_id: ID of the knowledge
 
         Returns:
-            ChapterDto instance
-
-        Raises:
-            ServiceError: When knowledge retrieval fails
+            ChapterDto instance if found, None otherwise
         """
-        result = self._perform_get_knowledge(
+        return self._perform_get_knowledge(
             bot_id,
             knowledge_id,
         )
-        if result is None:
-            raise ServiceError("Get knowledge failed.")
-        return result
 
-    def _perform_get_knowledge(self, bot_id: int, knowledge_id: int) -> KnowledgeDto:
+    def _perform_get_knowledge(
+        self, bot_id: int, knowledge_id: int
+    ) -> Optional[KnowledgeDto]:
         ch: Knowledge = Knowledge.query.filter_by(
             bot_id=bot_id, id=knowledge_id
         ).first()
         if not ch:
-            raise NotFoundError("Chapter", f"{bot_id}_{knowledge_id}")
+            return None
         return self._knowledge_to_dto(ch)
 
     def get_knowledge_if_exist(

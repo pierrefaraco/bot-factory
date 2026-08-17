@@ -1,0 +1,33 @@
+FROM python:3.12-slim
+
+# Runs the HTTP regression suite (server/test/) as its own container on the
+# botfactory-network, so it reaches db/chromadb/api/mock-llm by service name
+# regardless of the host's own network setup (e.g. a nested dev-container
+# where `localhost` doesn't route to sibling containers' published ports).
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --extra test --no-install-project
+
+COPY ai_server ./ai_server
+COPY db ./db
+COPY config ./config
+COPY test ./test
+
+RUN uv sync --frozen --extra test
+
+CMD ["pytest", "test/", "-v"]

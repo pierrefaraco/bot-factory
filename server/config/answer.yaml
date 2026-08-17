@@ -45,6 +45,10 @@ answer_format:
     description: "The answer must be in sequential numbered steps."
   - label: table
     description: "The answer must be in a table to compare information if relevant."
+  - label: markdown
+    description: "The answer must be in markdown."
+  - label: adapt
+    description: "Use the most appropriate format to answer."
 
 answer_length:
   - label: very-short

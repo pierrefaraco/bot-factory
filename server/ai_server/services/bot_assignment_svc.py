@@ -83,7 +83,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         logger.info(f"user {user} ")
         logger.info(f"data {data} ")
         # Validate that user is child of assigner
-        if user.parent_id != data["assigned_by"]:
+        if int(user.parent_id) != int(data["assigned_by"]):
             raise ServiceError(
                 f"Guest user {data['user_id']} is not a child of user {data['assigned_by']}"
             )
@@ -112,7 +112,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         db.session.commit()
         return self._assignment_to_dto(assignment)
 
-    def get_dto_by_id(self, entity_id: int) -> BotAssignmentDto:
+    def get_dto_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
         """
         Retrieve an assignment by its ID.
 
@@ -120,22 +120,14 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             entity_id: ID of the assignment to retrieve
 
         Returns:
-            BotAssignmentDto instance if found
-
-        Raises:
-            ServiceError: When assignment retrieval fails
+            BotAssignmentDto instance if found, None otherwise
         """
-        result = self._perform_get_by_id(entity_id)
-        if result is None:
-            raise ServiceError(
-                "Get assignment by id failed, no BotAssignmentDto returned."
-            )
-        return result
+        return self._perform_get_by_id(entity_id)
 
-    def _perform_get_by_id(self, entity_id: int) -> BotAssignmentDto:
+    def _perform_get_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
         assignment = BotAssignment.query.get(entity_id)
         if not assignment:
-            raise NotFoundError("Assignment", str(entity_id))
+            return None
         return self._assignment_to_dto(assignment)
 
     def get_all(self) -> List[BotAssignmentDto]:
@@ -369,31 +361,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         if not assignments:
             return False
 
-        db.session.delete(assignments)
+        for assignment in assignments:
+            db.session.delete(assignment)
         db.session.commit()
         return True
-
-    def is_bot_assigned_to_user(self, bot_id: int, user_id: int) -> bool:
-        """
-        Return True if the bot_id is assigned to user id.
-
-        Args:
-            bot_id: ID of the bot
-            user_id: ID of the user
-
-        Returns:
-            True if an assigment exist with bot_id and user_id
-        """
-        result = self._perform_is_bot_assigned_to_user(
-            bot_id,
-            user_id,
-        )
-        return bool(result)
-
-    def _perform_is_bot_assigned_to_user(self, bot_id: int, user_id: int) -> bool:
-        assignment = BotAssignment.query.filter_by(
-            bot_id=bot_id, user_id=user_id
-        ).first()
-        if assignment:
-            return True
-        return False

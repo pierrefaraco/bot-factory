@@ -307,13 +307,17 @@ def delete_user_guest(guest_id):
     try:
         user_id = get_jwt_identity()
         guest = User.query.filter_by(id=guest_id).first()
-        if guest.parent_id == int(user_id):
-            return delete_user(guest_id)
-        return jsonify(
-            msg=f"Unable to delete  user {guest_id} because it's not your guest."
-        ), 200
+        if not guest:
+            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
+        if guest.parent_id != int(user_id):
+            return jsonify(
+                {"error": f"Unable to delete user {guest_id} - not your guest"}
+            ), HTTPStatus.FORBIDDEN
+        return delete_user(guest_id)
+    except ApiError:
+        raise
     except Exception as exc:
-        msg = f"Exception while activating user: {exc}"
+        msg = f"Exception while deleting guest user: {exc}"
         logger.error(msg)
         raise ApiError(msg, 500)
 
@@ -322,7 +326,7 @@ def delete_user_guest(guest_id):
 @role_required([ADMIN_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def delete_user_admin(user_id):
-    delete_user(user_id)
+    return delete_user(user_id)
 
 
 def delete_user(user_id):
@@ -331,6 +335,8 @@ def delete_user(user_id):
         user_admin_svc.delete_user(user_id)
         # security_logger.info(f'User {user_id} deleted by admin {get_jwt_identity()}')
         return jsonify(msg="User deleted successfully"), 200
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while deleting user: {exc}"
         logger.error(msg)
@@ -361,6 +367,8 @@ def change_role(user_id):
                 "roles": user.roles,
             },
         ), 200
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while changing user role: {exc}"
         logger.error(msg)
@@ -394,12 +402,13 @@ def change_password_guest(guest_id):
     try:
         guest = User.query.filter_by(id=guest_id).first()
         user_id = get_jwt_identity()
-        if guest.parent_id == int(user_id):
-            return change_password(guest_id)
-        return ApiError(
-            f"Unable to change the  password because user {guest_id} it's not your guest.",
-            200,
-        )
+        if not guest:
+            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
+        if guest.parent_id != int(user_id):
+            return jsonify(
+                {"error": f"Unable to change password for user {guest_id} - not your guest"}
+            ), HTTPStatus.FORBIDDEN
+        return change_password(guest_id)
     except ApiError as exc:
         msg = f"Exception while changing guest password: {exc}"
         code = exc.status_code
@@ -435,11 +444,15 @@ def deactivate_user_guest(guest_id):
         user_id = get_jwt_identity()
         guest = User.query.filter_by(id=guest_id).first()
 
-        if guest.parent_id == int(user_id):
-            return deactivate_user(guest_id)
-        return jsonify(
-            msg=f"Unable to deactivate user {guest_id} because it's not your guest."
-        ), 200
+        if not guest:
+            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
+        if guest.parent_id != int(user_id):
+            return jsonify(
+                {"error": f"Unable to deactivate user {guest_id} - not your guest"}
+            ), HTTPStatus.FORBIDDEN
+        return deactivate_user(guest_id)
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while deactivating user: {exc}"
         logger.error(msg)
@@ -461,6 +474,8 @@ def deactivate_user(user_id):
         return jsonify(
             msg="User deactivated successfully", user=user_dto.to_dict()
         ), 200
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while deactivating user: {exc}"
         logger.error(msg)
@@ -473,17 +488,18 @@ def deactivate_user(user_id):
 def activate_user_guest(guest_id):
     try:
         user_id = get_jwt_identity()
-        children = User.query.filter_by(id=guest_id).first()
-        if children.parent_id == int(user_id):
-            return activate_user(guest_id)
-        return jsonify(
-            msg=f"Unable to activate user {guest_id} because it's not your guest."
-        ), 200
+        guest = User.query.filter_by(id=guest_id).first()
+        if not guest:
+            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
+        if guest.parent_id != int(user_id):
+            return jsonify(
+                {"error": f"Unable to activate user {guest_id} - not your guest"}
+            ), HTTPStatus.FORBIDDEN
+        return activate_user(guest_id)
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while activating guest: {exc}"
-        logger.error(msg)
-        raise ApiError(msg, 500)
-        msg = f"Exception while activating user: {exc}"
         logger.error(msg)
         raise ApiError(msg, 500)
 
@@ -501,6 +517,8 @@ def activate_user(user_id):
         user_dto: UserDto = user_admin_svc.activate_user(user_id)
         # security_logger.info(f'User {user_id} activated by admin {get_jwt_identity()}')
         return jsonify(msg="User activated successfully", user=user_dto.to_dict()), 200
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while activating user: {exc}"
         logger.error(msg)
@@ -525,6 +543,8 @@ def reassign_children():
             f"Children reassigned from {old_parent_id} to {new_parent_id} by admin {get_jwt_identity()}"
         )
         return jsonify(msg="Children reassigned successfully"), 200
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while reassigning children: {exc}"
         logger.error(msg)
@@ -539,20 +559,24 @@ def get_user_self():
     return get_user(user_id)
 
 
-@bp.route(f"{CONTROLLER_PATH}/guest/<int:user_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_user_guest(guest_id):
     try:
         user_id = get_jwt_identity()
-        children = User.query.filter_by(id=guest_id).first()
-        if children.parent_id == user_id:
-            return get_user(user_id)
-        return jsonify(
-            msg=f"Unable to get user {guest_id} because it's not your guest."
-        ), 200
+        guest = User.query.filter_by(id=guest_id).first()
+        if not guest:
+            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
+        if guest.parent_id != int(user_id):
+            return jsonify(
+                {"error": f"Unable to get user {guest_id} - not your guest"}
+            ), HTTPStatus.FORBIDDEN
+        return get_user(guest_id)
+    except ApiError:
+        raise
     except Exception as exc:
-        msg = f"Exception while activating user: {exc}"
+        msg = f"Exception while retrieving guest user: {exc}"
         logger.error(msg)
         raise ApiError(msg, 500)
 
@@ -574,6 +598,8 @@ def get_user(user_id):
         logger.info(f"user_dto.to_dict() {user_dto.to_dict()}")
         return jsonify(user_dto.to_dict()), 200
 
+    except ApiError:
+        raise
     except Exception as exc:
         msg = f"Exception while getting user details: {exc}"
         logger.error(msg)
@@ -615,13 +641,13 @@ def patch_user_guest(guest_id):
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["PATCH"])
+@bp.route(f"{CONTROLLER_PATH}/<int:target_user_id>", methods=["PATCH"])
 @role_required([ADMIN_ROLE])
 @api.validate(json=PatchBotRequest, tags=["users-admin"], security={"BearerAuth": []})
-def patch_user_admin(guest_id):
+def patch_user_admin(target_user_id):
     """Update user's selected bot (admin only)"""
     parent_id = get_jwt_identity()
-    return _patch_user(parent_id, guest_id)
+    return _patch_user(parent_id, target_user_id)
 
 
 def _patch_user(parent_id, guest_id=-1):

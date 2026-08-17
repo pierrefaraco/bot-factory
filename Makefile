@@ -1,4 +1,8 @@
-.PHONY: help setup dev build test clean logs stop start restart up down migrate db-shell db-init db-create db-upgrade db-downgrade db-history db-current db-stamp
+.PHONY: help setup dev build test clean logs stop start restart up down migrate db-shell db-init db-create db-upgrade db-downgrade db-history db-current db-stamp test-server-http test-server-http-dev
+
+# Port of an API already running in dev mode (make dev-server / z-run.sh),
+# used by test-server-http-dev. Override: make test-server-http-dev PORT=8080
+PORT ?= 444
 
 help:
 	@echo "Bot Factory - Development Commands"
@@ -30,6 +34,8 @@ help:
 	@echo "Testing:"
 	@echo "  make test           Run all tests"
 	@echo "  make test-server    Run backend tests"
+	@echo "  make test-server-http  Run the HTTP regression suite (docker-compose + mock LLM)"
+	@echo "  make test-server-http-dev PORT=444  Run it against an API already running in dev mode"
 	@echo "  make test-client    Run frontend tests"
 	@echo ""
 	@echo "Database:"
@@ -144,6 +150,41 @@ test-server-single:
 ifdef TEST
 	cd server && uv run --extra test pytest $(TEST) -v
 endif
+
+test-server-http:
+	@echo "Starting stack with mock LLM for the HTTP regression suite..."
+	docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d --build db chromadb mock-llm api
+	@echo "Running tests in a container on the compose network (reaches api/db by service name, no host networking involved)..."
+	docker-compose -f docker-compose.yml -f docker-compose.test.yml run --rm test-runner
+	@echo "✓ HTTP regression suite complete (stack left running; 'make down' to stop)"
+	@echo "  Point a future FastAPI server instead: TEST_API_BASE_URL=http://api:<port>/api make test-server-http"
+
+test-server-http-dev:
+	@echo "Running HTTP regression suite against an API already running in dev mode on port $(PORT)..."
+	@echo "(override with: make test-server-http-dev PORT=<port>)"
+	@echo "Note: a manually-started dev server (z-run.sh) has no MISTRAL_BASE_URL set, so"
+	@echo "test_rag.py will call the real Mistral API unless you export MISTRAL_BASE_URL"
+	@echo "yourself before starting it."
+	docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d db chromadb mock-llm
+	@TARGET_HOST=""; \
+	for candidate in $$(hostname) host.docker.internal; do \
+		echo "Trying to reach the dev server via $$candidate:$(PORT)..."; \
+		if docker-compose -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps test-runner \
+			curl -sf http://$$candidate:$(PORT)/api/health > /dev/null 2>&1; then \
+			TARGET_HOST=$$candidate; \
+			break; \
+		fi; \
+	done; \
+	if [ -z "$$TARGET_HOST" ]; then \
+		echo "Could not reach port $(PORT) via this shell's own container ($$(hostname)) or"; \
+		echo "host.docker.internal (the real host machine). If the dev server runs somewhere"; \
+		echo "else reachable, point at it directly instead:"; \
+		echo "  TEST_API_BASE_URL=http://<host>:$(PORT)/api make test-server-http-dev"; \
+		exit 1; \
+	fi; \
+	echo "Reaching dev server via $$TARGET_HOST:$(PORT)"; \
+	TEST_API_BASE_URL="http://$$TARGET_HOST:$(PORT)/api" \
+	docker-compose -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps test-runner
 
 test-client:
 	@echo "Running frontend tests..."

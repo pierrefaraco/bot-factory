@@ -1,8 +1,8 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.services.prompt_svc import PromptService
 from ai_server.services.yaml_svc import YamlSvc
-from ai_server.dao.database import BotParameters, db
+from ai_server.dao.database import BotParameters, InterlocutorIdentity, db
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.decorators.singleton import singleton
@@ -101,7 +101,9 @@ class BotParametersService(BaseService[BotParametersDto]):
             "behaviour_when_ignore": str(params.get("behaviour_when_ignore") or ""),
             "behaviour_with_language": str(params.get("behaviour_with_language") or ""),
             "localisation": str(params.get("localisation") or ""),
-            "interlocutor_identity": str(params.get("interlocutor_identity") or ""),
+            "interlocutor_identity": str(
+                params.get("interlocutor_identity") or InterlocutorIdentity.USER.value
+            ),
             "answer_format": str(params.get("answer_format") or ""),
             "voice_output": bool(params.get("voice_output")),
             "persona_description": str(params.get("persona_description") or ""),
@@ -148,7 +150,8 @@ class BotParametersService(BaseService[BotParametersDto]):
             behaviour_when_ignore=data.get("behaviour_when_ignore", ""),
             behaviour_with_language=data.get("behaviour_with_language", ""),
             localisation=data.get("localisation", ""),
-            interlocutor_identity=data.get("interlocutor_identity", ""),
+            interlocutor_identity=data.get("interlocutor_identity")
+            or InterlocutorIdentity.USER.value,
             answer_format=data.get("answer_format", ""),
             voice_output=bool(data.get("voice_output", False)),
             persona_description=data.get("persona_description", ""),
@@ -498,7 +501,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         question = prompt_svc.welcome_message_trigger(user_name, params, behaviour_dict)
         return question
 
-    def get_by_bot_id(self, bot_id: int) -> BotParametersDto:
+    def get_by_bot_id(self, bot_id: int) -> Optional[BotParametersDto]:
         """
         Get bot parameters by bot ID.
 
@@ -506,20 +509,14 @@ class BotParametersService(BaseService[BotParametersDto]):
             bot_id: The ID of the bot
 
         Returns:
-            BotParametersDto instance if found
-
-        Raises:
-            ServiceError: When bot parameters retrieval fails
+            BotParametersDto instance if found, None otherwise
         """
-        result = self._perform_get_by_bot_id(bot_id)
-        if result is None:
-            raise ServiceError("Get bot parameters by bot_id failed.")
-        return result
+        return self._perform_get_by_bot_id(bot_id)
 
-    def _perform_get_by_bot_id(self, bot_id: int) -> BotParametersDto:
+    def _perform_get_by_bot_id(self, bot_id: int) -> Optional[BotParametersDto]:
         bot_params = BotParameters.query.filter_by(bot_id=bot_id).first()
         if not bot_params:
-            raise NotFoundError("BotParameters", str(bot_id))
+            return None
         return self._bot_parameters_to_dto(bot_params)
 
     def update_by_bot_id(
@@ -566,7 +563,7 @@ class BotParametersService(BaseService[BotParametersDto]):
 
     def patch_bot_parameters(
         self, bot_id: int, data: dict, user_name: str
-    ) -> BotParametersDto:
+    ) -> Optional[BotParametersDto]:
         """
         Patch bot parameters with specific logic for each field.
 
@@ -576,27 +573,21 @@ class BotParametersService(BaseService[BotParametersDto]):
             user_name: Name of the user patching the parameters
 
         Returns:
-            Updated BotParametersDto instance
-
-        Raises:
-            ServiceError: When bot parameters patch fails
+            Updated BotParametersDto instance, or None if not found
         """
-        result = self._perform_patch_bot_parameters(
+        return self._perform_patch_bot_parameters(
             bot_id,
             data,
             user_name,
         )
-        if result is None:
-            raise ServiceError("Patch bot parameters failed.")
-        return result
 
     def _perform_patch_bot_parameters(
         self, bot_id: int, data: dict, user_name: str
-    ) -> BotParametersDto:
+    ) -> Optional[BotParametersDto]:
         bot_params = BotParameters.query.filter_by(bot_id=bot_id).first()
 
         if not bot_params:
-            raise NotFoundError("BotParameters", str(bot_id))
+            return None
 
         # Only overwrite fields that are present in the payload. Empty strings
         # are ignored except for optional fields the user may want to clear,

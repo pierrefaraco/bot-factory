@@ -95,7 +95,7 @@ class BotService(BaseService[BotDto]):
 
     def _check_bot_ownership(self, bot_id: int, user_account_id: int) -> bool:
         bot: Bot = Bot.query.get(bot_id)
-        return bot is not None and bot.user_account_id == user_account_id
+        return bot is not None and int(bot.user_account_id) == int(user_account_id)
 
     def create_random_bot(self, user_account_id) -> BotDto:
         bot = Bot(user_account_id=user_account_id, prompt="")
@@ -142,7 +142,7 @@ class BotService(BaseService[BotDto]):
         bot: Bot = Bot.query.filter_by(id=entity_id).first()
         return bot.prompt
 
-    def get_dto_by_id(self, entity_id: int, view="minimal") -> BotDto:
+    def get_dto_by_id(self, entity_id: int, view="minimal") -> Optional[BotDto]:
         """
         Retrieve a bot by its ID.
 
@@ -153,16 +153,15 @@ class BotService(BaseService[BotDto]):
             Bot instance if found, None otherwise
         """
         self.logger.info(f"get_dto_by_id {view}")
-        result = self._perform_get_by_id(
+        return self._perform_get_by_id(
             entity_id,
             view,
         )
-        if result is None:
-            raise ServiceError("Get bot by id failed, no BotDto returned.")
-        return result
 
-    def _perform_get_by_id(self, entity_id: int, view: str) -> BotDto:
+    def _perform_get_by_id(self, entity_id: int, view: str) -> Optional[BotDto]:
         bot = Bot.query.filter_by(id=entity_id).first()
+        if bot is None:
+            return None
         avatar = self.avatar_svc.get_avatar_by_bot_id(entity_id)
         avatar = avatar if avatar is not None else AvatarDto()
         if view == "full":

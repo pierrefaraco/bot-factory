@@ -65,8 +65,10 @@ def create_assignment():
         if not user:
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
-        # Add the assigner information
+        # Add the assigner information; the service expects "user_id" for
+        # the assignee (the DTO field is named guest_user_id for API clarity).
         validated_data["assigned_by"] = user_id
+        validated_data["user_id"] = validated_data["guest_user_id"]
 
         assignment_dto = bot_assignment_svc.create(validated_data)
         if assignment_dto:
@@ -97,7 +99,7 @@ def get_assignments_by_parent(parent_user_id):
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
         # Users can only see their own assignments (unless they're admin)
-        if user.roles != ADMIN_ROLE and user_id != parent_user_id:
+        if user.roles != ADMIN_ROLE and int(user_id) != parent_user_id:
             return jsonify({"error": "Forbidden"}), HTTPStatus.FORBIDDEN
 
         assignments = bot_assignment_svc.get_assignments_by_parent(parent_user_id)
@@ -125,16 +127,16 @@ def get_assignments_by_guest(guest_user_id):
 
         # Users can only see assignments for their own guests, or guests can see their own assignments
         if user.roles == GUEST_ROLE:
-            if user_id != guest_user_id:
+            if int(user_id) != guest_user_id:
                 return jsonify({"error": "Forbidden"}), HTTPStatus.FORBIDDEN
         elif user.roles in [USER_ROLE, ADMIN_ROLE]:
             guest_user: User = User.query.filter_by(id=guest_user_id).first()
             if not guest_user or (
-                user.roles != ADMIN_ROLE and guest_user.parent_id != user_id
+                user.roles != ADMIN_ROLE and guest_user.parent_id != int(user_id)
             ):
                 return jsonify({"error": "Forbidden"}), HTTPStatus.FORBIDDEN
 
-        assignments = bot_assignment_svc.get_assignments_by_guest(guest_user_id)
+        assignments = bot_assignment_svc.get_assignments_by_user(guest_user_id)
         return jsonify(
             [assignment.to_dict() for assignment in assignments]
         ), HTTPStatus.OK
@@ -159,16 +161,16 @@ def get_assigned_bot_ids(guest_user_id):
 
         # Same authorization logic as above
         if user.roles == GUEST_ROLE:
-            if user_id != guest_user_id:
+            if int(user_id) != guest_user_id:
                 return jsonify({"error": "Forbidden"}), HTTPStatus.FORBIDDEN
         elif user.roles in [USER_ROLE, ADMIN_ROLE]:
             guest_user: User = User.query.filter_by(id=guest_user_id).first()
             if not guest_user or (
-                user.roles != ADMIN_ROLE and guest_user.parent_id != user_id
+                user.roles != ADMIN_ROLE and guest_user.parent_id != int(user_id)
             ):
                 return jsonify({"error": "Forbidden"}), HTTPStatus.FORBIDDEN
 
-        bot_ids = bot_assignment_svc.get_assigned_bot_ids_for_guest(guest_user_id)
+        bot_ids = bot_assignment_svc.get_assigned_bot_ids_for_user(guest_user_id)
         return jsonify({"bot_ids": bot_ids}), HTTPStatus.OK
 
     except Exception as e:
@@ -199,7 +201,9 @@ def update_assignment(assignment_id):
 
         # Get the assignment to check ownership
         assignment = bot_assignment_svc.get_dto_by_id(assignment_id)
-        if user.roles != ADMIN_ROLE and assignment.assigned_by != user_id:
+        if not assignment:
+            return jsonify({"error": "Assignment not found"}), HTTPStatus.NOT_FOUND
+        if user.roles != ADMIN_ROLE and assignment.assigned_by != int(user_id):
             return jsonify({"error": "Forbidden"}), HTTPStatus.FORBIDDEN
 
         updated_assignment = bot_assignment_svc.update(assignment_id, validated_data)
@@ -227,7 +231,9 @@ def delete_assignment(assignment_id):
 
         # Get the assignment to check ownership
         assignment = bot_assignment_svc.get_dto_by_id(assignment_id)
-        if user.roles != ADMIN_ROLE and assignment.assigned_by != user_id:
+        if not assignment:
+            return jsonify({"error": "Assignment not found"}), HTTPStatus.NOT_FOUND
+        if user.roles != ADMIN_ROLE and assignment.assigned_by != int(user_id):
             return jsonify({"error": "Forbidden"}), HTTPStatus.FORBIDDEN
 
         success = bot_assignment_svc.delete(assignment_id)
@@ -297,7 +303,7 @@ def check_assignment():
                 {"error": "bot_id and guest_user_id are required"}
             ), HTTPStatus.BAD_REQUEST
 
-        is_assigned = bot_assignment_svc.is_bot_assigned_to_guest(
+        is_assigned = bot_assignment_svc.is_bot_assigned_to_user(
             data["bot_id"], data["guest_user_id"]
         )
         return jsonify({"is_assigned": is_assigned}), HTTPStatus.OK

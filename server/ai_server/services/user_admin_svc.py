@@ -182,7 +182,7 @@ class UserAdminService(BaseService[UserDto]):
                 assigment.bot_id, assigment.user_id
             )
 
-        bot_ids: list[int] = user_data.get("assigned_bot_ids", [])
+        bot_ids: list[int] = user_data.get("assigned_bot_ids") or []
         bots_ass_dto: list[BotAssignmentDto] = []
         self.logger.debug(
             f"Updating bot assignments for user {user_id} with {len(bot_ids)} bots"
