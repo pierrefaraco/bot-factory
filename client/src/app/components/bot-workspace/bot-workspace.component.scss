@@ -312,10 +312,16 @@ app-bot-list {
     animation: fadeIn 0.3s ease-in-out;
     flex: 1;
     overflow: hidden;
-    // Pas de padding ici : l'inset qui laisse respirer le `box-shadow` des
-    // cartes est désormais porté une seule fois par `.main-content`, pour
-    // que toutes les cartes (Overview, Knowledge, Settings, Avatar) partagent
-    // exactement le même repère plutôt que de le recalculer à chaque onglet.
+    // La carte à l'intérieur (.overview-section) remplit ce conteneur à
+    // 100 %, à ras bord (mesuré : mêmes coordonnées que `.tab-pane` lui-même).
+    // Son `box-shadow` (--card-shadow, décalage vertical positif — surtout
+    // visible en bas) n'a donc aucune place pour se dégrader avant d'être
+    // tronqué net par cet `overflow: hidden` — d'où l'ombre "cassée" sur les
+    // coins bas. Le padding sur `.main-content` ne suffit pas : le clip se
+    // fait ici, un niveau plus bas. Même fix que `.sidebar-bots` plus haut.
+    // Gauche/droite non touchés : ces bords sont volontairement à 0 pour
+    // rester alignés avec `.dashboard-header` (cf. `.main-content`).
+    padding-bottom: 0.75rem;
 
     &.active {
       display: flex;
