@@ -1,6 +1,7 @@
 from importlib.resources import files
 from ai_server.dto.knowledge_dto import KnowledgeDto
 from ai_server.services.knowledge_svc import KnowledgeSvc
+from ai_server.services.rag_svc import RagService
 from datetime import datetime, timezone
 from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -17,7 +18,17 @@ FRENCH_TEMPLATE = "start.txt"
 @singleton
 class TemplateSvc:
     def __init__(self):
-        self.knowledge_svc = KnowledgeSvc(None)
+        # KnowledgeSvc est @singleton : le décorateur n'exécute __init__ qu'au
+        # tout premier appel et ignore les arguments des appels suivants (cf.
+        # ai_server/decorators/singleton.py). Passer `None` ici revenait donc,
+        # selon l'ordre d'import des controllers Flask (rest_bot avant
+        # rest_rag dans main.py), à figer `rag_svc=None` pour TOUTE
+        # l'application — d'où l'AttributeError 'NoneType' object has no
+        # attribute 'db_service' côté rest_knowledge. RagService() est lui
+        # aussi un singleton sans argument (même pattern que bot_svc.py,
+        # property `context_svc`), donc toujours sûr à appeler ici quel que
+        # soit l'ordre d'import.
+        self.knowledge_svc = KnowledgeSvc(RagService())
         self.logger = BotFactoryLogger()
 
     def importTemplateInDB(self, bot_id, template_name):
