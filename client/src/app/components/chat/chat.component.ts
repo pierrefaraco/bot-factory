@@ -49,6 +49,15 @@ export class ChatComponent implements OnInit, OnChanges, OnDestroy, ChatServiceU
   currentResponse: string = '';
   response: Observable<string> = new Observable<string>();
   private scrollToBottom = false;
+  // true once the user has manually scrolled more than nearBottomThresholdPx
+  // away from the bottom -- gates non-forced auto-scroll calls (streaming
+  // ticks) so they stop fighting a deliberate manual scroll-up.
+  private userScrolledAway = false;
+  // Kept small deliberately: a short conversation's entire scrollable
+  // range can be well under 80px, which would make scrolling to the very
+  // top never register as "away" at all -- this only needs to absorb
+  // minor trackpad/wheel jitter, not tolerate a large chunk of the range.
+  private readonly nearBottomThresholdPx = 24;
   selected_bot: Bot = {
     id: -1,
   }
@@ -109,6 +118,7 @@ export class ChatComponent implements OnInit, OnChanges, OnDestroy, ChatServiceU
   initBot(bot: Bot) {
     if (bot.id != this.selected_bot.id) {
       this.messages = []
+      this.userScrolledAway = false;
       this.selected_bot = bot
       this.highlightInputField();
       this.chatService.getMessageHistory(this.selected_bot.id).subscribe({
@@ -122,10 +132,11 @@ export class ChatComponent implements OnInit, OnChanges, OnDestroy, ChatServiceU
             }));
             this.cdr.detectChanges();
             // Multiple scroll attempts to ensure it works after animations complete (0.4s slideInUp animation)
-            this.scrollToBottomOfChat();
-            setTimeout(() => this.scrollToBottomOfChat(), 100);
-            setTimeout(() => this.scrollToBottomOfChat(), 300);
-            setTimeout(() => this.scrollToBottomOfChat(), 500);
+            // Forced: initial load of this conversation, nothing to preserve yet.
+            this.scrollToBottomOfChat(true);
+            setTimeout(() => this.scrollToBottomOfChat(true), 100);
+            setTimeout(() => this.scrollToBottomOfChat(true), 300);
+            setTimeout(() => this.scrollToBottomOfChat(true), 500);
           }
           if (response.status == 204) {
             this.beginAssistantStream(this.chatService.concatenateFirstMessageStream(this.selected_bot.id, this));
@@ -162,13 +173,41 @@ export class ChatComponent implements OnInit, OnChanges, OnDestroy, ChatServiceU
 
   ngAfterViewChecked() {
     if (this.scrollToBottom) {
-      this.scrollToBottomOfChat();
+      // Forcé : ces cas (nouveau message envoyé, nouvelle réponse qui
+      // démarre, erreur ajoutée, reset) sont toujours un nouveau tour de
+      // conversation -- l'utilisateur doit le voir, même s'il avait
+      // scrollé plus haut pour relire un message précédent.
+      this.scrollToBottomOfChat(true);
       this.scrollToBottom = false;
     }
   }
 
-  scrollToBottomOfChat(): void {
+  /**
+   * Un utilisateur qui a manuellement remonté dans l'historique ne doit
+   * pas se retrouver renvoyé en bas à chaque paquet réseau reçu pendant le
+   * streaming -- reproduit et confirmé : scroller en haut pendant qu'une
+   * réponse arrive se faisait annuler dès le chunk suivant. Mis à jour à
+   * chaque scroll natif du conteneur (cf. (scroll) dans le template).
+   */
+  onMessagesScroll(): void {
+    const element = this.scrollContainer?.nativeElement;
+    if (!element) return;
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    this.userScrolledAway = distanceFromBottom > this.nearBottomThresholdPx;
+  }
+
+  /**
+   * @param force Ignore la position de scroll actuelle de l'utilisateur et
+   * saute en bas quoi qu'il arrive -- réservé aux nouveaux tours de
+   * conversation (cf. ngAfterViewChecked). Sans ça (force=false, le
+   * défaut), ne fait rien si l'utilisateur s'est manuellement éloigné du
+   * bas (ex. pendant qu'une réponse défile en direct).
+   */
+  scrollToBottomOfChat(force: boolean = false): void {
     try {
+      if (!force && this.userScrolledAway) {
+        return;
+      }
       if (this.scrollContainer && this.scrollContainer.nativeElement) {
         const element = this.scrollContainer.nativeElement;
         // `.messages-container` a `scroll-behavior: smooth` en CSS, qui
@@ -186,6 +225,7 @@ export class ChatComponent implements OnInit, OnChanges, OnDestroy, ChatServiceU
         // ici, aucun changement par rapport à avant) -- seul `'instant'`
         // force réellement un saut immédiat en ignorant le CSS.
         element.scrollTo({ top: element.scrollHeight, behavior: 'instant' as ScrollBehavior });
+        this.userScrolledAway = false;
       }
     } catch (err) {
       console.error('Error scrolling to bottom:', err);
@@ -320,6 +360,7 @@ export class ChatComponent implements OnInit, OnChanges, OnDestroy, ChatServiceU
 
   resetChat() {
     this.messages = [];
+    this.userScrolledAway = false;
     // this.lastMessage = null;
     this.response = null;
     if (this.chatForm) {
