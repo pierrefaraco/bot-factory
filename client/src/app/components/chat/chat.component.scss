@@ -27,17 +27,8 @@
   overflow-x: hidden;
   padding: 1.5rem;
   padding-bottom: 0;
-  display: flex;
-  flex-direction: column;
-  // Ancre la conversation en bas : avec peu de messages, ils restent collés
-  // à la zone de saisie au lieu de flotter en haut avec un grand vide en
-  // dessous. Une fois le contenu plus grand que le conteneur, ce vide
-  // disparaît et le scroll reprend son comportement normal.
-  justify-content: flex-end;
-  gap: 1rem;
   scroll-behavior: smooth;
   min-height: 0;
-
 
   &::-webkit-scrollbar {
     width: 10px;
@@ -65,6 +56,27 @@
   // Firefox scrollbar
   scrollbar-width: thin;
   scrollbar-color: var(--bg-tertiary) transparent;
+}
+
+// `justify-content: flex-end` used to live directly on .messages-container
+// (the overflow-y: auto scroller itself). display:flex + flex-direction:
+// column + justify-content:flex-end + overflow-y:auto on the SAME element
+// is a known-bad combination: once there are enough messages, the browser
+// can under-report `scrollHeight` (confirmed live: 44 messages, container
+// claimed scrollHeight 503px while the first message actually rendered
+// ~6600px above the viewport) -- scrolling to the very top of the
+// scrollbar then still leaves most of the conversation unreachable.
+// Moving flex/justify-content to this inner, non-scrolling wrapper keeps
+// the "few messages stay pinned to the bottom" look (min-height:100% lets
+// it fill the container so flex-end still applies when short) while
+// .messages-container itself goes back to being a plain block-level
+// overflow container, whose scrollHeight browsers compute reliably.
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
+  gap: 1rem;
 }
 
 .message {

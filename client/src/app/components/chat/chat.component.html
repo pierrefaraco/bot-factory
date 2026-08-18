@@ -1,31 +1,32 @@
 <div class="chat-container">
 
   <div class="messages-container" #scrollContainer (scroll)="onMessagesScroll()">
-    <div *ngFor="let message of messages"
-      [ngClass]="{ 'user-message': message.type=='user', 'bot-message': message.type=='assistant', 'streaming': message.isStreaming }"
-      [attr.data-timestamp]="message.timestamp | date:'HH:mm'" class="message">
+    <div class="messages-list">
+      <div *ngFor="let message of messages"
+        [ngClass]="{ 'user-message': message.type=='user', 'bot-message': message.type=='assistant', 'streaming': message.isStreaming }"
+        [attr.data-timestamp]="message.timestamp | date:'HH:mm'" class="message">
 
-      <div class="avatar" *ngIf="message.type!='user'">
-        <app-svg-avatar #draw_avatar [avatar]="selected_bot.avatar"></app-svg-avatar>
-      </div>
+        <div class="avatar" *ngIf="message.type!='user'">
+          <app-svg-avatar #draw_avatar [avatar]="selected_bot.avatar"></app-svg-avatar>
+        </div>
 
-      <div class="message-content">
-        <div class="message-text">
-          <p>{{ message.content }}<span class="typing-cursor" *ngIf="message.isStreaming"></span></p>
-          <div class="message-footer">
-            <span class="timestamp" *ngIf="!message.isStreaming">{{ message.timestamp | date:'HH:mm' }}</span>
-            <!-- <span class="timestamp">  -->
-            <!--    <app-button *ngIf="message.type === 'assistant'"
-                [icon]="message.isPlaying ? 'volume_up' : 'volume_off'"
-                [label]="message.isPlaying ? 'Playing...' : 'Play'" (buttonClickedEvent)="playMessage(message)"
-                [color]="'var(--text-primary)'" [backgroundColor]="'transparent'" [type]="'small-icon-button'"
-                [size]="'small'" [disabled]="message.isPlaying">
-              </app-button></span> -->
+        <div class="message-content">
+          <div class="message-text">
+            <p>{{ message.content }}<span class="typing-cursor" *ngIf="message.isStreaming"></span></p>
+            <div class="message-footer">
+              <span class="timestamp" *ngIf="!message.isStreaming">{{ message.timestamp | date:'HH:mm' }}</span>
+              <!-- <span class="timestamp">  -->
+              <!--    <app-button *ngIf="message.type === 'assistant'"
+                  [icon]="message.isPlaying ? 'volume_up' : 'volume_off'"
+                  [label]="message.isPlaying ? 'Playing...' : 'Play'" (buttonClickedEvent)="playMessage(message)"
+                  [color]="'var(--text-primary)'" [backgroundColor]="'transparent'" [type]="'small-icon-button'"
+                  [size]="'small'" [disabled]="message.isPlaying">
+                </app-button></span> -->
+            </div>
           </div>
         </div>
       </div>
     </div>
-
   </div>
 
 
