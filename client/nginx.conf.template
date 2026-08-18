@@ -62,6 +62,18 @@ http {
       proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_set_header X-Forwarded-Proto $scheme;
+      # proxy_buffering defaults to "on": nginx accumulates the whole
+      # upstream response in its own buffers and only flushes it to the
+      # browser once full/closed. For the SSE chat endpoints
+      # (/api/rag/streamchat, /api/rag/trigfirstmessage) this silently
+      # turns real token-by-token streaming from Flask into one single
+      # delivery at the end -- the backend and frontend were both already
+      # correct, this proxy setting was erasing the effect between them.
+      # Harmless to disable for the rest of /api/ too (plain JSON
+      # responses aren't large enough for buffering to matter).
+      proxy_buffering off;
+      proxy_cache off;
+      chunked_transfer_encoding on;
     }
 
     # Angular routing - serve index.html for all routes

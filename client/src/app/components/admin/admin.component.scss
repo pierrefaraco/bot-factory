@@ -340,79 +340,56 @@
   }
 }
 
-// Styles pour le tableau personnalisé
-app-array {
-  background-color: var(--bg-primary);
-  border-radius: 0.75rem;
-  overflow: hidden;
-  box-shadow: var(--shadow-md);
+// Styles spécifiques aux colonnes de CE tableau (largeurs/couleurs par
+// position) : l'habillage générique (carte, en-tête, survol de ligne) vit
+// maintenant dans array.component.scss, réutilisable par tout consommateur
+// de <app-array>. Scopé par table (.guest-table/.users-table) plutôt que
+// sur `app-array` seul : les deux tableaux n'ont plus le même nombre/ordre
+// de colonnes (ajout de Status/Created), un nth-child partagé serait faux
+// pour l'un des deux dès qu'ils divergent.
+app-array.guest-table ::ng-deep tbody td {
+  // Colonne Activate
+  &:first-child {
+    width: 100px;
+  }
 
-  ::ng-deep {
-    table {
-      width: 100%;
-      border-collapse: collapse;
+  // Colonne Email
+  &:nth-child(2) {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  // Colonne Assigned Bots
+  &:nth-child(4) {
+    span {
+      color: var(--text-accent);
+      font-size: 0.875rem;
     }
+  }
 
-    thead {
-      background-color: var(--bg-tertiary);
+  // Colonne Actions
+  &:last-child {
+    width: 80px;
+    text-align: center;
+  }
+}
 
-      th {
-        padding: 1rem 1.5rem;
-        text-align: left;
-        font-weight: 600;
-        color: var(--text-primary);
-        font-size: 0.875rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border-bottom: 2px solid var(--border-primary);
-      }
-    }
+app-array.users-table ::ng-deep tbody td {
+  // Colonne Activate
+  &:first-child {
+    width: 100px;
+  }
 
-    tbody {
-      tr {
-        transition: background-color 0.2s ease;
-        border-bottom: 1px solid var(--border-primary);
+  // Colonne Email
+  &:nth-child(2) {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
 
-        &:hover {
-          background-color: var(--bg-hover);
-        }
-
-        &:last-child {
-          border-bottom: none;
-        }
-      }
-
-      td {
-        padding: 1.25rem 1.5rem;
-        color: var(--text-secondary);
-        vertical-align: middle;
-
-        // Colonne Activate
-        &:first-child {
-          width: 100px;
-        }
-
-        // Colonne Email
-        &:nth-child(2) {
-          color: var(--text-primary);
-          font-weight: 500;
-        }
-
-        // Colonne Assigned Bot
-        &:nth-child(3) {
-          span {
-            color: var(--text-accent);
-            font-size: 0.875rem;
-          }
-        }
-
-        // Colonne Actions
-        &:last-child {
-          width: 80px;
-          text-align: center;
-        }
-      }
-    }
+  // Colonne Actions
+  &:last-child {
+    width: 80px;
+    text-align: center;
   }
 }
 
@@ -474,22 +451,8 @@ td app-button {
   }
 }
 
-// Animation pour les lignes du tableau (réutilise le @keyframes fadeIn
-// déjà défini plus haut pour .tab-pane)
-tr {
-  animation: fadeIn 0.3s ease-out;
-}
-
 // Responsive design
 @media (max-width: 1024px) {
-  app-array ::ng-deep {
-    thead th,
-    tbody td {
-      padding: 1rem;
-      font-size: 0.875rem;
-    }
-  }
-
   .bots-container {
     gap: 0.3125rem;
     grid-template-rows: repeat(3, auto);
@@ -502,20 +465,10 @@ tr {
 }
 
 @media (max-width: 768px) {
-  app-array ::ng-deep {
-    thead th {
-      font-size: 0.75rem;
-      padding: 0.75rem;
-    }
-
-    tbody td {
-      padding: 0.875rem;
-      font-size: 0.8125rem;
-
-      &:first-child,
-      &:last-child {
-        width: auto;
-      }
+  app-array ::ng-deep tbody td {
+    &:first-child,
+    &:last-child {
+      width: auto;
     }
   }
 
@@ -537,23 +490,101 @@ tr {
 }
 
 @media (max-width: 480px) {
-  app-array ::ng-deep {
-    table {
-      font-size: 0.75rem;
-    }
-
-    thead th,
-    tbody td {
-      padding: 0.5rem;
-    }
-
-    // Masquer certaines colonnes sur très petits écrans
-    tbody td:nth-child(3) {
-      display: none;
-    }
-
-    thead th:nth-child(3) {
-      display: none;
-    }
+  // Masquer la colonne Assigned Bots sur très petits écrans (Guest
+  // uniquement -- le tableau Users n'a pas cette colonne à cette position).
+  app-array.guest-table ::ng-deep tbody td:nth-child(4) {
+    display: none;
   }
+
+  app-array.guest-table ::ng-deep thead th:nth-child(4) {
+    display: none;
+  }
+}
+
+.role-select {
+  // Global `select { width: 100% }` (styles.scss) collapses to ~32px here:
+  // with no intrinsic size of its own to contribute, the table's auto
+  // layout shrinks the column to fit the select's chevron alone, so the
+  // "User"/"Guest" text renders but has no room to actually show. Explicit
+  // width overrides that inherited 100%.
+  width: auto;
+  min-width: 6rem;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--text-accent);
+    outline-offset: 1px;
+  }
+}
+
+// Barre de filtres métier (Rôle/Statut) : la recherche générique vit dans
+// array.component.scss, ces filtres restent ici car spécifiques au domaine
+// User/Guest.
+.filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+  flex-shrink: 0;
+}
+
+.filter-select {
+  // Même convention que .role-select ci-dessus.
+  width: auto;
+  min-width: 8rem;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--text-accent);
+    outline-offset: 1px;
+  }
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.625rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.status-active {
+    color: var(--success-color);
+    background: var(--bg-success);
+  }
+
+  &.status-inactive {
+    color: var(--error-color);
+    background: var(--bg-danger);
+  }
+}
+
+.table-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
 }

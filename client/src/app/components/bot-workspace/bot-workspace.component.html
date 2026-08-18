@@ -14,7 +14,7 @@
             No bot selected
           </span>
         </p>
-        <button type="button" class="create-bot-btn" (click)="onCreateBot()">
+        <button *ngIf="!isGuest" type="button" class="create-bot-btn" (click)="onCreateBot()">
           <span class="material-icons">add_circle</span>
           <span>Create a new bot</span>
         </button>
@@ -50,13 +50,13 @@
             <span>Overview</span>
           </button>
 
-          <button class="tab-button" [class.active]="activeTab === 'settings'" (click)="setActiveTab('settings')"
+          <button *ngIf="!isGuest" class="tab-button" [class.active]="activeTab === 'settings'" (click)="setActiveTab('settings')"
             [disabled]="!hasSelectedBot">
             <span class="material-icons">tune</span>
             <span>Settings</span>
           </button>
 
-          <button class="tab-button" [class.active]="activeTab === 'knowledge'" (click)="setActiveTab('knowledge')"
+          <button *ngIf="!isGuest" class="tab-button" [class.active]="activeTab === 'knowledge'" (click)="setActiveTab('knowledge')"
             [disabled]="!hasSelectedBot">
             <span class="material-icons">auto_stories</span>
             <span>Knowledge</span>
@@ -64,7 +64,7 @@
 
 
 
-          <button class="tab-button" [class.active]="activeTab === 'draw'" (click)="setActiveTab('draw')"
+          <button *ngIf="!isGuest" class="tab-button" [class.active]="activeTab === 'draw'" (click)="setActiveTab('draw')"
             [disabled]="!hasSelectedBot">
             <span class="material-icons">brush</span>
             <span>Avatar</span>
@@ -85,7 +85,7 @@
                 <span class="material-icons">smart_toy</span>
                 <h3>No bot selected</h3>
                 <p>Select a bot from the list or create a new one to get started</p>
-                <button class="btn-create-first" (click)="onCreateBot()">
+                <button *ngIf="!isGuest" class="btn-create-first" (click)="onCreateBot()">
                   <span class="material-icons">add_circle</span>
                   Create my first bot
                 </button>
@@ -117,7 +117,14 @@
                     <span class="material-icons">refresh</span>
                   </button>
 
-                  <div class="dropdown quick-actions-menu">
+                  <!-- DELETE /api/bot/<id> is role_required([ADMIN_ROLE,
+                       USER_ROLE]) server-side -- GUEST excluded -- and also
+                       ownership-scoped (_can_modify_bot): a User can only
+                       delete a bot they created, not one merely assigned to
+                       them ("My Bots" now lists both). This menu's only item
+                       is that delete action, so it's hidden outright rather
+                       than left open onto a guaranteed 403/half-empty. -->
+                  <div class="dropdown quick-actions-menu" *ngIf="!isGuest && canDeleteSelectedBot">
                     <button type="button" id="botActionsMenuTrigger" class="quick-actions-trigger"
                       data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true"
                       aria-label="More actions for {{ botName }}" title="More actions">
@@ -145,7 +152,7 @@
         <!-- Onglet Connaissances -->
         <div class="tab-pane" [class.active]="activeTab === 'knowledge'">
           <div class="knowledges-panel">
-            <div class="overview-section knowledge-section" *ngIf="hasSelectedBot">
+            <div class="overview-section knowledge-section" *ngIf="hasSelectedBot && !isGuest">
               <div class="up-section">
                 <span class="material-icons">auto_stories</span>
                 <h2>
@@ -156,7 +163,7 @@
                 <app-knowledges [bot]="selectedBot"></app-knowledges>
               </div>
             </div>
-            <div class="overview-section knowledge-editor-section" *ngIf="hasSelectedBot">
+            <div class="overview-section knowledge-editor-section" *ngIf="hasSelectedBot && !isGuest">
               <div class="up-section">
                 <span class="material-icons">edit</span>
                 <h2>
@@ -164,16 +171,16 @@
                 </h2>
               </div>
               <div class="knowledge-editor-container">
-                
+
                 <app-knowledge-editor></app-knowledge-editor>
               </div>
             </div>
-          </div> 
+          </div>
         </div>
 
         <!-- Onglet Paramètres -->
         <div class="tab-pane" [class.active]="activeTab === 'settings'">
-          <div class="overview-section settings-section" *ngIf="hasSelectedBot">
+          <div class="overview-section settings-section" *ngIf="hasSelectedBot && !isGuest">
             <div class="up-section">
               <span class="material-icons">tune</span>
               <h2>
@@ -188,7 +195,7 @@
 
         <!-- Onglet Draw -->
         <div class="tab-pane" [class.active]="activeTab === 'draw'">
-          <div class="overview-section draw-section" *ngIf="hasSelectedBot">
+          <div class="overview-section draw-section" *ngIf="hasSelectedBot && !isGuest">
             <div class="up-section">
               <span class="material-icons">brush</span>
               <h2>

@@ -256,6 +256,15 @@ class BotService(BaseService[BotDto]):
         if not bot:
             return False
 
+        # Cleared explicitly rather than left to the FK's ON DELETE SET NULL:
+        # user_account.selected_bot_id references bot.id via a use_alter FK
+        # created inside the same op.create_table as user_account (before
+        # the bot table exists), which MySQL cannot apply as a real DB-level
+        # constraint — so it can't be trusted to null this out on its own.
+        User.query.filter_by(selected_bot_id=entity_id).update(
+            {"selected_bot_id": None}
+        )
+
         db.session.delete(bot)
         db.session.commit()
         return True
@@ -325,6 +334,25 @@ class BotService(BaseService[BotDto]):
                 self._bot_to_dto(bot, self.avatar_svc.get_avatar_by_bot_id(bot.id))
             )
         return bots_dto
+
+    def get_owned_and_assigned_bots(self, user_id: int) -> List[BotDto]:
+        """
+        Retrieve every bot a User/Admin should see in "My Bots": the ones
+        they created themselves (Bot.user_account_id) plus any a parent
+        assigned to them the same way a Guest gets assigned bots
+        (BotAssignment) -- previously only the owned half was returned here,
+        so an assigned bot never showed up in the workspace bot-list for
+        anyone but a Guest.
+
+        Returns:
+            List of BotDto instances, deduplicated by id (defensive: a bot
+            assigned to its own owner would otherwise appear twice).
+        """
+        owned = self.get_bots_by_user(user_id)
+        assigned = self.get_assigned_bots(user_id)
+        seen_ids = {bot.id for bot in owned}
+        merged = owned + [bot for bot in assigned if bot.id not in seen_ids]
+        return merged
 
     def get_bot_count_by_user(self, user_account_id: int) -> int:
         """

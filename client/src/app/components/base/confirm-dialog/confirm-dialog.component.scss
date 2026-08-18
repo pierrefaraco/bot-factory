@@ -1,0 +1,111 @@
+// custom-dialog.component.scss pose `::ng-deep .mat-mdc-dialog-container {
+// min-width: 800px !important; ... }` : cette règle n'est PAS scopée à son
+// host (`.mat-mdc-dialog-container` est un ANCÊTRE de <app-custom-dialog>
+// dans le DOM -- Material l'insère au-dessus -- donc `:host ::ng-deep` ne
+// peut de toute façon pas l'atteindre, seul `::ng-deep` global le peut).
+// Une confirmation n'est pas un formulaire : pour ne pas hériter du
+// 800-1400px pensé pour les formulaires/listes, on cible ici le
+// `panelClass` passé à `dialog.open(ConfirmDialogComponent, { panelClass:
+// 'confirm-dialog-panel' })`. `panelClass` est posé par Material sur
+// `.cdk-overlay-pane`, PARENT de `.mat-mdc-dialog-container` (pas le même
+// élément) -- d'où le combinateur descendant plutôt qu'un sélecteur
+// composé. Spécificité (2 classes) toujours plus élevée que la règle à 1
+// classe de custom-dialog, donc gagne de façon déterministe (indépendamment
+// de l'ordre de chargement des styles, même avec !important des deux
+// côtés).
+// custom-dialog.component.scss force aussi .cdk-overlay-pane et
+// .cdk-global-overlay-wrapper en plein écran (100vw/100vh, position:fixed,
+// top/left:0) sous 1024px, pensé pour les dialogues de formulaire sur
+// mobile. Vérifié en direct (DOM réel, port 443) : sans cette même
+// correction sur le pane, seule la largeur de .mat-mdc-dialog-container
+// était corrigée -- son parent restait figé plein écran en haut à gauche,
+// donc ce conteneur plus étroit se retrouvait coincé dans son coin
+// supérieur gauche au lieu d'être centré (ni son display:flex/
+// align-items/justify-content sur .cdk-global-overlay-wrapper ne pouvait
+// centrer un pane qui faisait déjà 100% de sa taille).
+// `panelClass` est posé directement sur .cdk-overlay-pane (confirmé via
+// className en direct : "cdk-overlay-pane confirm-dialog-panel
+// mat-mdc-dialog-panel"), donc sélecteur composé ici (contrairement au
+// descendant utilisé pour .mat-mdc-dialog-container, un élément différent).
+::ng-deep .cdk-overlay-pane.confirm-dialog-panel {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 440px !important;
+  max-height: 90vh !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+}
+
+::ng-deep .confirm-dialog-panel .mat-mdc-dialog-container {
+  min-width: 360px !important;
+  max-width: 440px !important;
+  width: 90vw !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: 90vh !important;
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  // Le breakpoint 1024px force aussi border-radius/margin à 0 pour le
+  // plein écran mobile -- restaurés ici pour garder le look carte arrondie
+  // (border-radius posé sur .mdc-dialog__surface par custom-dialog.component.scss,
+  // resterait sinon carré tant que le panneau croit devoir remplir l'écran).
+  border-radius: 1.25rem !important;
+  margin: 0 !important;
+}
+
+// <app-custom-dialog> lui-même impose `min-width: 800px` sur son propre
+// :host (custom-dialog.component.scss, pensé pour les dialogues de
+// formulaire) -- ici il est rendu à l'intérieur du conteneur Material déjà
+// réduit à 360-440px ci-dessus. Sans cette surcharge, cette boîte de 800px
+// déborde du panneau visible (`overflow: hidden` sur `.mdc-dialog__surface`)
+// et le texte centré n'apparaît qu'à moitié. `<app-custom-dialog>` est ici
+// un vrai descendant du template de CE composant (contrairement au
+// `.mat-mdc-dialog-container` ci-dessus, qui est un ancêtre posé par
+// Material) donc `:host ::ng-deep` suffit et reste scopé à cet usage --
+// les autres dialogues (formulaires) gardent leurs 800-1400px.
+:host ::ng-deep app-custom-dialog {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  // Le breakpoint 768px de custom-dialog.component.scss force aussi le
+  // :host de <app-custom-dialog> à height/min-height: 100vh (plein écran
+  // mobile pour les formulaires) -- vérifié en direct : sans cette
+  // surcharge, ce :host s'étire sur toute la hauteur de l'écran alors que
+  // son contenu (titre + message + boutons) ne fait qu'environ 240px, d'où
+  // le grand vide sous les boutons.
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  .dialog-header {
+    text-align: center;
+  }
+
+  .dialog-body {
+    // Material donne `flex-grow: 1` à .mat-mdc-dialog-content par défaut
+    // (pensé pour un long contenu de formulaire scrollable qui doit remplir
+    // l'espace restant) -- vérifié en direct : ça étirait ce message d'une
+    // ligne sur toute la hauteur disponible, laissant un grand vide avant
+    // les boutons. `flex-grow: 0` pour qu'il ne prenne que sa hauteur de
+    // contenu réelle.
+    flex-grow: 0 !important;
+  }
+
+  .buttons-container {
+    justify-content: center !important;
+  }
+}
+
+.confirm-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-align: center;
+}

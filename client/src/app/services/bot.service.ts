@@ -28,7 +28,7 @@ export class BotService {
 
 
   getUserBots(): Observable<Bot[]> {
-    return this.http.get<Bot[]>(`${this.apiUrl}/self`);
+    return this.http.get<Bot[]>(`${this.apiUrl}/me`);
   }
 
   getAllBots(): Observable<Bot[]> {

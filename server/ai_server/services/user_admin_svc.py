@@ -1,9 +1,10 @@
 from http import HTTPStatus
+from sqlalchemy import or_
 from werkzeug.security import generate_password_hash, check_password_hash
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.dao.database import Bot, User, db
+from ai_server.dao.database import Bot, BotAssignment, Message, Session, TokenUsage, User, db
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.exceptions.api_error import ApiError
 from typing import List, Optional, Dict, Any
@@ -46,6 +47,7 @@ class UserAdminService(BaseService[UserDto]):
             user.parent_id,
             user.is_active,
             user.selected_bot_id,
+            created_at=user.created_at.isoformat() if user.created_at else "",
         )
 
     def register_new_user(self, mail: str, user_name: str, password: str) -> UserDto:
@@ -259,9 +261,13 @@ class UserAdminService(BaseService[UserDto]):
         except (ServiceError, NotFoundError):
             return None
 
-    def get_all(self) -> List[UserDto]:
+    def get_all(self, caller_id: int) -> List[UserDto]:
         """
-        Retrieve all users.
+        Retrieve all non-Admin users -- authorize_user_scope() 403s on
+        Admin targets for every action this list feeds into (role change,
+        delete, bot assignment...), so Admin rows (including the caller's
+        own) are left out entirely rather than shown and then rejected on
+        click.
 
         Returns:
             List of UserDto instances
@@ -269,16 +275,38 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._perform_get_all()
+        result = self._perform_get_all(caller_id)
         if result is None:
             raise ServiceError("User get_all failed, no list returned.")
         return result
 
-    def _perform_get_all(self) -> List[UserDto]:
-        users: List[User] = User.query.filter_by().all()
-        return [self.user_to_dto(user) for user in users]
+    def _perform_get_all(self, caller_id: int) -> List[UserDto]:
+        users: List[User] = User.query.filter(User.roles != ADMIN_ROLE).all()
+        # user_to_dto() alone leaves assigned_bots at its dataclass default
+        # ([]) -- the admin "All users" list needs it populated the same way
+        # _perform_get_children() already does, so its bot-assignment column
+        # isn't blank for every row regardless of actual assignments.
+        dtos = [self._get_assignated_bots(user) for user in users]
+        for dto, user in zip(dtos, users):
+            # parent_email, not just parent_id: this feeds the "All users"
+            # table's Parent column directly, and the parent itself may be
+            # an Admin (excluded from `users` above), so the frontend can't
+            # always resolve it by matching parent_id against this same list.
+            if user.parent_id and user.parent_id != -1:
+                parent = User.query.filter_by(id=user.parent_id).first()
+                dto.parent_email = parent.mail if parent else None
+            # owned_bots_count: distinct from assigned_bots (dto.assigned_bots
+            # is bots *assigned to* this account, e.g. to a Guest by its
+            # parent). A User creates/owns bots directly (Bot.user_account_id),
+            # which is a completely different relationship -- the "Bots"
+            # column shows one or the other depending on role.
+            if user.roles == USER_ROLE:
+                dto.owned_bots_count = Bot.query.filter_by(
+                    user_account_id=user.id
+                ).count()
+        return dtos
 
-    def get_all_users(self) -> List[UserDto]:
+    def get_all_users(self, caller_id: int) -> List[UserDto]:
         """
         Get all users (for backward compatibility).
 
@@ -288,7 +316,7 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        return self.get_all()
+        return self.get_all(caller_id)
 
     def update(self, user_id: int, user_data: Dict[str, Any]) -> UserDto:
         """
@@ -398,6 +426,31 @@ class UserAdminService(BaseService[UserDto]):
                 "Cannot delete user with children. Please delete or reassign children first."
             )
 
+        # Session.user_id, TokenUsage.user_id, BotAssignment.user_id/
+        # assigned_by and Bot.user_account_id are all real FKs to
+        # user_account.id with no ondelete=CASCADE -- deleting a user who
+        # has ever chatted, been assigned a bot, or owns a bot used to 500
+        # with a raw IntegrityError instead of actually deleting anything.
+        # Deleted in dependency order (children before parents), same as
+        # server/test/factories.py's registry for the same reason: Message
+        # references session_id, so sessions must go after their messages.
+        session_ids = [
+            row.id for row in Session.query.filter_by(user_id=entity_id).all()
+        ]
+        if session_ids:
+            Message.query.filter(Message.session_id.in_(session_ids)).delete(
+                synchronize_session=False
+            )
+        Session.query.filter_by(user_id=entity_id).delete(synchronize_session=False)
+        TokenUsage.query.filter_by(user_id=entity_id).delete(synchronize_session=False)
+        BotAssignment.query.filter(
+            (BotAssignment.user_id == entity_id)
+            | (BotAssignment.assigned_by == entity_id)
+        ).delete(synchronize_session=False)
+        # Bot's own children (BotParameters/BotAvatar/Knowledge) do have
+        # ondelete=CASCADE, so removing the Bot rows here is enough for them.
+        Bot.query.filter_by(user_account_id=entity_id).delete(synchronize_session=False)
+
         db.session.delete(user)
         db.session.commit()
         return True
@@ -449,9 +502,12 @@ class UserAdminService(BaseService[UserDto]):
             return self.user_to_dto(user)
         return None
 
-    def get_users_by_role(self, role: str) -> List[UserDto]:
+    def get_users_by_role(self, role: str, caller_id: int) -> List[UserDto]:
         """
-        Get all users with a specific role.
+        Get all users with a specific role, excluding every Admin account
+        other than the caller's own (same rule as get_all() -- this route
+        accepts role=Admin same as any other, and would otherwise be a
+        second, unfiltered way to list every Admin in the system).
 
         Args:
             role: Role to filter by
@@ -462,13 +518,16 @@ class UserAdminService(BaseService[UserDto]):
         Raises:
             ServiceError: When user retrieval fails
         """
-        result = self._perform_get_by_role(role)
+        result = self._perform_get_by_role(role, caller_id)
         if result is None:
             raise ServiceError("Get users by role failed.")
         return result
 
-    def _perform_get_by_role(self, role: str) -> List[UserDto]:
-        users = User.query.filter(User.roles.contains(role)).all()
+    def _perform_get_by_role(self, role: str, caller_id: int) -> List[UserDto]:
+        users = User.query.filter(
+            User.roles.contains(role),
+            or_(User.roles != ADMIN_ROLE, User.id == int(caller_id)),
+        ).all()
         return [self.user_to_dto(user) for user in users]
 
     def get_children_users_count(self, parent_id: int) -> List[UserDto]:

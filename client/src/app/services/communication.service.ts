@@ -59,6 +59,18 @@ export class CommunicationService {
     return this.triggerOnSelectBot.value;
   }
 
+  // triggerOnSelectBot is a BehaviorSubject: it replays its last value to
+  // every new subscriber, including bot-workspace.component.ts on the very
+  // next login in the same tab (this service is providedIn: 'root', so it
+  // outlives logout/login -- no full page reload happens between them).
+  // Without this reset, a user with zero bots would still see the
+  // previous user's bot flashed in and fire GET /api/rag/<id>,
+  // /api/knowledge/<id>, /api/rag/trigfirstmessage?bot_id=<id> for a bot
+  // that isn't theirs. Called from AuthService.logout().
+  resetSelectedBot(): void {
+    this.triggerOnSelectBot.next(null);
+  }
+
 
   submitEditBot(result: any): void {
     this.triggerSubmitEditBot.next(result);

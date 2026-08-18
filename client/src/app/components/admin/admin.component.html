@@ -14,44 +14,18 @@
     </div>
   </div>
 
-  <div class="quick-summary">
-    <div class="summary-card">
-      <div class="card-icon">
-        <span class="material-icons">people</span>
-      </div>
-      <div class="card-content">
-        <span class="card-value">{{ guestUsers.length }}</span>
-        <span class="card-label">Total guests</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <div class="card-icon">
-        <span class="material-icons">check_circle</span>
-      </div>
-      <div class="card-content">
-        <span class="card-value">{{ activeUsersCount }}</span>
-        <span class="card-label">Active guests</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <div class="card-icon">
-        <span class="material-icons">smart_toy</span>
-      </div>
-      <div class="card-content">
-        <span class="card-value">{{ totalAssignedBots }}</span>
-        <span class="card-label">Assigned bots</span>
-      </div>
-    </div>
-  </div>
 
   <div class="main-content">
     <div class="tabs-container">
       <nav class="tabs-nav">
         <button class="tab-button" [class.active]="activeTab === 'overview'" (click)="setActiveTab('overview')">
           <span class="material-icons">dashboard</span>
-          <span>Overview</span>
+          <span>Guest</span>
         </button>
-        <button class="tab-button" [class.active]="activeTab === 'users'" (click)="setActiveTab('users')">
+        <!-- GET /users (this tab's data source) is role_required([ADMIN_ROLE])
+             -- a User caller would only ever see a 403 here, so the tab
+             itself is Admin-only rather than showing an empty/broken table. -->
+        <button *ngIf="isAdmin" class="tab-button" [class.active]="activeTab === 'users'" (click)="setActiveTab('users')">
           <span class="material-icons">people</span>
           <span>Users</span>
         </button>
@@ -70,28 +44,41 @@
             <span class="material-icons">group</span>
             <h2>Guest management</h2>
           </div>
+
+          <div class="filters-bar">
+            <select class="filter-select" [ngModel]="guestStatusFilter"
+              (ngModelChange)="guestStatusFilter = $event; applyGuestFilters()" title="Filter by status">
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
           <div class="table-container">
-            <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize" [emptyMessage]="'No guests yet — create one to get started'">
-              <tr appLine *ngFor="let user of paginatedUsers">
+            <div class="table-loading" *ngIf="guestsLoading">
+              <mat-spinner diameter="36"></mat-spinner>
+              <span>Loading guests...</span>
+            </div>
+
+            <app-array *ngIf="!guestsLoading" #guestArray class="guest-table"
+              [columns_names]="guestColumns" [records]="filteredGuestUsers"
+              [sortableColumns]="guestSortableColumns"
+              [emptyMessage]="'No guests yet — create one to get started'">
+              <tr appLine *ngFor="let user of guestArray.paginatedRecords">
                 <td appColumn>
                   <app-button *ngIf="user.id !==-1" (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
                   [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="user.is_active ? 'var(--btn-color1)' : 'var(--bg-danger)'"
-                  [disabled]="false" data-bs-toggle="dropdown">
+                  [disabled]="false" [title]="user.is_active ? 'Deactivate' : 'Activate'">
                 </app-button>
                 </td>
                 <td appColumn>{{ user.email }}</td>
                 <td appColumn>
-                  <div class="bots-container" *ngIf="user.id !== -1">
-                    <ng-container *ngIf="user.assigned_bots && user.assigned_bots.length > 0; else noBots">
-                      <span class="bot-badge" *ngFor="let assigned_bot of user.assigned_bots">
-                        Bot #{{ assigned_bot.bot_id }}
-                      </span>
-                    </ng-container>
-                    <ng-template #noBots>
-                      <span class="no-bots">No bot assigned</span>
-                    </ng-template>
-                  </div>
+                  <span class="status-badge" [class.status-active]="user.is_active" [class.status-inactive]="!user.is_active">
+                    {{ user.is_active ? 'Active' : 'Inactive' }}
+                  </span>
                 </td>
+                <td appColumn>{{ user.assigned_bots?.length || 0 }}</td>
+                <td appColumn>{{ user.created_at | date:'dd/MM/yyyy' }}</td>
                 <td appColumn>
                   <div class="dropdown" *ngIf="user.id != -1">
                     <app-button [icon]="'more_vert'" [label]="'more'" [color]="'var(--text-primary)'"
@@ -109,41 +96,88 @@
       </div>
 
       <!-- Users Tab -->
-      <div class="tab-pane" [class.active]="activeTab === 'users'">
+      <div *ngIf="isAdmin" class="tab-pane" [class.active]="activeTab === 'users'">
         <div class="overview-section users-table-section">
           <div class="up-section">
             <span class="material-icons">people</span>
-            <h2>All users</h2>
+            <h2>Users Management</h2>
           </div>
+
+          <div class="filters-bar">
+            <select class="filter-select" [ngModel]="userRoleFilter"
+              (ngModelChange)="userRoleFilter = $event; applyUserFilters()" title="Filter by role">
+              <option value="all">All roles</option>
+              <option *ngFor="let role of roleOptions" [value]="role">{{ role }}</option>
+            </select>
+            <select class="filter-select" [ngModel]="userStatusFilter"
+              (ngModelChange)="userStatusFilter = $event; applyUserFilters()" title="Filter by status">
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
           <div class="table-container">
-            <app-array [columns_names]="['Activate','Email', 'Assigned Bot', 'Actions']" [records]="guestUsers" [pageSize]="pageSize" [emptyMessage]="'No guests yet — create one to get started'">
-              <tr appLine *ngFor="let user of paginatedUsers">
+            <div class="table-loading" *ngIf="usersLoading">
+              <mat-spinner diameter="36"></mat-spinner>
+              <span>Loading users...</span>
+            </div>
+
+            <app-array *ngIf="!usersLoading" #allUsersArray class="users-table"
+              [columns_names]="userColumns" [records]="filteredAllUsers"
+              [sortableColumns]="userSortableColumns"
+              [emptyMessage]="'No users yet'">
+              <!-- #allUsersArray (local ref) so this table's own pagination
+                   state updates independently from #guestArray above. -->
+              <tr appLine *ngFor="let user of allUsersArray.paginatedRecords">
                 <td appColumn>
-                  <app-button *ngIf="user.id !==-1" (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
+                  <app-button (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
                   [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="user.is_active ? 'var(--btn-color1)' : 'var(--bg-danger)'"
-                  [disabled]="false" data-bs-toggle="dropdown">
+                  [disabled]="false" [title]="user.is_active ? 'Deactivate' : 'Activate'">
                 </app-button>
                 </td>
                 <td appColumn>{{ user.email }}</td>
                 <td appColumn>
-                  <div class="bots-container" *ngIf="user.id !== -1">
-                    <ng-container *ngIf="user.assigned_bots && user.assigned_bots.length > 0; else noBots">
-                      <span class="bot-badge" *ngFor="let assigned_bot of user.assigned_bots">
-                        Bot #{{ assigned_bot.bot_id }}
-                      </span>
-                    </ng-container>
-                    <ng-template #noBots>
-                      <span class="no-bots">No bot assigned</span>
-                    </ng-template>
-                  </div>
+                  <!-- Plain text for the caller's own (always Admin) row:
+                       "Admin" isn't in roleOptions anymore (no API path can
+                       target it), so a <select> here would have no matching
+                       <option> for the current value and silently show the
+                       first one ("User") instead -- misleading on a row
+                       that's disabled anyway. -->
+                  <!-- <span *ngIf="user.id === currentUserId" class="role-select" title="You cannot change your own role">{{ user.roles }}</span> -->
+                  <select *ngIf="user.id !== currentUserId" class="role-select" [ngModel]="user.roles" (ngModelChange)="changeRole(user, $event)" title="Change role">
+                    <option *ngFor="let role of roleOptions" [value]="role">{{ role }}</option>
+                  </select>
                 </td>
                 <td appColumn>
-                  <div class="dropdown" *ngIf="user.id != -1">
+                  <span class="status-badge" [class.status-active]="user.is_active" [class.status-inactive]="!user.is_active">
+                    {{ user.is_active ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td appColumn>
+                  <span *ngIf="user.parent_email; else noParent">{{ user.parent_email }}</span>
+                  <ng-template #noParent>
+                    <span class="no-bots">No parent</span>
+                  </ng-template>
+                </td>
+                <td appColumn>
+                  <!-- Different relationship depending on role: a Guest's
+                       bots are assigned to it by its parent (assigned_bots,
+                       BotAssignment rows); a User owns/creates bots directly
+                       (owned_bots_count, Bot.user_account_id) -- Admin rows
+                       never appear in this list at all. -->
+                  <span *ngIf="user.roles === 'Guest'">{{ user.assigned_bots?.length || 0 }}</span>
+                  <span *ngIf="user.roles === 'User'">{{ user.owned_bots_count || 0 }}</span>
+                </td>
+                <td appColumn>{{ user.created_at | date:'dd/MM/yyyy' }}</td>
+                <td appColumn>
+                  <div class="dropdown">
                     <app-button [icon]="'more_vert'" [label]="'more'" [color]="'var(--text-primary)'"
                     [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color1)'"
-                    [disabled]="false" data-bs-toggle="dropdown">
+                    [disabled]="user.id === currentUserId" data-bs-toggle="dropdown"
+                    [title]="user.id === currentUserId ? 'You cannot manage your own account' : 'more'">
                   </app-button>
-                  <app-custom-dropdown-menu [params]="user" [items]="actionItemList" aria-labelledby="navbarDropdown">
+                  <app-custom-dropdown-menu *ngIf="user.id !== currentUserId" [params]="user" [items]="allUsersActionItemList" aria-labelledby="navbarDropdownAllUsers">
                   </app-custom-dropdown-menu>
                   </div>
                 </td>

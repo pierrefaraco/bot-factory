@@ -1,14 +1,44 @@
-<div class="custom-common">
-<table class="custom-table">
+<div class="custom-common" [@fadeIn]>
+  <div class="table-toolbar" *ngIf="records.length > 0">
+    <div class="search-box">
+      <span class="material-icons search-icon">search</span>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Search..."
+        [ngModel]="searchTerm"
+        (ngModelChange)="onSearchChange($event)"
+        aria-label="Search in table" />
+    </div>
+    <div class="page-size-control">
+      <label for="array-page-size">Per page</label>
+      <select id="array-page-size" [ngModel]="currentPageSize" (ngModelChange)="onPageSizeChange($event)">
+        <option *ngFor="let size of pageSizeOptions" [value]="size">{{ size }}</option>
+      </select>
+    </div>
+  </div>
+
+  <table class="custom-table">
     <thead>
-      <tr  >
-        <th class="header " *ngFor="let column of columns_names">{{column}}</th>
+      <tr>
+        <th
+          *ngFor="let column of columns_names"
+          [class.sortable]="isSortable(column)"
+          [attr.tabindex]="isSortable(column) ? 0 : null"
+          [attr.role]="isSortable(column) ? 'button' : null"
+          [attr.aria-sort]="sortColumn === column ? (sortDirection === 'asc' ? 'ascending' : 'descending') : null"
+          (click)="onSortClick(column)"
+          (keydown.enter)="onSortClick(column)"
+          (keydown.space)="$event.preventDefault(); onSortClick(column)">
+          {{ column }}
+          <span class="sort-icon material-icons" *ngIf="isSortable(column)">
+            {{ sortColumn === column ? (sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+          </span>
+        </th>
       </tr>
     </thead>
     <tbody>
-      <ng-content>
-
-      </ng-content>
+      <ng-content></ng-content>
       <tr *ngIf="records.length === 0" class="empty-row">
         <td [attr.colspan]="columns_names.length">
           <div class="empty-state">
@@ -17,21 +47,28 @@
           </div>
         </td>
       </tr>
+      <tr *ngIf="records.length > 0 && filteredSortedRecords.length === 0" class="empty-row">
+        <td [attr.colspan]="columns_names.length">
+          <div class="empty-state">
+            <span class="material-icons">search_off</span>
+            <p>No results for &laquo;{{ searchTerm }}&raquo;</p>
+          </div>
+        </td>
+      </tr>
     </tbody>
   </table>
 
-  <div class="pagination-controls" *ngIf="records.length > 0">
-
-    <app-button  class="pagination-item" [icon]="'chevron_left'" [label]="'previous'" [color]="'var(--text-primary)'"
-      [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color3)'"
-      [disabled]="false" (buttonClickedEvent)="previousPage()" >
+  <div class="pagination-controls" *ngIf="filteredSortedRecords.length > 0">
+    <app-button class="pagination-item" [icon]="'chevron_left'" [label]="'previous'" [color]="'var(--text-primary)'"
+      [type]="'icon-button'" [backgroundColor]="'var(--btn-color3)'"
+      [disabled]="currentPage <= 1" (buttonClickedEvent)="previousPage()">
     </app-button>
     <span class="pagination-item">
-       {{currentPage}} / {{totalPages}}
+      {{ currentPage }} / {{ totalPages }}
     </span>
-    <app-button  class="pagination-item" [icon]="'chevron_right'" [label]="'next'" [color]="'var(--text-primary)'"
-      [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color3)'"
-      [disabled]="false" (buttonClickedEvent)="nextPage()" >
+    <app-button class="pagination-item" [icon]="'chevron_right'" [label]="'next'" [color]="'var(--text-primary)'"
+      [type]="'icon-button'" [backgroundColor]="'var(--btn-color3)'"
+      [disabled]="currentPage >= totalPages" (buttonClickedEvent)="nextPage()">
     </app-button>
   </div>
 </div>

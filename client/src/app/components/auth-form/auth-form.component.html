@@ -81,26 +81,24 @@
 
       <!-- Signup form -->
       <form *ngIf="!isLoginMode" [formGroup]="signupForm" (ngSubmit)="onSignupSubmit()" class="auth-form">
-        <div class="form-row">
-          <div class="form-group">
-            <app-form-field
-              [control]="signupName"
-              name="name"
-              label="Name"
-              type="text"
-              [errorMessage]="getErrorMessage('name', 'signup')">
-            </app-form-field>
-          </div>
+        <div class="form-group">
+          <app-form-field
+            [control]="signupName"
+            name="name"
+            label="Name"
+            type="text"
+            [errorMessage]="getErrorMessage('name', 'signup')">
+          </app-form-field>
+        </div>
 
-          <div class="form-group">
-            <app-form-field
-              [control]="signupEmail"
-              name="email"
-              label="Email"
-              type="text"
-              [errorMessage]="getErrorMessage('email', 'signup')">
-            </app-form-field>
-          </div>
+        <div class="form-group">
+          <app-form-field
+            [control]="signupEmail"
+            name="email"
+            label="Email"
+            type="text"
+            [errorMessage]="getErrorMessage('email', 'signup')">
+          </app-form-field>
         </div>
 
         <div class="form-group">

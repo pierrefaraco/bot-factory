@@ -13,10 +13,12 @@ import { BotDrawComponent } from '../bot-list/bot-draw/bot-draw.component';
 // Services
 import { BotService } from '../../services/bot.service';
 import { CommunicationService } from '../../services/communication.service';
+import { AuthService } from '../../services/auth.service';
 import { Bot } from '../../models/bot.model';
 import { Avatar } from '@app/models/avatar.model';
 import { ButtonComponent } from '../base/button/button.component';
 import { KnowledgeEditorComponent } from '../knowledges/knowledge-editor/knowledge-editor.component';
+import { USER_ROLES } from '../../constants/user-roles.constants';
 
 @Component({
   selector: 'app-bot-workspace',
@@ -53,7 +55,8 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
     private communicationService: CommunicationService,
     private router: Router,
     private route: ActivatedRoute,
-    private botService: BotService
+    private botService: BotService,
+    private authService: AuthService
   ) {
     this.updateLayoutBasedOnScreenSize();
   }
@@ -99,8 +102,23 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
     // });
 
     // Récupérer l'onglet depuis les query params
+    const validTabs: typeof this.activeTab[] = ['overview', 'chat', 'knowledge', 'settings', 'draw'];
     this.route.queryParams.subscribe(params => {
-      if (params['tab']) {
+      // Une valeur non reconnue (lien externe/marque-page obsolète, faute de
+      // frappe) laissait `activeTab` sur cette valeur : aucun onglet ne
+      // matchait plus dans le template, page vide sans repli ni message.
+      // 'settings'/'knowledge'/'draw' restent dans validTabs pour tout le
+      // monde (ce ne sont pas des valeurs invalides), mais un Guest y
+      // arrivant par un lien direct ne doit ni les voir ni pouvoir
+      // déclencher les appels (GET /api/knowledge, GET
+      // /api/bot/parameters-description, PATCH /api/avatar) qu'il n'a pas
+      // le droit d'appeler (403 côté serveur) -- repli sur l'onglet par
+      // défaut.
+      const restrictedForGuest = ['settings', 'knowledge', 'draw'];
+      if (this.isGuest && restrictedForGuest.includes(params['tab'])) {
+        return;
+      }
+      if (validTabs.includes(params['tab'])) {
         this.activeTab = params['tab'];
       }
     });
@@ -159,6 +177,35 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
 
   get hasSelectedBot(): boolean {
     return this.selectedBot !== null && this.selectedBot.id !== -1;
+  }
+
+  // GET /api/knowledge/<id>, GET /api/bot/parameters-description, PATCH
+  // /api/avatar, POST /api/bot and DELETE /api/bot/<id> are all
+  // role_required([ADMIN_ROLE, USER_ROLE]) server-side -- GUEST is
+  // deliberately excluded (bot configuration/knowledge/avatar editing and
+  // bot creation/deletion aren't Guest capabilities, only chatting with an
+  // assigned bot is). The Settings/Knowledge/Avatar tabs, their child
+  // components (<app-bot-params>, <app-knowledges>, <app-bot-draw>), both
+  // "Create a new bot" buttons and the "Delete selected bot" menu used to
+  // be rendered unconditionally regardless of role, so a Guest could fire
+  // requests guaranteed to 403 just by selecting a bot or clicking around.
+  get isGuest(): boolean {
+    return this.authService.getUserRole() === USER_ROLES.GUEST;
+  }
+
+  // DELETE /api/bot/<id> is ownership-scoped server-side (_can_modify_bot,
+  // rest_bot.py): a User can only delete a bot they created themselves,
+  // Admin bypasses unconditionally. "My Bots" now also lists bots merely
+  // *assigned* to a User (bot_svc.get_owned_and_assigned_bots), so
+  // selecting one of those and hitting "Delete selected bot" would
+  // otherwise be a guaranteed 403.
+  get canDeleteSelectedBot(): boolean {
+    if (this.isAdmin) return true;
+    return this.selectedBot?.user_account_id === this.authService.get_curent_user_id();
+  }
+
+  get isAdmin(): boolean {
+    return this.authService.getUserRole() === USER_ROLES.ADMIN;
   }
 
   get botName(): string {

@@ -16,6 +16,47 @@
   width: 90vw !important;
 }
 
+// Habillage carte aligné sur auth-form-card (auth-form.component.scss) :
+// même radius/ombre/fond, un seul fichier corrige les 3 dialogues existants
+// (UserDialogComponent/PasswordDialogComponent/BotAssignmentDialogComponent)
+// + tout nouveau consommateur de <app-custom-dialog>.
+::ng-deep .mat-mdc-dialog-container .mdc-dialog__surface {
+  // --mdc-dialog-container-color pilote le background-color par défaut de
+  // Material (cf. error-dialog.component.scss, même contrainte) ; `background`
+  // en plus au cas où un enfant ne respecte pas cette variable. `overflow:
+  // hidden` pour que les coins arrondis découpent réellement leur contenu
+  // (sans ça, .buttons-container/.dialog-body gardent des coins droits et
+  // laissent dépasser un bord de la couleur de fond par défaut de Material
+  // derrière le radius).
+  --mdc-dialog-container-color: var(--card-bg);
+  border-radius: 1.25rem !important;
+  box-shadow: var(--shadow-xl) !important;
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+}
+
+.dialog-header {
+  padding: 1.75rem 2.5rem 0.5rem !important;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dialog-body {
+  padding: 0.75rem 2.5rem !important;
+}
+
+.buttons-container {
+  // Material ne pose un `gap` sur .mat-mdc-dialog-actions qu'à partir du
+  // breakpoint 768px ci-dessous (gap: 0.5rem) : au-delà, les deux
+  // <app-button> Cancel/Submit (`:host { display: inline-block }`, sans
+  // marge propre) se touchent bord à bord. Même valeur reprise ici pour
+  // que le desktop ne soit pas le cas non traité.
+  gap: 0.75rem;
+  padding: 1.5rem 2.5rem !important;
+}
+
 
 // ========== Responsive Design ==========
 @media (max-width: 1024px) {
@@ -164,26 +205,8 @@
   }
 }
 
-// ========== Animations ==========
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.dialog-header {
-  animation: slideDown 0.3s ease-out;
-}
-
-.dialog-body {
-  animation: slideDown 0.3s ease-out 0.1s both;
-}
-
-.buttons-container {
-  animation: slideDown 0.3s ease-out 0.2s both;
-}
+// L'animation d'entrée est maintenant le trigger Angular `fadeIn` partagé
+// (animations/shared.animations.ts), appliqué via [@fadeIn] dans
+// custom-dialog.component.html -- l'ancien @keyframes slideDown ci-dessus
+// tournait en double dessus (translateY(-20px) sur les mêmes éléments,
+// avec un `both` qui les laissait invisibles pendant leur délai), retiré.

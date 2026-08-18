@@ -7,6 +7,7 @@ import { User } from '../models/user.model';
 import { JwtService, JwtPayload } from './jwt.service'
 import { API_URL} from  '../constants/user-roles.constants'
 import { formatNumber } from '@angular/common';
+import { CommunicationService } from './communication.service';
 @Injectable({
   providedIn: 'root'
 })
@@ -27,7 +28,7 @@ export class AuthService {
     withCredentials: true // Important si vous utilisez des cookies
   };
 
-  constructor(private http: HttpClient, private jwtService: JwtService) {
+  constructor(private http: HttpClient, private jwtService: JwtService, private communicationService: CommunicationService) {
     let jwt = this.getJwtInfoFromStorage()
     this.currentJwtSubject = new BehaviorSubject<JwtPayload | null>(jwt);
     this.currentJwt = this.currentJwtSubject.asObservable();
@@ -110,6 +111,7 @@ export class AuthService {
     console.log("logout")
     localStorage.clear();
     this.isAuthenticatedSubject.next(false);
+    this.communicationService.resetSelectedBot();
     return this.http.post(`${API_URL}/auth/logout`, {}, this.httpOptions)
       .pipe(
         map(() => {

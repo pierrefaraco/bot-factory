@@ -224,9 +224,15 @@ class User(db.Model):
         ),
         nullable=True,
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        server_default=sqlalchemy.text("CURRENT_TIMESTAMP"),
+    )
 
     def __repr__(self) -> str:
-        return f"User(id={self.id!r}, name={self.name!r}, password_hash={self.password_hash!r}, mail={self.mail!r}), roles={self.roles!r}, parent_id={self.parent_id!r}, is_active={self.is_active!r}, selected_bot_id={self.selected_bot_id!r})"
+        return f"User(id={self.id!r}, name={self.name!r}, password_hash={self.password_hash!r}, mail={self.mail!r}), roles={self.roles!r}, parent_id={self.parent_id!r}, is_active={self.is_active!r}, selected_bot_id={self.selected_bot_id!r}, created_at={self.created_at!r})"
 
     def __init__(
         self,

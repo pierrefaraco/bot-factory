@@ -1,0 +1,10 @@
+<app-custom-dialog
+  [title]="data.title"
+  [dialogRef]="dialogRef"
+  [cancelLabel]="data.cancelLabel || 'Cancel'"
+  [submitLabel]="data.confirmLabel || (data.danger ? 'Delete' : 'Confirm')"
+  [submitIcon]="data.danger ? 'delete' : 'check'"
+  [danger]="!!data.danger"
+  (submit)="onConfirm()">
+  <p class="confirm-message">{{ data.message }}</p>
+</app-custom-dialog>

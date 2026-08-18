@@ -31,32 +31,47 @@ handler — ce qui est déjà exactement ce que fait le code en interne
 (comparaison `guest.parent_id == user_id`, `role == ADMIN`), juste réparti
 sur 3 routes au lieu d'une.
 
-**Proposition** :
-```
-GET /users/{id}              (remplace self + guest/<id> + <id>)
-GET /token-stats/users/{id}  (remplace self + guest/<id> + user/<id>)
-```
+**Ce qui a réellement été fait** (scope réduit, décidé avec l'utilisateur
+après investigation) : fusionner uniquement les paires `guest/<id>` +
+`<id>` (admin) en une seule route `/<id>`. Les routes `/self` sont restées
+**inchangées** — c'est là qu'aucun bug n'a jamais été trouvé (logique
+triviale : toujours autorisé), contrairement à la logique guest-vs-admin
+dupliquée qui contenait 100% des bugs de droits d'accès corrigés dans une
+session précédente. Ça évite aussi tout changement frontend : Angular
+n'appelle jamais les variantes admin (`/users/<id>` en PUT/DELETE/GET/PATCH
+sans passer par `/self` ou `/guest/<id>`), donc les routes survivantes
+gardent exactement le path déjà utilisé par la variante admin.
 
-**Règles d'autorisation à préserver EXACTEMENT** (voir statut "EN COURS"
-plus bas pour le détail par rôle) :
-- **USER** : accès à sa propre ressource (`id == jwt_user_id`) et à celles
-  de ses guests (`target.parent_id == jwt_user_id`). Jamais aux ressources
-  d'un autre USER ou de ses guests.
+Nouveau helper partagé `server/ai_server/decorators/user_scope.py` :
+`authorize_user_scope(target_id, allow_self=True)`, utilisé après
+`@role_required([ADMIN_ROLE, USER_ROLE])` sur les 7 paires fusionnées de
+`rest_users_admin.py` (update, delete, get, patch, selected_bot,
+deactivate, activate) et les 5 paires de `rest_token_stats.py` (stats,
+history, total, last-24h, stats-24h).
+
+**Règles d'autorisation préservées exactement** :
 - **ADMIN** : accès à tout, sans restriction.
-- **GUEST** : accès uniquement à sa propre ressource (`id == jwt_user_id`).
-  Un guest n'a jamais accès aux ressources d'un autre guest, même s'ils
-  partagent le même parent USER.
+- **USER** : accès à sa propre ressource et à celles de ses guests
+  (`target.parent_id == jwt_user_id`) uniquement.
+- **GUEST** : jamais d'accès à ces routes fusionnées (bloqué par
+  `role_required` avant même d'atteindre la logique de scope — GUEST
+  n'était déjà présent que sur les routes `/self`, inchangées).
+- Exception documentée : `deactivate`/`activate` n'ont jamais eu de
+  variante `/self` — `allow_self=False` explicite pour ne pas introduire
+  l'auto-(dés)activation par accident lors de la fusion. Deux tests dédiés
+  (`test_deactivate_self_still_blocked`, `test_activate_self_still_blocked`)
+  verrouillent ce comportement.
+- Autre exception non fusionnée : le changement de mot de passe
+  (`/users/password/self` + `/users/password/guest/<id>`) n'a **aucune**
+  variante admin aujourd'hui (un ADMIN ne peut pas réinitialiser le mot de
+  passe d'un utilisateur arbitraire) — décision explicite de l'utilisateur
+  de ne pas fusionner pour ne pas élargir ce périmètre de droits.
 
-- **Impact code** : fusionne ~30 handlers en ~10 ; côté Angular,
-  `users.service.ts`/`token-stats.service.ts` doivent construire l'URL
-  avec l'id réel au lieu d'appeler `/self`.
-- **Risque** : moyen. Pas de client tiers, mais surface de test large (182
-  tests existants) et logique d'autorisation à préserver bit à bit.
-- **Migration** : garder `/users/self` comme alias temporaire qui redirige
-  en interne vers `/users/{jwt_id}`, dépréciable plus tard. Pas besoin de
-  versionner toute l'API pour ça.
+**Bilan** : 47 routes → 35 (-12) sur les deux blueprints. 184 tests passent
+(182 existants + 2 nouveaux pour l'exception deactivate/activate), zéro
+changement frontend Angular requis.
 
-**Statut : EN COURS** (validé par l'utilisateur, prochaine étape de travail).
+**Statut : FAIT** (2026-08-17).
 
 ## Constat n°2 : verbes exposés dans le path
 

@@ -128,20 +128,31 @@
 }
 
 // Icon size variations
+//
+// !important sur les 3 propriétés (pas juste font-size) : Material pose sa
+// propre règle `.mat-mdc-button > .mat-icon` (1.125rem partout, non
+// !important) sur tout <mat-icon> enfant direct d'un bouton mat-mdc-button/
+// -unelevated/-raised/-outlined/-tonal (donc `type="custom-button"` ici).
+// Même spécificité que ces classes (2 sélecteurs de classe chacune) --
+// sans !important sur width/height, l'ordre de chargement des styles
+// décide, et Material peut gagner sur width/height pendant que font-size
+// (seul !important avant ce correctif) restait à nous : un glyph de 24px
+// affiché dans une boîte de 18px de large, tronqué (vérifié en direct,
+// icône "cancel" coupée sur le bouton Cancel des dialogues).
 .small-icon {
   font-size: 1.125rem !important;
-  width: 1.125rem;
-  height: 1.125rem;
+  width: 1.125rem !important;
+  height: 1.125rem !important;
 }
 
 .medium-icon {
   font-size: 1.5rem !important;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.5rem !important;
+  height: 1.5rem !important;
 }
 
 .big-icon {
   font-size: 2rem !important;
-   width: 2rem;
-  height: 2rem;
+  width: 2rem !important;
+  height: 2rem !important;
 }

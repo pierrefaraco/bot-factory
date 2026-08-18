@@ -168,6 +168,12 @@
   border: 2px solid transparent;
   box-sizing: border-box;
   min-height: 56px;
+  // Sans largeur explicite, ce flex-item ne prend que la largeur de son
+  // contenu (icône + texte) au lieu de remplir la ligne du mat-tree-node
+  // (lui-même display:flex) : un chapitre au nom vide n'a alors qu'une
+  // zone cliquable d'à peine 70px sur une ligne de ~640px, le reste étant
+  // mort au clic malgré le curseur pointer affiché partout.
+  width: 100%;
   max-width: 100%;
   overflow: visible;
 

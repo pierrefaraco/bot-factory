@@ -25,14 +25,14 @@ export class TokenStatsService {
    * Récupère les statistiques de tokens de l'utilisateur connecté
    */
   getMyStats(): Observable<UserTokenStats> {
-    return this.http.get<UserTokenStats>(`${this.baseUrl}/self`);
+    return this.http.get<UserTokenStats>(`${this.baseUrl}/me`);
   }
 
   /**
    * Récupère uniquement le total de tokens consommés
    */
   getMyTotal(): Observable<TotalTokens> {
-    return this.http.get<TotalTokens>(`${this.baseUrl}/total/self`);
+    return this.http.get<TotalTokens>(`${this.baseUrl}/total/me`);
   }
 
   /**
@@ -41,7 +41,7 @@ export class TokenStatsService {
    */
   getMyHistory(limit: number = 100, last24h: boolean = false): Observable<TokenUsageHistory> {
     return this.http.get<TokenUsageHistory>(
-      `${this.baseUrl}/history/self?limit=${limit}&last24h=${last24h}`
+      `${this.baseUrl}/history/me?limit=${limit}&last24h=${last24h}`
     );
   }
 
@@ -49,14 +49,14 @@ export class TokenStatsService {
    * Récupère le total de tokens consommés dans les dernières 24 heures
    */
   getMyLast24h(): Observable<TotalTokens> {
-    return this.http.get<TotalTokens>(`${this.baseUrl}/last-24h/self`);
+    return this.http.get<TotalTokens>(`${this.baseUrl}/last-24h/me`);
   }
 
   /**
    * Récupère les statistiques détaillées des 24 dernières heures
    */
   getMyStatsLast24h(): Observable<UserTokenStatsLast24h> {
-    return this.http.get<UserTokenStatsLast24h>(`${this.baseUrl}/stats-24h/self`);
+    return this.http.get<UserTokenStatsLast24h>(`${this.baseUrl}/stats-24h/me`);
   }
 
   // ========== Statistiques des guests ==========
@@ -66,7 +66,7 @@ export class TokenStatsService {
    * @param guestId ID de l'utilisateur guest
    */
   getGuestStats(guestId: number): Observable<UserTokenStats> {
-    return this.http.get<UserTokenStats>(`${this.baseUrl}/guest/${guestId}`);
+    return this.http.get<UserTokenStats>(`${this.baseUrl}/user/${guestId}`);
   }
 
   /**
@@ -74,7 +74,7 @@ export class TokenStatsService {
    * @param guestId ID de l'utilisateur guest
    */
   getGuestTotal(guestId: number): Observable<TotalTokens> {
-    return this.http.get<TotalTokens>(`${this.baseUrl}/total/guest/${guestId}`);
+    return this.http.get<TotalTokens>(`${this.baseUrl}/total/user/${guestId}`);
   }
 
   /**
@@ -84,7 +84,7 @@ export class TokenStatsService {
    */
   getGuestHistory(guestId: number, limit: number = 100): Observable<TokenUsageHistory> {
     return this.http.get<TokenUsageHistory>(
-      `${this.baseUrl}/history/guest/${guestId}?limit=${limit}`
+      `${this.baseUrl}/history/user/${guestId}?limit=${limit}`
     );
   }
 

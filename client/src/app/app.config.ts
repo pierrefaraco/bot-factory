@@ -3,11 +3,12 @@ import { provideRouter, withComponentInputBinding, withPreloading, PreloadAllMod
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { alfred_routes } from './app.routes';
 import { jwtInterceptor,errorInterceptor } from './interceptors/jwt.interceptor';
+import { successNotificationInterceptor } from './interceptors/success-notification.interceptor';
 import { provideAnimations } from '@angular/platform-browser/animations';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideHttpClient(withInterceptors([errorInterceptor,jwtInterceptor])),
+    provideHttpClient(withInterceptors([errorInterceptor,jwtInterceptor,successNotificationInterceptor])),
     provideZoneChangeDetection({ eventCoalescing: true }), 
     provideRouter(
       alfred_routes, 

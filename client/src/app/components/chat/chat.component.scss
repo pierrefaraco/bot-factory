@@ -133,6 +133,12 @@
 }
 
 .avatar {
+  // `position` requis pour que `z-index` ait un effet : sans lui, ce
+  // z-index:100 était ignoré (défaut `static`) et .message-content
+  // (position:relative, plus tard dans le DOM) passait devant dans leur
+  // zone de recouvrement -- l'avatar se retrouvait en grande partie masqué
+  // par la bulle au lieu de rester devant elle.
+  position: relative;
   height: 64px !important;
   width: 48px !important;
   z-index: 100;
@@ -159,6 +165,13 @@
   align-items: center;
   margin-top: 0px;
   padding-top: 0px;
+  // Réserve la hauteur du timestamp (.timestamp, 24px) même quand il n'est
+  // pas encore affiché (message en cours de streaming, footer vide) --
+  // sans ça la bulle grandirait d'un coup quand le timestamp apparaît à la
+  // fin, réintroduisant le même bug que le "Skip" button corrigé plus tôt
+  // (footer plus haut => avatar poussé vers le bas, .message étant
+  // align-items: flex-end).
+  min-height: 24px;
 }
 
 .message-content {

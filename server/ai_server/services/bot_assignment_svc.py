@@ -3,7 +3,7 @@ from ai_server.dao.database import BotAssignment, Bot, User, db
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
-from ai_server.config.constant import GUEST_ROLE
+from ai_server.config.constant import GUEST_ROLE, USER_ROLE
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.decorators.singleton import singleton
 
@@ -73,17 +73,25 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
                 f"Bot {data['bot_id']} does not belong to user {data['assigned_by']}"
             )
 
-        # Validate that user exists and is a GUEST
+        # Validate that user exists and can be assigned bots (GUEST or USER
+        # -- "My Bots" now shows assigned bots for Users too, and
+        # admin.component.ts's "Assign Bot" action is already offered for
+        # User rows in the Users tab, so this used to 500 for them).
         user: User = User.query.get(data["user_id"])
         if not user:
             raise NotFoundError("User", str(data["user_id"]))
 
-        if user.roles != GUEST_ROLE:
-            raise ServiceError(f"User {data['user_id']} is not a GUEST user")
+        if user.roles not in (GUEST_ROLE, USER_ROLE):
+            raise ServiceError(f"User {data['user_id']} is not a GUEST or USER account")
         logger.info(f"user {user} ")
         logger.info(f"data {data} ")
-        # Validate that user is child of assigner
-        if int(user.parent_id) != int(data["assigned_by"]):
+        # Guests are only assignable by their own parent -- Users have no
+        # equivalent parent relationship to check here, and the calling
+        # route (PATCH /users/<id>) already ran authorize_user_scope, which
+        # is what actually gates who may reach this point for a User target
+        # (Admin, since a User has no guests of their own to assign bots
+        # through this same endpoint anyway).
+        if user.roles == GUEST_ROLE and int(user.parent_id) != int(data["assigned_by"]):
             raise ServiceError(
                 f"Guest user {data['user_id']} is not a child of user {data['assigned_by']}"
             )

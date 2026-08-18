@@ -9,8 +9,8 @@ from ai_server.config.openapi import api
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.token_tracking_svc import TokenTrackingService
 from ai_server.decorators.role_required import role_required
+from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import User
 
 CONTROLLER_NAME = "token_stats"
 CONTROLLER_PATH = "/token-stats"
@@ -30,7 +30,7 @@ logger = BotFactoryLogger()
 token_tracking_svc = TokenTrackingService()
 
 
-@bp.route(f"{CONTROLLER_PATH}/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_token_stats_self():
@@ -46,41 +46,15 @@ def get_token_stats_self():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_token_stats_guest(guest_id):
-    """Get token statistics for a guest user"""
+def get_token_stats_by_id(user_id):
+    """Get token statistics for a user (own guest, or any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {
-                    "error": f"Unable to access stats for user {guest_id} - not your guest"
-                }
-            ), HTTPStatus.FORBIDDEN
-
-        stats = token_tracking_svc.get_user_token_stats(guest_id)
-        return jsonify(stats), HTTPStatus.OK
-
-    except Exception as exc:
-        logger.error(f"Error getting guest token stats: {exc}")
-        return jsonify(
-            {"error": "Internal server error"}
-        ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/user/<int:user_id>", methods=["GET"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_token_stats_user(user_id):
-    """Get token statistics for a specific user (admin only)"""
-    try:
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
         stats = token_tracking_svc.get_user_token_stats(user_id)
         return jsonify(stats), HTTPStatus.OK
     except Exception as exc:
@@ -90,7 +64,7 @@ def get_token_stats_user(user_id):
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/history/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/history/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(query=TokenHistoryQuery, tags=["token-stats"], security={"BearerAuth": []})
 def get_token_history_self():
@@ -115,48 +89,16 @@ def get_token_history_self():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/history/guest/<int:guest_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/history/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(query=TokenHistoryQuery, tags=["token-stats"], security={"BearerAuth": []})
-def get_token_history_guest(guest_id):
-    """Get token usage history for a guest user"""
+def get_token_history_by_id(user_id):
+    """Get token usage history for a user (own guest, or any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
 
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {
-                    "error": f"Unable to access history for user {guest_id} - not your guest"
-                }
-            ), HTTPStatus.FORBIDDEN
-
-        limit = request.args.get("limit", default=100, type=int)
-        last_24h = request.args.get("last24h", default=False, type=bool)
-        if limit < 1 or limit > 1000:
-            return jsonify(
-                {"error": "Limit must be between 1 and 1000"}
-            ), HTTPStatus.BAD_REQUEST
-
-        history = token_tracking_svc.get_user_token_history(guest_id, limit, last_24h)
-        return jsonify({"history": history}), HTTPStatus.OK
-
-    except Exception as exc:
-        logger.error(f"Error getting guest token history: {exc}")
-        return jsonify(
-            {"error": "Internal server error"}
-        ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/history/user/<int:user_id>", methods=["GET"])
-@role_required([ADMIN_ROLE])
-@api.validate(query=TokenHistoryQuery, tags=["token-stats"], security={"BearerAuth": []})
-def get_token_history_user(user_id):
-    """Get token usage history for a specific user (admin only)"""
-    try:
         limit = request.args.get("limit", default=100, type=int)
         last_24h = request.args.get("last24h", default=False, type=bool)
         if limit < 1 or limit > 1000:
@@ -203,7 +145,7 @@ def get_all_users_token_stats():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/total/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/total/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_total_tokens_self():
@@ -219,41 +161,15 @@ def get_total_tokens_self():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/total/guest/<int:guest_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/total/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_total_tokens_guest(guest_id):
-    """Get total tokens consumed by a guest user"""
+def get_total_tokens_by_id(user_id):
+    """Get total tokens consumed by a user (own guest, or any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {
-                    "error": f"Unable to access tokens for user {guest_id} - not your guest"
-                }
-            ), HTTPStatus.FORBIDDEN
-
-        total = token_tracking_svc.get_user_total_tokens(guest_id)
-        return jsonify({"user_id": guest_id, "total_tokens": total}), HTTPStatus.OK
-
-    except Exception as exc:
-        logger.error(f"Error getting guest total tokens: {exc}")
-        return jsonify(
-            {"error": "Internal server error"}
-        ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/total/user/<int:user_id>", methods=["GET"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_total_tokens_user(user_id):
-    """Get total tokens consumed by a specific user (admin only)"""
-    try:
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
         total = token_tracking_svc.get_user_total_tokens(user_id)
         return jsonify({"user_id": user_id, "total_tokens": total}), HTTPStatus.OK
     except Exception as exc:
@@ -263,7 +179,7 @@ def get_total_tokens_user(user_id):
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/last-24h/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/last-24h/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_tokens_last_24h_self():
@@ -281,43 +197,16 @@ def get_tokens_last_24h_self():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/last-24h/guest/<int:guest_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/last-24h/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_tokens_last_24h_guest(guest_id):
-    """Get total tokens consumed by a guest user in the last 24 hours"""
+def get_tokens_last_24h_by_id(user_id):
+    """Get total tokens consumed by a user in the last 24h (own guest, or
+    any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {
-                    "error": f"Unable to access tokens for user {guest_id} - not your guest"
-                }
-            ), HTTPStatus.FORBIDDEN
-
-        total = token_tracking_svc.get_user_tokens_last_24h(guest_id)
-        return jsonify(
-            {"user_id": guest_id, "total_tokens_last_24h": total}
-        ), HTTPStatus.OK
-
-    except Exception as exc:
-        logger.error(f"Error getting guest tokens last 24h: {exc}")
-        return jsonify(
-            {"error": "Internal server error"}
-        ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/last-24h/user/<int:user_id>", methods=["GET"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_tokens_last_24h_user(user_id):
-    """Get total tokens consumed by a specific user in the last 24 hours (admin only)"""
-    try:
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
         total = token_tracking_svc.get_user_tokens_last_24h(user_id)
         return jsonify(
             {"user_id": user_id, "total_tokens_last_24h": total}
@@ -329,7 +218,7 @@ def get_tokens_last_24h_user(user_id):
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/stats-24h/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/stats-24h/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
 def get_stats_last_24h_self():
@@ -345,41 +234,16 @@ def get_stats_last_24h_self():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/stats-24h/guest/<int:guest_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/stats-24h/user/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_stats_last_24h_guest(guest_id):
-    """Get detailed token statistics for a guest user in the last 24 hours"""
+def get_stats_last_24h_by_id(user_id):
+    """Get detailed token stats for a user in the last 24h (own guest, or
+    any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {
-                    "error": f"Unable to access stats for user {guest_id} - not your guest"
-                }
-            ), HTTPStatus.FORBIDDEN
-
-        stats = token_tracking_svc.get_user_stats_last_24h(guest_id)
-        return jsonify(stats), HTTPStatus.OK
-
-    except Exception as exc:
-        logger.error(f"Error getting guest stats last 24h: {exc}")
-        return jsonify(
-            {"error": "Internal server error"}
-        ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/stats-24h/user/<int:user_id>", methods=["GET"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["token-stats"], security={"BearerAuth": []})
-def get_stats_last_24h_user(user_id):
-    """Get detailed token statistics for a specific user in the last 24 hours (admin only)"""
-    try:
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
         stats = token_tracking_svc.get_user_stats_last_24h(user_id)
         return jsonify(stats), HTTPStatus.OK
     except Exception as exc:

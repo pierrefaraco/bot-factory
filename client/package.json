@@ -7,7 +7,9 @@
     "build": "ng build",
     "build:prod": "ng build --configuration production && node optimize-build.js",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "e2e": "playwright test",
+    "e2e:report": "playwright show-report"
   },
   "private": true,
   "dependencies": {
@@ -37,6 +39,7 @@
     "@angular/cli": "^21.2.19",
     "@angular/compiler-cli": "^21.2.19",
     "@angular/material": "^21.2.14",
+    "@playwright/test": "^1.62.1",
     "@types/google.accounts": "^0.0.18",
     "@types/jasmine": "~5.1.0",
     "jasmine-core": "~5.2.0",

@@ -64,7 +64,6 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
   selected_bot: Bot
   selectedKnowledgeId: number
   knowledgeMouseEnterId: number
-  private subscriptionSelectBot: Subscription;
   private subscriptionUpdatedKnowledge: Subscription;
   titleColor: string = "var(--text-primary)"
   nodeColor: string = "var(--bg-primary)"
@@ -110,17 +109,12 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
   ngOnInit() {
     console.log("DataComponent initialized");
 
-    // Initialiser le bot si fourni via Input
-    if (this.bot) {
-      this.selected_bot = this.bot;
-      this.loadChapters();
-    }
-
-    this.subscriptionSelectBot = this.communicationService.triggerOnSelectBot$.subscribe((bot) => {
-      console.log("KnowledgesComponent selected bot: ", bot);
-      this.selected_bot = bot
-      this.loadChapters()
-    })
+    // Bot selection is handled exclusively via the [bot] @Input binding in
+    // ngOnChanges (bot-workspace passes it down from the same
+    // triggerOnSelectBot$ event) -- subscribing to it here too used to
+    // cause loadChapters() to fire redundantly (once from this Input already
+    // being set, once from the BehaviorSubject replaying its current value
+    // to this new subscription, once from ngOnChanges).
 
     this.subscriptionUpdatedKnowledge = this.communicationService.triggerKnowledgeUdateted$.subscribe((knowledge) => {
       this.loadChapters();
@@ -139,7 +133,7 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   ngOnDestroy() {
-    this.subscriptionSelectBot.unsubscribe();
+    this.subscriptionUpdatedKnowledge.unsubscribe();
     this.destroy$.next();
     this.destroy$.complete();
   }

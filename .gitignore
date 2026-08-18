@@ -1,6 +1,7 @@
 # Environment variables
 .env*
 !.env.example
+!client/.env.e2e.example
 
 # Python
 __pycache__/
@@ -110,3 +111,8 @@ temp/
 # Claude Code / Playwright MCP local state
 .claude/
 .playwright-mcp/
+
+# Playwright E2E (client/e2e) - JWTs + generated reports, never committed
+client/e2e/.auth/
+client/playwright-report/
+client/test-results/

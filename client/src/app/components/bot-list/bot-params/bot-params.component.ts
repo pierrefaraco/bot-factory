@@ -62,7 +62,6 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
 
   selectedTabIndex = 0;
   private subscriptionCreateBot: Subscription;
-  private subscriptionSelectBot: Subscription;
   botForm: FormGroup
   namectrl = new FormControl('', Validators.required)
   botinfewwordsctrl = new FormControl('', Validators.required)
@@ -111,18 +110,15 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   ngOnInit(): void {
-    // Initialiser avec le bot si fourni via Input
-    if (this.bot && this.isEditing) {
-      this.editBot();
-    }
+    // Bot selection is handled exclusively via the [bot] @Input binding in
+    // ngOnChanges (bot-workspace passes it down from the same
+    // triggerOnSelectBot$ event) -- subscribing to it here too used to
+    // cause editBot() to fire redundantly (once from this Input already
+    // being set, once from the BehaviorSubject replaying its current value
+    // to this new subscription, once from ngOnChanges).
 
     this.subscriptionCreateBot = this.communicationService.triggerCreateBot$.subscribe(() => {
       this.createBot()
-    });
-
-    this.subscriptionSelectBot = this.communicationService.triggerOnSelectBot$.subscribe((bot) => {
-      this.bot = bot
-      this.editBot()
     });
 
     // Signaler que le composant est initialisé
@@ -140,7 +136,6 @@ export class BotParamsComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnDestroy(): void {
     this.subscriptionCreateBot.unsubscribe();
-    this.subscriptionSelectBot.unsubscribe();
   }
 
 

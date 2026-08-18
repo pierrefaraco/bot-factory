@@ -92,31 +92,22 @@ def get_bot(bot_id):
         # Check permissions based on user role
         if user.roles == ADMIN_ROLE:
             # Admin can access any bot
-            pass
-        elif user.roles == USER_ROLE:
-            # User can access their own bots
-            if int(bot_dto.user_account_id) != int(user_id):
-                return jsonify(
-                    {
-                        "error": f"You don't have rights to get bot {bot_id}. bot_dto.user_account_id{bot_dto.user_account_id} user_id{user_id}"
-                    }
-                ), HTTPStatus.FORBIDDEN
-        elif user.roles == GUEST_ROLE:
-            # Guest can only access assigned bots
-            if not bot_svc.is_bot_assigned_to_user(bot_id, user_id):
-                return jsonify(
-                    {"error": f"Bot {bot_id} is not assigned to you."}
-                ), HTTPStatus.FORBIDDEN
-        else:
-            return jsonify({"error": "Invalid user role"}), HTTPStatus.FORBIDDEN
-
-        return jsonify(bot_dto.to_dict()), HTTPStatus.OK
+            return jsonify(bot_dto.to_dict()), HTTPStatus.OK
+        elif user.roles in (USER_ROLE,GUEST_ROLE):
+            # User and guest can access their own bots
+            if int(bot_dto.user_account_id) == int(user_id) or bot_svc.is_bot_assigned_to_user(bot_id, user_id) :
+                return jsonify(bot_dto.to_dict()), HTTPStatus.OK
+        return jsonify(
+            {
+                "error": f"You don't have rights to get bot {bot_id}. bot_dto.user_account_id{bot_dto.user_account_id} user_id{user_id}"
+            }
+        ), HTTPStatus.FORBIDDEN
     except Exception as e:
         logger.error(f"Error getting bot {bot_id}: {str(e)}")
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["bot"], security={"BearerAuth": []})
 def get_user_bots():
@@ -126,15 +117,14 @@ def get_user_bots():
         user: User = User.query.filter_by(id=user_id).first()
         if not user:
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
-
-        if user.roles == GUEST_ROLE:
-            # For GUEST users, get only assigned bots
-            bots_dto: List[BotDto] = bot_svc.get_assigned_bots(user_id)
-            return jsonify([bot_dto.to_dict() for bot_dto in bots_dto]), HTTPStatus.OK
-        else:
-            # For USER and ADMIN, get their own bots
-            bots_dto: List[BotDto] = bot_svc.get_bots_by_user(user_id)
-            return jsonify([bot_dto.to_dict() for bot_dto in bots_dto]), HTTPStatus.OK
+        # get_owned_and_assigned_bots already merges both for any role: a
+        # Guest owns nothing (get_bots_by_user is always empty for them), so
+        # it degrades to assigned-only automatically -- adding
+        # get_assigned_bots() on top of it here duplicated every assigned
+        # bot for every caller, Guest included (2 "Select bot N" buttons per
+        # assigned bot in the UI, strict-mode failures in bot-workspace.spec.ts).
+        bots_dto: List[BotDto] = bot_svc.get_owned_and_assigned_bots(user_id)
+        return jsonify([bot_dto.to_dict() for bot_dto in bots_dto]), HTTPStatus.OK
     except Exception as e:
         return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 

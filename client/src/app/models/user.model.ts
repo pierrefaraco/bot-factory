@@ -11,4 +11,7 @@ export interface User {
     selected_bot_id: number;
     assigned_bot_ids?: number[];
     assigned_bots?: AssignedBot[];
+    parent_email?: string;
+    owned_bots_count?: number;
+    created_at?: string;
 }

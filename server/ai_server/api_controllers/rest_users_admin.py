@@ -15,6 +15,7 @@ from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.user_admin_svc import UserAdminService
 from ai_server.dao.database import db, User, Bot
 from ai_server.decorators.role_required import role_required
+from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.dto.user_dto import UserDto
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 
@@ -43,7 +44,11 @@ class UserUpdateRequest(BaseModel):
 class RoleChangeRequest(BaseModel):
     """Schema for role change validation"""
 
-    role: Literal[ADMIN_ROLE, USER_ROLE, GUEST_ROLE]
+    # ADMIN deliberately excluded: there is no API path to create a second
+    # Admin account at all (the only one is the pre-seeded super-admin from
+    # SUPER_ADMIN_LOGIN/PASSWORD) -- authorize_user_scope's "no admin acts
+    # on another admin" rule stays in place as defense-in-depth regardless.
+    role: Literal[USER_ROLE, GUEST_ROLE]
 
 
 class PasswordChangeRequest(BaseModel):
@@ -108,7 +113,7 @@ def register():
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/self", methods=["PUT"])
+@bp.route(f"{CONTROLLER_PATH}/me", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(json=UserUpdateRequest, tags=["users-admin"], security={"BearerAuth": []})
 def update_users_self():
@@ -117,38 +122,21 @@ def update_users_self():
     return _update_users(user_id)
 
 
-@bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["PUT"])
+@bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(json=UserUpdateRequest, tags=["users-admin"], security={"BearerAuth": []})
-def update_users_guest(guest_id):
-    """Update guest user's information"""
+def update_users_by_id(user_id):
+    """Update a user's information (own guest, or any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {"error": f"Unable to update user {guest_id} - not your guest"}
-            ), HTTPStatus.FORBIDDEN
-
-        return _update_users(guest_id)
-
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
+        return _update_users(user_id)
     except Exception as exc:
-        logger.error(f"Guest user update error: {exc}")
+        logger.error(f"User update error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["PUT"])
-@role_required([ADMIN_ROLE])
-@api.validate(json=UserUpdateRequest, tags=["users-admin"], security={"BearerAuth": []})
-def update_users_admin(user_id):
-    """Update user's information (admin only)"""
-    return _update_users(user_id)
 
 
 def _update_users(user_id):
@@ -218,9 +206,13 @@ def register_guest():
 @role_required([ADMIN_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_all_users():
-    """Get all users (admin only)"""
+    """Get all users (admin only) -- excludes every other Admin account,
+    matching authorize_user_scope's "no acting on peer admins" rule: those
+    rows would 403 on every action anyway, so they're left out entirely
+    rather than shown disabled."""
     try:
-        users = user_admin_svc.get_all_users()
+        caller_id = get_jwt_identity()
+        users = user_admin_svc.get_all_users(caller_id)
         return jsonify({"users": users}), HTTPStatus.OK
     except Exception as exc:
         logger.error(f"Get all users error: {exc}")
@@ -254,7 +246,8 @@ def get_users_by_role(role):
         if role not in [ADMIN_ROLE, USER_ROLE, GUEST_ROLE]:
             return jsonify({"error": "Invalid role"}), HTTPStatus.BAD_REQUEST
 
-        users = user_admin_svc.get_users_by_role(role)
+        caller_id = get_jwt_identity()
+        users = user_admin_svc.get_users_by_role(role, caller_id)
         return jsonify({"users": users}), HTTPStatus.OK
     except Exception as exc:
         logger.error(f"Get users by role error: {exc}")
@@ -263,7 +256,7 @@ def get_users_by_role(role):
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/children/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/children/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_children_self():
@@ -292,7 +285,7 @@ def _get_children(parent_id):
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/self", methods=["DELETE"])
+@bp.route(f"{CONTROLLER_PATH}/me", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def delete_user_self():
@@ -300,33 +293,22 @@ def delete_user_self():
     return delete_user(user_id)
 
 
-@bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["DELETE"])
+@bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["DELETE"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def delete_user_guest(guest_id):
+def delete_user_by_id(user_id):
+    """Delete a user (own guest, or any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {"error": f"Unable to delete user {guest_id} - not your guest"}
-            ), HTTPStatus.FORBIDDEN
-        return delete_user(guest_id)
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
+        return delete_user(user_id)
     except ApiError:
         raise
     except Exception as exc:
-        msg = f"Exception while deleting guest user: {exc}"
+        msg = f"Exception while deleting user: {exc}"
         logger.error(msg)
         raise ApiError(msg, 500)
-
-
-@bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["DELETE"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def delete_user_admin(user_id):
-    return delete_user(user_id)
 
 
 def delete_user(user_id):
@@ -349,6 +331,10 @@ def delete_user(user_id):
 def change_role(user_id):
     """Change le rôle d'un utilisateur"""
     try:
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
+
         data = request.get_json()
         new_role = data.get("role")
         if not new_role:
@@ -375,7 +361,7 @@ def change_role(user_id):
         raise ApiError(msg, 500)
 
 
-@bp.route(f"{CONTROLLER_PATH}/password/self", methods=["PUT"])
+@bp.route(f"{CONTROLLER_PATH}/password/me", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(json=PasswordChangeRequest, tags=["users-admin"], security={"BearerAuth": []})
 def change_password_self():
@@ -436,34 +422,24 @@ def change_password(user_id):
     return jsonify(msg="Password updated successfully"), 200
 
 
-@bp.route(f"{CONTROLLER_PATH}/<int:guest_id>/deactivate/guest", methods=["PUT"])
+@bp.route(f"{CONTROLLER_PATH}/<int:user_id>/deactivate", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def deactivate_user_guest(guest_id):
+def deactivate_user_by_id(user_id):
+    """Deactivate a user (own guest, or any user if admin). No self-service
+    deactivation, same as before the guest/admin merge -- there was never a
+    /me route for this."""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {"error": f"Unable to deactivate user {guest_id} - not your guest"}
-            ), HTTPStatus.FORBIDDEN
-        return deactivate_user(guest_id)
+        error = authorize_user_scope(user_id, allow_self=False)
+        if error:
+            return error
+        return deactivate_user(user_id)
     except ApiError:
         raise
     except Exception as exc:
         msg = f"Exception while deactivating user: {exc}"
         logger.error(msg)
         raise ApiError(msg, 500)
-
-
-@bp.route(f"{CONTROLLER_PATH}/<int:user_id>/deactivate", methods=["PUT"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def deactivate_user_admin(user_id):
-    return deactivate_user(user_id)
 
 
 def deactivate_user(user_id):
@@ -482,33 +458,24 @@ def deactivate_user(user_id):
         raise ApiError(msg, 500)
 
 
-@bp.route(f"{CONTROLLER_PATH}/<int:guest_id>/activate/guest", methods=["PUT"])
+@bp.route(f"{CONTROLLER_PATH}/<int:user_id>/activate", methods=["PUT"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def activate_user_guest(guest_id):
+def activate_user_by_id(user_id):
+    """Activate a user (own guest, or any user if admin). No self-service
+    activation, same as before the guest/admin merge -- there was never a
+    /me route for this."""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {"error": f"Unable to activate user {guest_id} - not your guest"}
-            ), HTTPStatus.FORBIDDEN
-        return activate_user(guest_id)
+        error = authorize_user_scope(user_id, allow_self=False)
+        if error:
+            return error
+        return activate_user(user_id)
     except ApiError:
         raise
     except Exception as exc:
-        msg = f"Exception while activating guest: {exc}"
+        msg = f"Exception while activating user: {exc}"
         logger.error(msg)
         raise ApiError(msg, 500)
-
-
-@bp.route(f"{CONTROLLER_PATH}/<int:user_id>/activate", methods=["PUT"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def activate_user_admin(user_id):
-    return activate_user(user_id)
 
 
 def activate_user(user_id):
@@ -551,7 +518,7 @@ def reassign_children():
         raise ApiError(msg, 500)
 
 
-@bp.route(f"{CONTROLLER_PATH}/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_user_self():
@@ -559,33 +526,22 @@ def get_user_self():
     return get_user(user_id)
 
 
-@bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def get_user_guest(guest_id):
+def get_user_by_id(user_id):
+    """Get a user's details (own guest, or any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {"error": f"Unable to get user {guest_id} - not your guest"}
-            ), HTTPStatus.FORBIDDEN
-        return get_user(guest_id)
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
+        return get_user(user_id)
     except ApiError:
         raise
     except Exception as exc:
-        msg = f"Exception while retrieving guest user: {exc}"
+        msg = f"Exception while retrieving user: {exc}"
         logger.error(msg)
         raise ApiError(msg, 500)
-
-
-@bp.route(f"{CONTROLLER_PATH}/<int:user_id>", methods=["GET"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def get_user_admin(user_id):
-    return get_user(user_id)
 
 
 def get_user(user_id):
@@ -606,7 +562,7 @@ def get_user(user_id):
         raise ApiError(msg, 500)
 
 
-@bp.route(f"{CONTROLLER_PATH}/self", methods=["PATCH"])
+@bp.route(f"{CONTROLLER_PATH}/me", methods=["PATCH"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(json=PatchBotRequest, tags=["users-admin"], security={"BearerAuth": []})
 def patch_user_self():
@@ -615,39 +571,21 @@ def patch_user_self():
     return _patch_user(user_id)
 
 
-@bp.route(f"{CONTROLLER_PATH}/guest/<int:guest_id>", methods=["PATCH"])
+@bp.route(f"{CONTROLLER_PATH}/<int:target_user_id>", methods=["PATCH"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(json=PatchBotRequest, tags=["users-admin"], security={"BearerAuth": []})
-def patch_user_guest(guest_id):
-    # """Update guest user's selected bot"""
+def patch_user_by_id(target_user_id):
+    """Update a user's selected bot (own guest, or any user if admin)"""
     try:
-        parent_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(parent_id):
-            return jsonify(
-                {"error": f"Unable to update user {guest_id} - not your guest"}
-            ), HTTPStatus.FORBIDDEN
-
-        return _patch_user(parent_id, guest_id)
-
+        error = authorize_user_scope(target_user_id)
+        if error:
+            return error
+        return _patch_user(get_jwt_identity(), target_user_id)
     except Exception as exc:
-        logger.error(f"Guest user patch error: {exc}")
+        logger.error(f"User patch error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/<int:target_user_id>", methods=["PATCH"])
-@role_required([ADMIN_ROLE])
-@api.validate(json=PatchBotRequest, tags=["users-admin"], security={"BearerAuth": []})
-def patch_user_admin(target_user_id):
-    """Update user's selected bot (admin only)"""
-    parent_id = get_jwt_identity()
-    return _patch_user(parent_id, target_user_id)
 
 
 def _patch_user(parent_id, guest_id=-1):
@@ -675,7 +613,7 @@ def _patch_user(parent_id, guest_id=-1):
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-@bp.route(f"{CONTROLLER_PATH}/selected_bot/self", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/selected_bot/me", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
 def get_selected_bot_self():
@@ -684,38 +622,21 @@ def get_selected_bot_self():
     return _get_selected_bot(user_id)
 
 
-@bp.route(f"{CONTROLLER_PATH}/selected_bot/guest/<int:guest_id>", methods=["GET"])
+@bp.route(f"{CONTROLLER_PATH}/selected_bot/<int:user_id>", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE])
 @api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def get_selected_bot_guest(guest_id):
-    """Get guest user's selected bot"""
+def get_selected_bot_by_id(user_id):
+    """Get a user's selected bot (own guest, or any user if admin)"""
     try:
-        user_id = get_jwt_identity()
-        guest = User.query.filter_by(id=guest_id).first()
-
-        if not guest:
-            return jsonify({"error": "Guest user not found"}), HTTPStatus.NOT_FOUND
-
-        if guest.parent_id != int(user_id):
-            return jsonify(
-                {"error": f"Unable to access user {guest_id} - not your guest"}
-            ), HTTPStatus.FORBIDDEN
-
-        return _get_selected_bot(guest_id)
-
+        error = authorize_user_scope(user_id)
+        if error:
+            return error
+        return _get_selected_bot(user_id)
     except Exception as exc:
-        logger.error(f"Guest selected bot retrieval error: {exc}")
+        logger.error(f"Selected bot retrieval error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
-@bp.route(f"{CONTROLLER_PATH}/selected_bot/<int:user_id>", methods=["GET"])
-@role_required([ADMIN_ROLE])
-@api.validate(tags=["users-admin"], security={"BearerAuth": []})
-def get_selected_bot_admin(user_id):
-    """Get user's selected bot (admin only)"""
-    return _get_selected_bot(user_id)
 
 
 def _get_selected_bot(user_id):

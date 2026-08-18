@@ -93,7 +93,7 @@ def test_get_self_bots_golden_path(http_client, api_base_url, create_user, creat
     create_bot(user.id)
     headers = login(user.mail, password)
 
-    response = http_client.get(f"{api_base_url}/bot/self", headers=headers)
+    response = http_client.get(f"{api_base_url}/bot/me", headers=headers)
 
     assert response.status_code == 200, response.text
     assert isinstance(response.json(), list)
@@ -187,6 +187,23 @@ def test_delete_bot_golden_path(http_client, api_base_url, create_user, create_b
     response = http_client.delete(f"{api_base_url}/bot/{bot.id}", headers=headers)
 
     assert response.status_code == 204, response.text
+
+
+def test_delete_bot_clears_selected_bot_id(
+    http_client, api_base_url, create_user, create_bot, login, db_session
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    user.selected_bot_id = bot.id
+    db_session.commit()
+    headers = login(user.mail, password)
+
+    response = http_client.delete(f"{api_base_url}/bot/{bot.id}", headers=headers)
+
+    assert response.status_code == 204, response.text
+    db_session.expire_all()
+    refreshed = db_session.get(User, user.id)
+    assert refreshed.selected_bot_id is None
 
 
 def test_delete_bot_not_owner(http_client, api_base_url, create_user, create_bot, login):

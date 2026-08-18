@@ -1,15 +1,64 @@
-<app-custom-dialog title="Assign Bots to User" action="Assign" 
- [isInValid]="assignmentForm.invalid" (submit)="onSubmitFromChild()" [dialogRef]="dialogRef">
+<app-custom-dialog title="Assign Bots to User" action="Assign"
+  [isInValid]="assignmentForm.invalid" (submit)="onSubmitFromChild()" [dialogRef]="dialogRef">
 
-    <form [formGroup]="assignmentForm">
-      <p>Assigning bots to: <strong>{{ data.user.name }}</strong> ({{ data.user.email }})</p>
-      
-      <app-multi-select 
-        [options]="botOptions"
-        [label]="'Select Bots'"
-        [placeholder]="'Select one or more bots...'"
-        formControlName="assigned_bot_ids">
-      </app-multi-select>
-    </form>
+  <form [formGroup]="assignmentForm" class="assignment-form">
+    <p class="assignment-intro">Assigning bots to: <strong>{{ data.user.name }}</strong> ({{ data.user.email }})</p>
+
+    <!-- Loading state -->
+    <div class="state-panel" *ngIf="loading">
+      <mat-spinner diameter="36"></mat-spinner>
+      <span>Loading bots…</span>
+    </div>
+
+    <!-- Empty state -->
+    <div class="state-panel" *ngIf="!loading && availableBots.length === 0">
+      <span class="material-icons state-icon" aria-hidden="true">smart_toy</span>
+      <span>No bots available to assign.</span>
+    </div>
+
+    <ng-container *ngIf="!loading && availableBots.length > 0">
+      <div class="search-box" *ngIf="availableBots.length > searchThreshold">
+        <span class="material-icons search-icon" aria-hidden="true">search</span>
+        <input
+          type="text"
+          class="search-input"
+          placeholder="Filter bots by name…"
+          [ngModel]="searchTerm"
+          [ngModelOptions]="{standalone: true}"
+          (ngModelChange)="onSearchChange($event)"
+          aria-label="Filter bots by name">
+      </div>
+
+      <div class="bot-list" role="listbox" aria-multiselectable="true" aria-label="Available bots">
+        <div
+          *ngFor="let bot of filteredBots; let i = index; trackBy: trackByBotId"
+          [id]="'bot-option-' + bot.id"
+          class="bot-row"
+          [class.selected]="isSelected(bot)"
+          [class.unavailable]="isBotUnavailable(bot)"
+          role="option"
+          [attr.aria-selected]="isSelected(bot)"
+          [attr.aria-disabled]="isBotUnavailable(bot)"
+          [attr.title]="isBotUnavailable(bot) ? 'This bot is currently unavailable' : null"
+          [tabindex]="isBotUnavailable(bot) ? -1 : (i === focusedIndex ? 0 : -1)"
+          (click)="toggleBot(bot)"
+          (keydown)="onRowKeydown($event, i, bot)">
+
+          <div class="bot-avatar">
+            <app-svg-avatar *ngIf="bot.avatar" [avatar]="bot.avatar"></app-svg-avatar>
+            <span class="material-icons avatar-fallback" *ngIf="!bot.avatar" aria-hidden="true">smart_toy</span>
+          </div>
+
+          <span class="bot-name">{{ getBotName(bot) }}</span>
+
+          <span class="material-icons check-icon" *ngIf="isSelected(bot)" aria-hidden="true">check_circle</span>
+        </div>
+
+        <div class="state-panel" *ngIf="filteredBots.length === 0">
+          <span>No bot matches "{{ searchTerm }}".</span>
+        </div>
+      </div>
+    </ng-container>
+  </form>
 
 </app-custom-dialog>

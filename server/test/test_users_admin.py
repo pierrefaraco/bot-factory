@@ -136,7 +136,7 @@ def test_update_self_golden_path(http_client, api_base_url, create_user, login):
     new_name = unique("Renamed")
 
     response = http_client.put(
-        f"{api_base_url}/users/self", json={"name": new_name}, headers=headers
+        f"{api_base_url}/users/me", json={"name": new_name}, headers=headers
     )
 
     assert response.status_code == 200, response.text
@@ -144,7 +144,7 @@ def test_update_self_golden_path(http_client, api_base_url, create_user, login):
 
 
 def test_update_self_requires_auth(http_client, api_base_url):
-    response = http_client.put(f"{api_base_url}/users/self", json={"name": "X"})
+    response = http_client.put(f"{api_base_url}/users/me", json={"name": "X"})
 
     assert_error(response, 401)
 
@@ -156,7 +156,7 @@ def test_update_guest_golden_path(http_client, api_base_url, create_user, login)
     new_name = unique("Renamed")
 
     response = http_client.put(
-        f"{api_base_url}/users/guest/{guest.id}",
+        f"{api_base_url}/users/{guest.id}",
         json={"name": new_name},
         headers=headers,
     )
@@ -172,7 +172,7 @@ def test_update_guest_not_owned(http_client, api_base_url, create_user, login):
     headers = login(stranger.mail, stranger_password)
 
     response = http_client.put(
-        f"{api_base_url}/users/guest/{guest.id}",
+        f"{api_base_url}/users/{guest.id}",
         json={"name": "X"},
         headers=headers,
     )
@@ -185,7 +185,7 @@ def test_update_guest_not_found(http_client, api_base_url, create_user, login):
     headers = login(user.mail, password)
 
     response = http_client.put(
-        f"{api_base_url}/users/guest/999999999", json={"name": "X"}, headers=headers
+        f"{api_base_url}/users/999999999", json={"name": "X"}, headers=headers
     )
 
     assert_error(response, 404, "not found")
@@ -205,9 +205,13 @@ def test_update_admin_golden_path(http_client, api_base_url, create_user, login)
     assert response.json()["user"]["name"] == new_name
 
 
-def test_update_admin_forbidden_for_non_admin(
+def test_update_forbidden_for_unrelated_user(
     http_client, api_base_url, create_user, login
 ):
+    # A plain USER hitting the merged guest+admin route on someone who is
+    # neither themselves nor their guest: denied with the ownership
+    # message (role_required alone no longer blocks USER on this path,
+    # since it must also serve USER-manages-their-guest).
     user, password = create_user(role=USER_ROLE)
     target, _target_password = create_user()
     headers = login(user.mail, password)
@@ -216,7 +220,7 @@ def test_update_admin_forbidden_for_non_admin(
         f"{api_base_url}/users/{target.id}", json={"name": "X"}, headers=headers
     )
 
-    assert_error(response, 403, "Access denied")
+    assert_error(response, 403, "not your guest")
 
 
 def test_get_all_users_golden_path(http_client, api_base_url, create_user, login):
@@ -251,6 +255,19 @@ def test_get_all_guests_golden_path(http_client, api_base_url, create_user, logi
     assert isinstance(response.json(), list)
 
 
+def test_get_all_guests_includes_created_at(http_client, api_base_url, create_user, login):
+    parent, parent_password = create_user(role=USER_ROLE)
+    create_user(role=GUEST_ROLE, parent_id=parent.id)
+    headers = login(parent.mail, parent_password)
+
+    response = http_client.get(f"{api_base_url}/users/guests", headers=headers)
+
+    assert response.status_code == 200, response.text
+    guests = response.json()
+    assert len(guests) > 0
+    assert guests[0]["created_at"]
+
+
 def test_get_users_by_role_golden_path(http_client, api_base_url, create_user, login):
     admin, admin_password = create_user(role=ADMIN_ROLE)
     headers = login(admin.mail, admin_password)
@@ -277,7 +294,7 @@ def test_get_children_self_golden_path(http_client, api_base_url, create_user, l
     create_user(role=GUEST_ROLE, parent_id=parent.id)
     headers = login(parent.mail, parent_password)
 
-    response = http_client.get(f"{api_base_url}/users/children/self", headers=headers)
+    response = http_client.get(f"{api_base_url}/users/children/me", headers=headers)
 
     assert response.status_code == 200, response.text
     assert isinstance(response.json()["children"], list)
@@ -303,7 +320,7 @@ def test_delete_self_golden_path(http_client, api_base_url, create_user, login):
     user, password = create_user()
     headers = login(user.mail, password)
 
-    response = http_client.delete(f"{api_base_url}/users/self", headers=headers)
+    response = http_client.delete(f"{api_base_url}/users/me", headers=headers)
 
     assert response.status_code == 200, response.text
     assert response.json()["msg"] == "User deleted successfully"
@@ -315,7 +332,7 @@ def test_delete_guest_owned(http_client, api_base_url, create_user, login):
     headers = login(parent.mail, parent_password)
 
     response = http_client.delete(
-        f"{api_base_url}/users/guest/{guest.id}", headers=headers
+        f"{api_base_url}/users/{guest.id}", headers=headers
     )
 
     assert response.status_code == 200, response.text
@@ -329,7 +346,7 @@ def test_delete_guest_not_owned(http_client, api_base_url, create_user, login):
     headers = login(stranger.mail, stranger_password)
 
     response = http_client.delete(
-        f"{api_base_url}/users/guest/{guest.id}", headers=headers
+        f"{api_base_url}/users/{guest.id}", headers=headers
     )
 
     assert_error(response, 403, "not your guest")
@@ -391,7 +408,7 @@ def test_change_password_self_golden_path(http_client, api_base_url, create_user
     headers = login(user.mail, password)
 
     response = http_client.put(
-        f"{api_base_url}/users/password/self",
+        f"{api_base_url}/users/password/me",
         json={"old_password": password, "new_password": "NewPassw0rd!45"},
         headers=headers,
     )
@@ -407,7 +424,7 @@ def test_change_password_self_wrong_old_password(
     headers = login(user.mail, password)
 
     response = http_client.put(
-        f"{api_base_url}/users/password/self",
+        f"{api_base_url}/users/password/me",
         json={"old_password": "wrong", "new_password": "NewPassw0rd!45"},
         headers=headers,
     )
@@ -420,7 +437,7 @@ def test_change_password_self_same_as_old(http_client, api_base_url, create_user
     headers = login(user.mail, password)
 
     response = http_client.put(
-        f"{api_base_url}/users/password/self",
+        f"{api_base_url}/users/password/me",
         json={"old_password": password, "new_password": password},
         headers=headers,
     )
@@ -460,7 +477,7 @@ def test_deactivate_guest_owned(http_client, api_base_url, create_user, login):
     headers = login(parent.mail, parent_password)
 
     response = http_client.put(
-        f"{api_base_url}/users/{guest.id}/deactivate/guest", headers=headers
+        f"{api_base_url}/users/{guest.id}/deactivate", headers=headers
     )
 
     assert response.status_code == 200, response.text
@@ -475,11 +492,41 @@ def test_activate_guest_owned(http_client, api_base_url, create_user, login):
     headers = login(parent.mail, parent_password)
 
     response = http_client.put(
-        f"{api_base_url}/users/{guest.id}/activate/guest", headers=headers
+        f"{api_base_url}/users/{guest.id}/activate", headers=headers
     )
 
     assert response.status_code == 200, response.text
     assert response.json()["user"]["is_active"] is True
+
+
+def test_deactivate_self_still_blocked(http_client, api_base_url, create_user, login):
+    # deactivate/activate never had a /me route, and the guest+admin
+    # merge must not accidentally introduce self-service (de)activation --
+    # authorize_user_scope is called with allow_self=False here specifically
+    # to preserve that gap.
+    user, password = create_user(role=USER_ROLE)
+    headers = login(user.mail, password)
+
+    response = http_client.put(
+        f"{api_base_url}/users/{user.id}/deactivate", headers=headers
+    )
+
+    assert_error(response, 403, "not your guest")
+
+
+def test_activate_self_still_blocked(http_client, api_base_url, create_user, login):
+    # Authorization is checked before the activation logic runs, so this
+    # verifies the access gate itself regardless of the target's current
+    # is_active value (an already-inactive self-target can't even log in
+    # to make this call, since login rejects inactive users).
+    user, password = create_user(role=USER_ROLE)
+    headers = login(user.mail, password)
+
+    response = http_client.put(
+        f"{api_base_url}/users/{user.id}/activate", headers=headers
+    )
+
+    assert_error(response, 403, "not your guest")
 
 
 def test_reassign_children_golden_path(http_client, api_base_url, create_user, login):
@@ -503,7 +550,7 @@ def test_get_self_golden_path(http_client, api_base_url, create_user, login):
     user, password = create_user()
     headers = login(user.mail, password)
 
-    response = http_client.get(f"{api_base_url}/users/self", headers=headers)
+    response = http_client.get(f"{api_base_url}/users/me", headers=headers)
 
     assert response.status_code == 200, response.text
     assert response.json()["email"] == user.mail
@@ -535,7 +582,7 @@ def test_get_guest_golden_path(http_client, api_base_url, create_user, login):
     headers = login(parent.mail, parent_password)
 
     response = http_client.get(
-        f"{api_base_url}/users/guest/{guest.id}", headers=headers
+        f"{api_base_url}/users/{guest.id}", headers=headers
     )
 
     assert response.status_code == 200, response.text
@@ -549,7 +596,7 @@ def test_get_guest_not_owned(http_client, api_base_url, create_user, login):
     headers = login(stranger.mail, stranger_password)
 
     response = http_client.get(
-        f"{api_base_url}/users/guest/{guest.id}", headers=headers
+        f"{api_base_url}/users/{guest.id}", headers=headers
     )
 
     assert_error(response, 403, "not your guest")
@@ -560,7 +607,7 @@ def test_get_guest_not_found(http_client, api_base_url, create_user, login):
     headers = login(user.mail, password)
 
     response = http_client.get(
-        f"{api_base_url}/users/guest/999999999", headers=headers
+        f"{api_base_url}/users/999999999", headers=headers
     )
 
     assert_error(response, 404, "not found")
@@ -572,7 +619,7 @@ def test_patch_self_golden_path(http_client, api_base_url, create_user, create_b
     headers = login(user.mail, password)
 
     response = http_client.patch(
-        f"{api_base_url}/users/self",
+        f"{api_base_url}/users/me",
         json={"selected_bot_id": bot.id},
         headers=headers,
     )
@@ -590,7 +637,7 @@ def test_patch_guest_golden_path(
     headers = login(parent.mail, parent_password)
 
     response = http_client.patch(
-        f"{api_base_url}/users/guest/{guest.id}",
+        f"{api_base_url}/users/{guest.id}",
         json={"selected_bot_id": bot.id},
         headers=headers,
     )
@@ -605,7 +652,7 @@ def test_patch_guest_not_owned(http_client, api_base_url, create_user, login):
     headers = login(stranger.mail, stranger_password)
 
     response = http_client.patch(
-        f"{api_base_url}/users/guest/{guest.id}", json={}, headers=headers
+        f"{api_base_url}/users/{guest.id}", json={}, headers=headers
     )
 
     assert_error(response, 403, "not your guest")
@@ -628,7 +675,7 @@ def test_get_selected_bot_self_golden_path(http_client, api_base_url, create_use
     headers = login(user.mail, password)
 
     response = http_client.get(
-        f"{api_base_url}/users/selected_bot/self", headers=headers
+        f"{api_base_url}/users/selected_bot/me", headers=headers
     )
 
     assert response.status_code == 200, response.text
@@ -643,7 +690,7 @@ def test_get_selected_bot_guest_golden_path(
     headers = login(parent.mail, parent_password)
 
     response = http_client.get(
-        f"{api_base_url}/users/selected_bot/guest/{guest.id}", headers=headers
+        f"{api_base_url}/users/selected_bot/{guest.id}", headers=headers
     )
 
     assert response.status_code == 200, response.text
@@ -656,7 +703,7 @@ def test_get_selected_bot_guest_not_owned(http_client, api_base_url, create_user
     headers = login(stranger.mail, stranger_password)
 
     response = http_client.get(
-        f"{api_base_url}/users/selected_bot/guest/{guest.id}", headers=headers
+        f"{api_base_url}/users/selected_bot/{guest.id}", headers=headers
     )
 
     assert_error(response, 403, "not your guest")

@@ -43,21 +43,6 @@ class StreamChatRequest(BaseModel):
     data: dict = Field(default_factory=dict)
 
 
-class StreamChatQuery(BaseModel):
-    """Query parameters for the SSE stream chat endpoint"""
-
-    question: str = Field(min_length=1)
-    bot_id: int
-    data: str = Field(default="{}", description="JSON-encoded payload")
-
-
-class FirstMessageQuery(BaseModel):
-    """Query parameters for the welcome-message trigger endpoint"""
-
-    stream: str = "TRUE"
-    data: str = Field(default="{}", description="JSON-encoded payload")
-
-
 # Services initialization
 logger = BotFactoryLogger()
 rag_svc = RagService()
@@ -137,7 +122,20 @@ def chat():
 
 @bp.route(f"{CONTROLLER_PATH}/trigfirstmessage", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
-@api.validate(query=FirstMessageQuery, tags=["rag"], security={"BearerAuth": []})
+# No @api.validate here (unlike other routes in this file): its Flask
+# plugin calls response.get_data() unconditionally on any flask.Response
+# returned by the view -- see spectree/plugins/flask_plugin.py,
+# validate_response() -- which forces this endpoint's streamed SSE
+# Response to fully drain into memory and rebuilds a brand-new buffered
+# Response from the result, before Werkzeug ever writes a byte to the
+# socket. Confirmed empirically: the whole answer arrived in one burst at
+# curl even with zero proxies in front of Flask, direct_passthrough=True
+# on the Response, and a verified-streaming LangChain chain underneath --
+# only removing this decorator fixed it. Auth is unaffected: role_required
+# already wraps @jwt_required() itself (ai_server/decorators/role_required.py),
+# and query args are validated manually below regardless (the function
+# never reads request.context, so @api.validate's query model was never
+# actually consumed).
 def trigfirstmessage():
     """Trigger first welcome message for a bot"""
     try:
@@ -179,11 +177,29 @@ def trigfirstmessage():
             return Response(
                 stream_with_context(response_iterator),
                 mimetype="text/event-stream",
+                # NOT direct_passthrough=True: that skips Werkzeug's
+                # automatic str->bytes encoding of yielded chunks
+                # (Response.iter_encoded), but rag_svc.py's generator
+                # yields plain `str` (f-strings), not `bytes` -- Werkzeug's
+                # dev server asserts `isinstance(data, bytes)` on write and
+                # crashes mid-response with direct_passthrough on. Not
+                # needed anyway: the actual bug was @api.validate silently
+                # calling response.get_data() (removed above, see that
+                # comment) -- nothing else in this codebase touches the
+                # response body, so the default (False) is fine here.
                 headers={
                     "Cache-Control": "no-cache",
                     "Connection": "keep-alive",
                     "Content-Type": "text/event-stream",
                     "Access-Control-Allow-Origin": "*",
+                    # Standard signal nginx honors to disable proxy_buffering
+                    # for this response specifically -- defense in depth
+                    # alongside the `proxy_buffering off` now set on the
+                    # /api/ location itself (client/nginx.conf.template);
+                    # without either, nginx buffers the whole SSE stream and
+                    # delivers it to the browser in one shot at the end,
+                    # even though this generator yields per LLM chunk.
+                    "X-Accel-Buffering": "no",
                 },
             )
         else:
@@ -205,7 +221,9 @@ def trigfirstmessage():
 
 @bp.route(f"{CONTROLLER_PATH}/streamchat", methods=["GET"])
 @role_required([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
-@api.validate(query=StreamChatQuery, tags=["rag"], security={"BearerAuth": []})
+# No @api.validate here -- cf. the identical comment on trigfirstmessage()
+# above for why (spectree's Flask plugin unconditionally drains streamed
+# Response bodies via get_data() before Werkzeug can stream them).
 def streamchat():
     """Stream chat endpoint with real-time responses"""
     try:
@@ -246,11 +264,16 @@ def streamchat():
         return Response(
             stream_with_context(response_iterator),
             mimetype="text/event-stream",
+            # No direct_passthrough=True here -- cf. the comment in
+            # trigfirstmessage() above (it breaks Werkzeug's str->bytes
+            # encoding for this generator's plain-str yields).
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "Content-Type": "text/event-stream",
                 "Access-Control-Allow-Origin": "*",
+                # Cf. same header in trigfirstmessage() above.
+                "X-Accel-Buffering": "no",
             },
         )
 

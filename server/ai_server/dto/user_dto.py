@@ -1,5 +1,5 @@
 from dataclasses import dataclass, asdict, field
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
@@ -12,6 +12,9 @@ class UserDto:
     is_active: bool
     selected_bot_id: int = -1
     assigned_bots: List = field(default_factory=list)
+    parent_email: Optional[str] = None
+    owned_bots_count: int = 0
+    created_at: str = ""
 
     def to_dict(self):
         return asdict(self)
