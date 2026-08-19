@@ -321,8 +321,18 @@
   gap: 0.375rem;
   position: absolute;
   right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
+  // Vertically centered via top/bottom + auto margins rather than
+  // top: 50%; transform: translateY(-50%) -- the [@slideIn] trigger on
+  // this same element sets its own inline `transform` (translateX) for
+  // the enter/leave animation, which clobbers a transform-based center
+  // for the animation's duration: the row would visibly drop down (no Y
+  // offset while animating) then snap back up once Angular clears the
+  // inline style and the CSS transform re-applies. top/bottom + margin
+  // doesn't touch transform, so it isn't affected by that.
+  top: 0;
+  bottom: 0;
+  margin-top: auto;
+  margin-bottom: auto;
   padding-left: 0.875rem;
   border-left: 2px solid var(--border-primary);
   background: var(--bg-hover);
