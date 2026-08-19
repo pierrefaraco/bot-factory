@@ -72,6 +72,8 @@
                   </span>
                 </td>
                 <td appColumn>{{ user.assigned_bots?.length || 0 }}</td>
+                <td appColumn>{{ guestTokens24h(user) | number }}</td>
+                <td appColumn>{{ guestTokens30d(user) | number }}</td>
                 <td appColumn>{{ user.created_at | date:'dd/MM/yyyy' }}</td>
                 <td appColumn>
                   <div class="dropdown" *ngIf="user.id != -1">
@@ -156,6 +158,17 @@
                        never appear in this list at all. -->
                   <span *ngIf="user.roles === 'Guest'">{{ user.assigned_bots?.length || 0 }}</span>
                   <span *ngIf="user.roles === 'User'">{{ user.owned_bots_count || 0 }}</span>
+                </td>
+                <td appColumn>
+                  <!-- Same Guest/User split as the Bots column above: a
+                       Guest's own usage vs. a User's full account total
+                       (which already includes its guests server-side). -->
+                  <span *ngIf="user.roles === 'Guest'">{{ guestTokens24h(user) | number }}</span>
+                  <span *ngIf="user.roles === 'User'">{{ userTokens24h(user) | number }}</span>
+                </td>
+                <td appColumn>
+                  <span *ngIf="user.roles === 'Guest'">{{ guestTokens30d(user) | number }}</span>
+                  <span *ngIf="user.roles === 'User'">{{ userTokens30d(user) | number }}</span>
                 </td>
                 <td appColumn>{{ user.created_at | date:'dd/MM/yyyy' }}</td>
                 <td appColumn>

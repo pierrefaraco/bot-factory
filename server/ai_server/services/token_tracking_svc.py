@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from ai_server.dao.database import TokenUsage, db
 from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = BotFactoryLogger()
@@ -396,3 +396,86 @@ class TokenTrackingService:
     def get_date_24h_ago(self) -> datetime:
         time_24h_ago = datetime.now(timezone.utc) - timedelta(hours=24)
         return time_24h_ago
+
+    def get_date_30d_ago(self) -> datetime:
+        return datetime.now(timezone.utc) - timedelta(days=30)
+
+    def get_admin_token_usage_summary(self, scope_user_id: Optional[int] = None) -> Dict:
+        """
+        Récupère, en 2 requêtes agrégées (pas de N+1), les tokens consommés
+        sur 24h et 30j pour chaque compte (user_id) et chaque guest
+        (user_guest_id).
+
+        Un guest chatte toujours sous le user_id de son parent (cf.
+        TokenCountingCallback.on_llm_end dans llm_svc.py, qui remonte
+        user_id -> parent_id et pose user_guest_id = id du guest) : le total
+        d'un compte inclut donc déjà ses guests, et scope_user_id == user_id
+        suffit à restreindre les deux requêtes au périmètre d'un compte (lui
+        + ses guests) sans avoir à connaître leurs ids à l'avance.
+
+        Args:
+            scope_user_id: si fourni, restreint aux lignes de ce compte --
+                utilisé pour un caller non-admin qui ne doit voir que son
+                propre périmètre. None (Admin) ne restreint rien.
+
+        Returns:
+            Dict avec deux mappings id -> {tokens_24h, tokens_30d}:
+            {"accounts": {user_id: {...}}, "guests": {guest_id: {...}}}
+        """
+        since_30d = self.get_date_30d_ago()
+        since_24h = self.get_date_24h_ago()
+        tokens_24h_expr = func.sum(
+            case((TokenUsage.timestamp >= since_24h, TokenUsage.total_tokens), else_=0)
+        )
+
+        try:
+            account_query = db.session.query(
+                TokenUsage.user_id,
+                tokens_24h_expr.label("tokens_24h"),
+                func.sum(TokenUsage.total_tokens).label("tokens_30d"),
+            ).filter(TokenUsage.timestamp >= since_30d)
+            if scope_user_id is not None:
+                account_query = account_query.filter(TokenUsage.user_id == scope_user_id)
+            account_rows = account_query.group_by(TokenUsage.user_id).all()
+
+            guest_query = db.session.query(
+                TokenUsage.user_guest_id,
+                tokens_24h_expr.label("tokens_24h"),
+                func.sum(TokenUsage.total_tokens).label("tokens_30d"),
+            ).filter(
+                TokenUsage.timestamp >= since_30d,
+                TokenUsage.user_guest_id.isnot(None),
+                TokenUsage.user_guest_id != -1,
+            )
+            if scope_user_id is not None:
+                guest_query = guest_query.filter(TokenUsage.user_id == scope_user_id)
+            guest_rows = guest_query.group_by(TokenUsage.user_guest_id).all()
+
+            # The CASE-based tokens_24h sum comes back from PyMySQL as
+            # Decimal (unlike a plain func.sum(int_column), which stays
+            # int) -- Flask's JSON encoder serializes Decimal as a string
+            # to avoid float precision loss, which would silently turn
+            # tokens_24h into "42" instead of 42 for API consumers. Cast
+            # both explicitly so the response is consistently numeric.
+            return {
+                "accounts": {
+                    row.user_id: {
+                        "tokens_24h": int(row.tokens_24h or 0),
+                        "tokens_30d": int(row.tokens_30d or 0),
+                    }
+                    for row in account_rows
+                },
+                "guests": {
+                    row.user_guest_id: {
+                        "tokens_24h": int(row.tokens_24h or 0),
+                        "tokens_30d": int(row.tokens_30d or 0),
+                    }
+                    for row in guest_rows
+                },
+            }
+
+        except SQLAlchemyError as e:
+            self.logger.error(f"Error getting admin token usage summary: {str(e)}")
+            return {"accounts": {}, "guests": {}}
+        finally:
+            db.session.close()

@@ -1,5 +1,7 @@
 """HTTP regression tests for /api/token-stats/* (rest_token_stats.py)."""
 
+from datetime import datetime, timedelta, timezone
+
 from ai_server.config.constant import ADMIN_ROLE, USER_ROLE
 
 from .helpers import assert_error
@@ -300,3 +302,104 @@ def test_get_stats_24h_user_golden_path_admin(http_client, api_base_url, create_
     )
 
     assert response.status_code == 200, response.text
+
+
+def test_get_admin_summary_requires_auth(http_client, api_base_url):
+    response = http_client.get(f"{api_base_url}/token-stats/admin-summary")
+
+    assert_error(response, 401)
+
+
+def test_get_admin_summary_rolls_up_guest_usage_under_parent(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login
+):
+    # A guest's usage is always recorded under its parent's user_id with
+    # user_guest_id set to the guest's own id (see TokenCountingCallback.
+    # on_llm_end in llm_svc.py) -- the account total must include it, and
+    # the guest must also show up separately keyed by its own id.
+    parent, parent_password = create_user(role=USER_ROLE)
+    guest, _guest_password = create_user(role="Guest", parent_id=parent.id)
+    bot = create_bot(parent.id)
+    create_token_usage(parent.id, bot.id, user_guest_id=guest.id, total_tokens=42)
+    headers = login(parent.mail, parent_password)
+
+    response = http_client.get(f"{api_base_url}/token-stats/admin-summary", headers=headers)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["accounts"][str(parent.id)]["tokens_24h"] == 42
+    assert body["accounts"][str(parent.id)]["tokens_30d"] == 42
+    assert body["guests"][str(guest.id)]["tokens_24h"] == 42
+    assert body["guests"][str(guest.id)]["tokens_30d"] == 42
+
+
+def test_get_admin_summary_scopes_to_own_account_for_user_role(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login
+):
+    caller, caller_password = create_user(role=USER_ROLE)
+    caller_bot = create_bot(caller.id)
+    create_token_usage(caller.id, caller_bot.id, total_tokens=10)
+
+    stranger, _stranger_password = create_user(role=USER_ROLE)
+    stranger_bot = create_bot(stranger.id)
+    create_token_usage(stranger.id, stranger_bot.id, total_tokens=99)
+
+    headers = login(caller.mail, caller_password)
+
+    response = http_client.get(f"{api_base_url}/token-stats/admin-summary", headers=headers)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert str(caller.id) in body["accounts"]
+    assert str(stranger.id) not in body["accounts"]
+
+
+def test_get_admin_summary_sees_everyone_for_admin(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login
+):
+    admin, admin_password = create_user(role=ADMIN_ROLE)
+    other, _other_password = create_user(role=USER_ROLE)
+    other_bot = create_bot(other.id)
+    create_token_usage(other.id, other_bot.id, total_tokens=7)
+
+    headers = login(admin.mail, admin_password)
+
+    response = http_client.get(f"{api_base_url}/token-stats/admin-summary", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert str(other.id) in response.json()["accounts"]
+
+
+def test_get_admin_summary_excludes_usage_older_than_30d(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login, db_session
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    old_usage = create_token_usage(user.id, bot.id, total_tokens=15)
+    old_usage.timestamp = datetime.now(timezone.utc) - timedelta(days=31)
+    db_session.commit()
+    headers = login(user.mail, password)
+
+    response = http_client.get(f"{api_base_url}/token-stats/admin-summary", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert str(user.id) not in response.json()["accounts"]
+
+
+def test_get_admin_summary_splits_24h_from_30d(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login, db_session
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    create_token_usage(user.id, bot.id, total_tokens=5)  # within last 24h
+    older_usage = create_token_usage(user.id, bot.id, total_tokens=20)
+    older_usage.timestamp = datetime.now(timezone.utc) - timedelta(days=5)
+    db_session.commit()
+    headers = login(user.mail, password)
+
+    response = http_client.get(f"{api_base_url}/token-stats/admin-summary", headers=headers)
+
+    assert response.status_code == 200, response.text
+    account = response.json()["accounts"][str(user.id)]
+    assert account["tokens_24h"] == 5
+    assert account["tokens_30d"] == 25

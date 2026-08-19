@@ -7,7 +7,8 @@ import {
   BotTokenStats,
   TotalTokens,
   AllUsersStats,
-  UserTokenStatsLast24h
+  UserTokenStatsLast24h,
+  AdminTokenUsageSummary
 } from '../models/token-stats.model';
 import { API_URL } from '../constants/user-roles.constants';
 
@@ -134,5 +135,15 @@ export class TokenStatsService {
    */
   getAllUsersStats(): Observable<AllUsersStats> {
     return this.http.get<AllUsersStats>(`${this.baseUrl}/all-users`);
+  }
+
+  /**
+   * Totaux de tokens (24h + 30j) pour chaque compte et chaque guest, en un
+   * seul appel -- tout le monde pour un Admin, seulement le compte de
+   * l'appelant (+ ses guests) pour un User. Alimente les colonnes tokens
+   * des tableaux Guest/Users de l'admin.
+   */
+  getAdminTokenUsageSummary(): Observable<AdminTokenUsageSummary> {
+    return this.http.get<AdminTokenUsageSummary>(`${this.baseUrl}/admin-summary`);
   }
 }

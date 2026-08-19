@@ -51,3 +51,17 @@ export interface UserTokenStatsLast24h {
 export interface AllUsersStats {
   users: UserTokenStats[];
 }
+
+export interface TokenUsageWindow {
+  tokens_24h: number;
+  tokens_30d: number;
+}
+
+export interface AdminTokenUsageSummary {
+  // Keyed by user id (string, since it comes back as JSON object keys) --
+  // "accounts" is a User account's own total including its guests' usage
+  // (a guest always chats under its parent's user_id server-side), while
+  // "guests" isolates each guest's own usage by its own id.
+  accounts: { [userId: string]: TokenUsageWindow };
+  guests: { [guestId: string]: TokenUsageWindow };
+}

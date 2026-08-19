@@ -23,6 +23,8 @@ import { ButtonComponent } from '../base/button/button.component';
 import { CustomDropDownMenuComponent } from '../base/custom-dropdown-menu/custom-dropdown-menu.component';
 import { AuthService } from '../../services/auth.service';
 import { SuccessNotificationService } from '../../services/success-notification.service';
+import { TokenStatsService } from '../../services/token-stats.service';
+import { AdminTokenUsageSummary } from '../../models/token-stats.model';
 import { USER_ROLES } from '../../constants/user-roles.constants';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
@@ -64,8 +66,14 @@ export class AdminComponent implements OnInit {
   // create a second Admin account at all.
   roleOptions: string[] = [USER_ROLES.USER, USER_ROLES.GUEST];
 
-  guestColumns = ['Email', 'Status', 'Assigned Bots', 'Created', 'Actions'];
-  userColumns = ['Email', 'Role', 'Status', 'Parent', 'Bots', 'Created', 'Actions'];
+  guestColumns = ['Email', 'Status', 'Assigned Bots', 'Tokens (24h)', 'Tokens (30d)', 'Created', 'Actions'];
+  userColumns = ['Email', 'Role', 'Status', 'Parent', 'Bots', 'Tokens (24h)', 'Tokens (30d)', 'Created', 'Actions'];
+
+  // Keyed by id (accounts by User.id, guests by their own id) -- loaded once
+  // in ngOnInit via loadTokenUsageSummary(), not tied to guest/user reloads
+  // since admin CRUD actions (create/delete/activate...) never change token
+  // consumption.
+  tokenUsageSummary: AdminTokenUsageSummary = { accounts: {}, guests: {} };
 
   guestStatusFilter: StatusFilter = 'all';
   userStatusFilter: StatusFilter = 'all';
@@ -84,6 +92,8 @@ export class AdminComponent implements OnInit {
     'Email': (a, b) => (a.email || '').localeCompare(b.email || ''),
     'Assigned Bots': (a, b) => (a.assigned_bots?.length || 0) - (b.assigned_bots?.length || 0),
     'Status': (a, b) => Number(a.is_active) - Number(b.is_active),
+    'Tokens (24h)': (a, b) => this.guestTokens24h(a) - this.guestTokens24h(b),
+    'Tokens (30d)': (a, b) => this.guestTokens30d(a) - this.guestTokens30d(b),
     'Created': (a, b) => this.createdAtMs(a) - this.createdAtMs(b),
   };
 
@@ -93,6 +103,8 @@ export class AdminComponent implements OnInit {
     'Parent': (a, b) => (a.parent_email || '').localeCompare(b.parent_email || ''),
     'Bots': (a, b) => this.botsCountFor(a) - this.botsCountFor(b),
     'Status': (a, b) => Number(a.is_active) - Number(b.is_active),
+    'Tokens (24h)': (a, b) => this.userTokens24h(a) - this.userTokens24h(b),
+    'Tokens (30d)': (a, b) => this.userTokens30d(a) - this.userTokens30d(b),
     'Created': (a, b) => this.createdAtMs(a) - this.createdAtMs(b),
   };
 
@@ -174,7 +186,8 @@ export class AdminComponent implements OnInit {
     private usersService: UsersService,
     private botService: BotService,
     private authService: AuthService,
-    private successNotificationService: SuccessNotificationService
+    private successNotificationService: SuccessNotificationService,
+    private tokenStatsService: TokenStatsService
   ) {}
 
   ngOnInit(): void {
@@ -186,6 +199,30 @@ export class AdminComponent implements OnInit {
     if (this.isAdmin) {
       this.loadAllUsers();
     }
+    this.loadTokenUsageSummary();
+  }
+
+  loadTokenUsageSummary(): void {
+    this.tokenStatsService.getAdminTokenUsageSummary().subscribe({
+      next: summary => this.tokenUsageSummary = summary,
+      error: error => console.error('Error loading token usage summary:', error),
+    });
+  }
+
+  guestTokens24h(user: User): number {
+    return this.tokenUsageSummary.guests[user.id]?.tokens_24h || 0;
+  }
+
+  guestTokens30d(user: User): number {
+    return this.tokenUsageSummary.guests[user.id]?.tokens_30d || 0;
+  }
+
+  userTokens24h(user: User): number {
+    return this.tokenUsageSummary.accounts[user.id]?.tokens_24h || 0;
+  }
+
+  userTokens30d(user: User): number {
+    return this.tokenUsageSummary.accounts[user.id]?.tokens_30d || 0;
   }
 
   get currentUserId(): number | null {

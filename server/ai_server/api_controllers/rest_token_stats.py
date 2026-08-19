@@ -1,7 +1,7 @@
 """Token Statistics REST API Controller"""
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, get_jwt
 from http import HTTPStatus
 from pydantic import BaseModel, Field
 
@@ -248,6 +248,28 @@ def get_stats_last_24h_by_id(user_id):
         return jsonify(stats), HTTPStatus.OK
     except Exception as exc:
         logger.error(f"Error getting user stats last 24h: {exc}")
+        return jsonify(
+            {"error": "Internal server error"}
+        ), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.route(f"{CONTROLLER_PATH}/admin-summary", methods=["GET"])
+@role_required([ADMIN_ROLE, USER_ROLE])
+@api.validate(tags=["token-stats"], security={"BearerAuth": []})
+def get_admin_token_usage_summary():
+    """Get 24h/30d token totals for every account and guest the caller can
+    see in one batch call (for the admin Guest/User tables) -- everyone for
+    Admin, only the caller's own account + guests for a User (a guest's
+    usage is always recorded under its parent's user_id, so scoping by
+    user_id already covers both)."""
+    try:
+        caller_id = get_jwt_identity()
+        roles = get_jwt().get("roles", [])
+        scope_user_id = None if ADMIN_ROLE in roles else int(caller_id)
+        summary = token_tracking_svc.get_admin_token_usage_summary(scope_user_id)
+        return jsonify(summary), HTTPStatus.OK
+    except Exception as exc:
+        logger.error(f"Error getting admin token usage summary: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
