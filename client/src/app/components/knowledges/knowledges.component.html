@@ -49,6 +49,9 @@
                     [ngClass]="selectedKnowledgeId === node.id ? 'selected-node-content' : 'node-content'"
                     [attr.tabindex]="selectedKnowledgeId === node.id ? 0 : -1">
 
+                    <!-- Espace réservé (aligne avec le bouton expand/collapse des nœuds parents) -->
+                    <span class="expand-spacer" aria-hidden="true"></span>
+
                     <!-- Icône du type de nœud -->
                     <span class="node-icon material-icons" aria-hidden="true">description</span>
 
@@ -154,8 +157,8 @@
 
                     <!-- Contenu du nœud -->
                     <div class="node-info">
-                        <span class="node-text label" [title]="node.indice + ' ' + node.name">
-                            <span class="node-indice">{{ node.indice }}</span> {{ node.name }}
+                        <span class="node-text label" [title]="node.name">
+                            {{ node.name }}
                         </span>
                     </div>
 
