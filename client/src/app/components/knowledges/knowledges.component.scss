@@ -309,13 +309,23 @@
 }
 
 // ========== Node Actions ==========
+// Absolutely positioned (relative to .node-container, which sets position:
+// relative) instead of a normal flex child: *ngIf mounting it inline used
+// to add ~40px of button height the row's own padding didn't budget for,
+// so .node-container (min-height: 56px, no fixed height) grew taller for
+// as long as the actions were visible -- the row visibly resized on every
+// hover. Taking it out of flow means it can never affect the row's height.
 .node-actions {
   display: flex;
   align-items: center;
   gap: 0.375rem;
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
   padding-left: 0.875rem;
-  margin-left: auto;
   border-left: 2px solid var(--border-primary);
+  background: var(--bg-hover);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   .node-content:hover & {
