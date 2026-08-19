@@ -236,15 +236,6 @@
 // ========== Expand Button ==========
 .expand-button {
   margin-right: 0.25rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    transform: scale(1.15) rotate(0deg);
-  }
-
-  ::ng-deep .material-icons {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
 }
 
 // ========== Node Info ==========
@@ -345,34 +336,17 @@
 
 .action-btn {
   opacity: 0.8;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   touch-action: manipulation;
 
   &:hover {
     opacity: 1;
-    transform: scale(1.2) translateY(-2px);
-  }
-
-  &:active {
-    transform: scale(1.1) translateY(0);
-    transition-duration: 0.1s;
-  }
-
-  // Effet de surbrillance au survol
-  ::ng-deep .material-icons {
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-    transition: filter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  &:hover ::ng-deep .material-icons {
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
   }
 }
 
 .action-btn-danger {
   &:hover {
     background: rgba(var(--text-warning-rgb, 239, 68, 68), 0.1) !important;
-    transform: scale(1.25) translateY(-2px);
   }
 }
 
@@ -430,12 +404,6 @@
     padding-left: 0.625rem;
   }
 
-  .action-btn {
-    &:hover {
-      transform: scale(1.15) translateY(-1px);
-    }
-  }
-
   .custom_input_field {
     padding: 0.5rem;
   }
@@ -487,10 +455,6 @@
     .action-btn {
       ::ng-deep .material-icons {
         font-size: 1.125rem;
-      }
-
-      &:hover {
-        transform: scale(1.12) translateY(-1px);
       }
     }
 
@@ -591,28 +555,3 @@
   animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-// ========== Hover Effects ==========
-.node-content,
-.selected-node-content {
-  // Effet de brillance au survol
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.1),
-      transparent
-    );
-    transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
-  }
-
-  &:hover::before {
-    left: 100%;
-  }
-}
