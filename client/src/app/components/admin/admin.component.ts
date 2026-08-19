@@ -192,13 +192,7 @@ export class AdminComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadGuestUsers();
-    // GET /users is role_required([ADMIN_ROLE]) -- a User caller would
-    // always get a guaranteed 403 here (and never see the Users tab that
-    // consumes it, since it's hidden below), so there's no reason to fire
-    // the request at all.
-    if (this.isAdmin) {
-      this.loadAllUsers();
-    }
+    this.loadAllUsers();
     this.loadTokenUsageSummary();
   }
 
@@ -352,6 +346,15 @@ export class AdminComponent implements OnInit {
   }
 
   loadAllUsers() {
+    // GET /users is role_required([ADMIN_ROLE]) -- a User caller would
+    // always get a guaranteed 403 (and never see the Users tab that
+    // consumes it, since it's hidden below). Guarded here rather than at
+    // each call site so every other caller -- role changes, activate/
+    // deactivate, delete, bot assignment, all of which refresh this list
+    // after acting -- doesn't have to remember to check isAdmin itself.
+    if (!this.isAdmin) {
+      return;
+    }
     this.usersLoading = true;
     this.usersService.getUsers()
       .pipe(finalize(() => this.usersLoading = false))
