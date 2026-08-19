@@ -17,6 +17,7 @@ import { MatInputModule } from '@angular/material/input';
 import { Observable } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { DataDialogComponent } from './knowledges-dialog/data-dialog.component';
+import { ConfirmDialogComponent } from '../base/confirm-dialog/confirm-dialog.component';
 import { Knowledge, FlatChapterNode } from '@app/models/knowledge.model';
 import { ButtonComponent } from '../base/button/button.component';
 import { CustomDropDownMenuComponent } from '../base/custom-dropdown-menu/custom-dropdown-menu.component';
@@ -42,7 +43,8 @@ import { trigger, state, style, transition, animate } from '@angular/animations'
     MatInputModule,
     ReactiveFormsModule,
     ButtonComponent,
-    CustomDropDownMenuComponent
+    CustomDropDownMenuComponent,
+    ConfirmDialogComponent
   ],
   selector: 'app-knowledges',
   templateUrl: './knowledges.component.html',
@@ -270,18 +272,32 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
       
     }
     console.log('chapter_id',chapter_id)
-    if (confirm('Are you sure you want to delete this chapter?')) {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete chapter',
+        message: 'Are you sure you want to delete this chapter? This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+      },
+      width: '420px',
+      panelClass: 'confirm-dialog-panel',
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) {
+        return;
+      }
       this.knowledgeService.deleteKnowledge(chapter_id).subscribe({
         next: () => {
           this.communicationService.onSelectKnowledge(null);
-          
+
           this.loadChapters();
           this.showMessage('Chapter deleted successfully', 'success');
           this.transmitToAlfred()
         },
         error: (error) => this.showMessage('Error deleting chapter', 'error')
       });
-    }
+    });
   }
 
   mouseEneterKnowledge(knowledMouseEnterId: number) {

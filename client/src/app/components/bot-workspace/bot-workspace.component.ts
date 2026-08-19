@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { Subscription } from 'rxjs';
 
 // Composants
@@ -19,6 +20,7 @@ import { Avatar } from '@app/models/avatar.model';
 import { ButtonComponent } from '../base/button/button.component';
 import { KnowledgeEditorComponent } from '../knowledges/knowledge-editor/knowledge-editor.component';
 import { USER_ROLES } from '../../constants/user-roles.constants';
+import { ConfirmDialogComponent } from '../base/confirm-dialog/confirm-dialog.component';
 
 @Component({
   selector: 'app-bot-workspace',
@@ -26,6 +28,7 @@ import { USER_ROLES } from '../../constants/user-roles.constants';
   imports: [
     CommonModule,
     RouterModule,
+    MatDialogModule,
     BotListComponent,
     ChatComponent,
     KnowledgesComponent,
@@ -34,6 +37,7 @@ import { USER_ROLES } from '../../constants/user-roles.constants';
     SvgAvatarComponent,
     BotDrawComponent,
     ButtonComponent,
+    ConfirmDialogComponent,
 
   ],
   templateUrl: './bot-workspace.component.html',
@@ -56,7 +60,8 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
     private router: Router,
     private route: ActivatedRoute,
     private botService: BotService,
-    private authService: AuthService
+    private authService: AuthService,
+    private dialog: MatDialog
   ) {
     this.updateLayoutBasedOnScreenSize();
   }
@@ -163,16 +168,26 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
   }
 
   deleteBot(bot_id: number): void {
-    console.log('delete bot')
-    // Convertir la méthode synchrone en Observable
-    if (confirm("Are you sure you want to delete this bot?")) {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete bot',
+        message: 'Are you sure you want to delete this bot? This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+      },
+      width: '420px',
+      panelClass: 'confirm-dialog-panel',
+    });
 
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) {
+        return;
+      }
       this.botService.deleteBot(bot_id).subscribe(() => {
         this.selectedBot = null;
         this.botListComponent.refresh();
       });
-
-    }
+    });
   }
 
   get hasSelectedBot(): boolean {

@@ -17,6 +17,7 @@ import { ArrayComponent } from "../base/array/array.component";
 import { LineComponent } from "../base/array/line/line.component";
 import { ColumnComponent } from "../base/array/column/column.component";
 import { CustomDropDownMenuComponent } from "../base/custom-dropdown-menu/custom-dropdown-menu.component";
+import { ConfirmDialogComponent } from "../base/confirm-dialog/confirm-dialog.component";
 import { CommunicationService } from "@app/services/communication.service";
 import { Subscription } from "rxjs";
 import { MatListModule } from '@angular/material/list';
@@ -42,6 +43,7 @@ import { USER_ROLES } from "@app/constants/user-roles.constants";
     LineComponent,
     ColumnComponent,
     CustomDropDownMenuComponent,
+    ConfirmDialogComponent,
     MatListModule
   ],
 })
@@ -311,9 +313,21 @@ export class BotListComponent implements OnInit, OnDestroy {
 
 
   deleteBot(bot_id: number): void {
-    // Convertir la méthode synchrone en Observable
-    if (confirm("Are you sure you want to delete this bot?")) {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Delete bot',
+        message: 'Are you sure you want to delete this bot? This cannot be undone.',
+        confirmLabel: 'Delete',
+        danger: true,
+      },
+      width: '420px',
+      panelClass: 'confirm-dialog-panel',
+    });
 
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) {
+        return;
+      }
       this.botService.deleteBot(bot_id).subscribe(() => {
         this.bots = this.bots.filter((bot) => bot.id !== bot_id);
         this.totalPages = Math.ceil(this.bots.length / this.pageSize);
@@ -321,8 +335,7 @@ export class BotListComponent implements OnInit, OnDestroy {
         if (this.bots.length > 0)
           this.selected_bot = this.bots[0];
       });
-
-    }
+    });
   }
 
 
