@@ -65,12 +65,6 @@
               [sortableColumns]="guestSortableColumns"
               [emptyMessage]="'No guests yet — create one to get started'">
               <tr appLine *ngFor="let user of guestArray.paginatedRecords">
-                <td appColumn>
-                  <app-button *ngIf="user.id !==-1" (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
-                  [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="user.is_active ? 'var(--btn-color1)' : 'var(--bg-danger)'"
-                  [disabled]="false" [title]="user.is_active ? 'Deactivate' : 'Activate'">
-                </app-button>
-                </td>
                 <td appColumn>{{ user.email }}</td>
                 <td appColumn>
                   <span class="status-badge" [class.status-active]="user.is_active" [class.status-inactive]="!user.is_active">
@@ -83,9 +77,9 @@
                   <div class="dropdown" *ngIf="user.id != -1">
                     <app-button [icon]="'more_vert'" [label]="'more'" [color]="'var(--text-primary)'"
                     [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color1)'"
-                    [disabled]="false" data-bs-toggle="dropdown">
+                    [disabled]="false" data-bs-toggle="dropdown" data-bs-display="static">
                   </app-button>
-                  <app-custom-dropdown-menu [params]="user" [items]="actionItemList" aria-labelledby="navbarDropdown">
+                  <app-custom-dropdown-menu [params]="user" [items]="getGuestActionItems(user)" aria-labelledby="navbarDropdown">
                   </app-custom-dropdown-menu>
                   </div>
                 </td>
@@ -130,12 +124,6 @@
               <!-- #allUsersArray (local ref) so this table's own pagination
                    state updates independently from #guestArray above. -->
               <tr appLine *ngFor="let user of allUsersArray.paginatedRecords">
-                <td appColumn>
-                  <app-button (buttonClickedEvent)="toggleUserStatus(user)" [icon]="user.is_active ? 'pause' : 'play_arrow'" [label]="'more'" [color]="'var(--text-primary)'"
-                  [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="user.is_active ? 'var(--btn-color1)' : 'var(--bg-danger)'"
-                  [disabled]="false" [title]="user.is_active ? 'Deactivate' : 'Activate'">
-                </app-button>
-                </td>
                 <td appColumn>{{ user.email }}</td>
                 <td appColumn>
                   <!-- Plain text for the caller's own (always Admin) row:
@@ -174,10 +162,10 @@
                   <div class="dropdown">
                     <app-button [icon]="'more_vert'" [label]="'more'" [color]="'var(--text-primary)'"
                     [color]="'var(--text-primary)'" [type]="'icon-button'" [backgroundColor]="'var(--btn-color1)'"
-                    [disabled]="user.id === currentUserId" data-bs-toggle="dropdown"
+                    [disabled]="user.id === currentUserId" data-bs-toggle="dropdown" data-bs-display="static"
                     [title]="user.id === currentUserId ? 'You cannot manage your own account' : 'more'">
                   </app-button>
-                  <app-custom-dropdown-menu *ngIf="user.id !== currentUserId" [params]="user" [items]="allUsersActionItemList" aria-labelledby="navbarDropdownAllUsers">
+                  <app-custom-dropdown-menu *ngIf="user.id !== currentUserId" [params]="user" [items]="getUserActionItems(user)" aria-labelledby="navbarDropdownAllUsers">
                   </app-custom-dropdown-menu>
                   </div>
                 </td>

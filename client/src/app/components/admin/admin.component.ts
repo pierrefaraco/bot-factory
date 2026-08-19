@@ -64,8 +64,8 @@ export class AdminComponent implements OnInit {
   // create a second Admin account at all.
   roleOptions: string[] = [USER_ROLES.USER, USER_ROLES.GUEST];
 
-  guestColumns = ['Activate', 'Email', 'Status', 'Assigned Bots', 'Created', 'Actions'];
-  userColumns = ['Activate', 'Email', 'Role', 'Status', 'Parent', 'Bots', 'Created', 'Actions'];
+  guestColumns = ['Email', 'Status', 'Assigned Bots', 'Created', 'Actions'];
+  userColumns = ['Email', 'Role', 'Status', 'Parent', 'Bots', 'Created', 'Actions'];
 
   guestStatusFilter: StatusFilter = 'all';
   userStatusFilter: StatusFilter = 'all';
@@ -96,35 +96,51 @@ export class AdminComponent implements OnInit {
     'Created': (a, b) => this.createdAtMs(a) - this.createdAtMs(b),
   };
 
-  actionItemList = [
-    {
-      label: "Edit User",
-      color:  "var(--text-accent)",
-      icon: "edit",
-      action: (user) => {this.editUser(user)}
-    },
-    {
-      label: "Assign Bot",
+  // Activate/Deactivate's label, icon and action all depend on the row's
+  // current is_active, so it can't be a static item like the rest of the
+  // list -- built fresh per row by getGuestActionItems/getUserActionItems
+  // below instead.
+  private toggleStatusItem(user: User) {
+    return {
+      label: user.is_active ? "Deactivate" : "Activate",
       color: "var(--text-accent)",
-      icon: "smart_toy",
-      action: (user) => {this.assignBot(user)}
-    },
-    {
-      label: "Change Password",
-      color: "var(--text-accent)",
-      icon: "lock",
-      action: (user) => {this.openPasswordModal(user)}
-    },
-    {
-      divider: true,
-      color:"var(--text-primary)"
-    }, {
-      label: "Delete",
-      color: "var(--text-danger)",
-      icon: "delete",
-      action:  (user) => {this.deleteUser(user)}
-    }
-  ]
+      icon: user.is_active ? "pause" : "play_arrow",
+      action: (user) => {this.toggleUserStatus(user)}
+    };
+  }
+
+  getGuestActionItems(user: User) {
+    return [
+      this.toggleStatusItem(user),
+      {
+        label: "Edit User",
+        color:  "var(--text-accent)",
+        icon: "edit",
+        action: (user) => {this.editUser(user)}
+      },
+      {
+        label: "Assign Bot",
+        color: "var(--text-accent)",
+        icon: "smart_toy",
+        action: (user) => {this.assignBot(user)}
+      },
+      {
+        label: "Change Password",
+        color: "var(--text-accent)",
+        icon: "lock",
+        action: (user) => {this.openPasswordModal(user)}
+      },
+      {
+        divider: true,
+        color:"var(--text-primary)"
+      }, {
+        label: "Delete",
+        color: "var(--text-danger)",
+        icon: "delete",
+        action:  (user) => {this.deleteUser(user)}
+      }
+    ];
+  }
 
   // "Edit User"/"Change Password" left out on purpose: PUT /users/password/
   // guest/<id> only ever authorizes the caller's own children
@@ -132,23 +148,26 @@ export class AdminComponent implements OnInit {
   // merged /users/<id> route), so it would 403 for most rows in this
   // platform-wide list. Role change has its own dedicated inline control
   // instead of living in this menu.
-  allUsersActionItemList = [
-    {
-      label: "Assign Bot",
-      color: "var(--text-accent)",
-      icon: "smart_toy",
-      action: (user) => {this.assignBot(user)}
-    },
-    {
-      divider: true,
-      color: "var(--text-primary)"
-    }, {
-      label: "Delete",
-      color: "var(--text-danger)",
-      icon: "delete",
-      action: (user) => {this.deleteUser(user)}
-    }
-  ]
+  getUserActionItems(user: User) {
+    return [
+      this.toggleStatusItem(user),
+      {
+        label: "Assign Bot",
+        color: "var(--text-accent)",
+        icon: "smart_toy",
+        action: (user) => {this.assignBot(user)}
+      },
+      {
+        divider: true,
+        color: "var(--text-primary)"
+      }, {
+        label: "Delete",
+        color: "var(--text-danger)",
+        icon: "delete",
+        action: (user) => {this.deleteUser(user)}
+      }
+    ];
+  }
 
   constructor(
     private dialog: MatDialog,
