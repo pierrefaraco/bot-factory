@@ -62,6 +62,13 @@ export class KnowledgeEditorComponent implements OnInit, OnDestroy {
     });
     this.subscriptionSelectBot = this.communicationService.triggerOnSelectBot$.subscribe((bot) => {
       console.log("KnowledgeEditorComponent DataComponent selected bot: ", bot);
+      if (this.selectedBot && bot && this.selectedBot.id !== bot.id) {
+        // Switching to a different bot invalidates the currently displayed
+        // knowledge (it belongs to the previous bot's tree) -- clear it so
+        // the editor falls back to the "select an item" placeholder instead
+        // of showing stale content until the user picks a new node.
+        this.selectedKnowledge = null;
+      }
       this.selectedBot = bot
     })
     this.knowledgeNameCtrl = new FormControl('', Validators.required);
