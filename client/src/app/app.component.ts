@@ -139,9 +139,11 @@ export class AppComponent implements OnInit {
       if (!passwords) {
         return;
       }
-      this.usersService.updateProfilePassword({ old_password: passwords.old_password,new_password:  passwords.new_password}).subscribe(
-          (user)=>this.myCurrentUser = user
-      )
+      // PUT /users/password/me returns {"msg": "..."}, not a user (see
+      // change_password in rest_users_admin.py) -- assigning that response
+      // to myCurrentUser used to clobber it, losing .email and blanking the
+      // nav's mail-based user menu.
+      this.usersService.updateProfilePassword({ old_password: passwords.old_password,new_password:  passwords.new_password}).subscribe()
     })
   }
 

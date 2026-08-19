@@ -109,7 +109,14 @@ export class UsersService {
 
 
   updateProfile(data: ProfileUpdateData): Observable<User> {
-    return this.http.put<User>(`${API_URL}/users/me`, data);
+    // PUT /users/me wraps the updated user as {"message": ..., "user": {...}}
+    // (see _update_users in rest_users_admin.py), not a bare User -- without
+    // unwrapping, a caller assigning the raw response to its User state (e.g.
+    // AppComponent.myCurrentUser) would clobber it with this envelope object,
+    // losing .email and blanking the nav's mail-based user menu.
+    return this.http
+      .put<{ message: string; user: User }>(`${API_URL}/users/me`, data)
+      .pipe(map((response) => response.user));
   }
 
   updateGuestPassword(userId: number, passwordData: { old_password: string; new_password: string;  }): Observable<any> {
