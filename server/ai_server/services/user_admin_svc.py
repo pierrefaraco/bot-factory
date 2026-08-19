@@ -352,7 +352,16 @@ class UserAdminService(BaseService[UserDto]):
         if not user:
             raise NotFoundError("User", str(user_id))
 
-        for key, value in data.items():
+        # UserUpdateRequest's "email" field maps to the User model's "mail"
+        # column (user_to_dto already does the reverse, user.mail -> "email",
+        # on the read side) -- without this, hasattr(user, "email") is always
+        # False (there's no such attribute), so the loop below silently
+        # skipped every email update instead of applying it.
+        update_fields = dict(data)
+        if "email" in update_fields:
+            update_fields["mail"] = update_fields.pop("email")
+
+        for key, value in update_fields.items():
             if hasattr(user, key) and value is not None:
                 setattr(user, key, value)
 

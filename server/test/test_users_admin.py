@@ -149,6 +149,23 @@ def test_update_self_requires_auth(http_client, api_base_url):
     assert_error(response, 401)
 
 
+def test_update_self_changes_email(http_client, api_base_url, create_user, login):
+    # Regression test: UserUpdateRequest's "email" field has no matching
+    # attribute on the User model (the column is "mail") -- _perform_update's
+    # generic `hasattr(user, key)` loop silently skipped it instead of
+    # applying the change.
+    user, password = create_user()
+    headers = login(user.mail, password)
+    new_email = unique("renamed") + "@example.com"
+
+    response = http_client.put(
+        f"{api_base_url}/users/me", json={"email": new_email}, headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["email"] == new_email
+
+
 def test_update_guest_golden_path(http_client, api_base_url, create_user, login):
     parent, parent_password = create_user(role=USER_ROLE)
     guest, _guest_password = create_user(role=GUEST_ROLE, parent_id=parent.id)
@@ -163,6 +180,22 @@ def test_update_guest_golden_path(http_client, api_base_url, create_user, login)
 
     assert response.status_code == 200, response.text
     assert response.json()["user"]["name"] == new_name
+
+
+def test_update_guest_changes_email(http_client, api_base_url, create_user, login):
+    parent, parent_password = create_user(role=USER_ROLE)
+    guest, _guest_password = create_user(role=GUEST_ROLE, parent_id=parent.id)
+    headers = login(parent.mail, parent_password)
+    new_email = unique("renamed") + "@example.com"
+
+    response = http_client.put(
+        f"{api_base_url}/users/{guest.id}",
+        json={"email": new_email},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["email"] == new_email
 
 
 def test_update_guest_not_owned(http_client, api_base_url, create_user, login):
@@ -203,6 +236,20 @@ def test_update_admin_golden_path(http_client, api_base_url, create_user, login)
 
     assert response.status_code == 200, response.text
     assert response.json()["user"]["name"] == new_name
+
+
+def test_update_admin_changes_email(http_client, api_base_url, create_user, login):
+    admin, admin_password = create_user(role=ADMIN_ROLE)
+    target, _target_password = create_user()
+    headers = login(admin.mail, admin_password)
+    new_email = unique("renamed") + "@example.com"
+
+    response = http_client.put(
+        f"{api_base_url}/users/{target.id}", json={"email": new_email}, headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["user"]["email"] == new_email
 
 
 def test_update_forbidden_for_unrelated_user(
