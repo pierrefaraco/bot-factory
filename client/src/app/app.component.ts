@@ -117,6 +117,12 @@ export class AppComponent implements OnInit {
     });
 
     dialogRef.afterClosed().subscribe(user=> {
+      // Cancel closes the dialog with no value (see CustomDialogComponent.
+      // onCancel / UserDialogComponent.onCancel) -- without this guard,
+      // Cancel still fired PUT /users/me with an empty body, 400ing.
+      if (!user) {
+        return;
+      }
       this.usersService.updateProfile(user).subscribe(
           (user)=>this.myCurrentUser = user
       )
@@ -129,6 +135,10 @@ export class AppComponent implements OnInit {
 
 
     dialogRef.afterClosed().subscribe(passwords=> {
+      // Same Cancel-closes-with-no-value case as openProfilDialog above.
+      if (!passwords) {
+        return;
+      }
       this.usersService.updateProfilePassword({ old_password: passwords.old_password,new_password:  passwords.new_password}).subscribe(
           (user)=>this.myCurrentUser = user
       )
