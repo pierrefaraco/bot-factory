@@ -27,5 +27,5 @@ class YamlSvc:
                 self.logger.debug(f"Successfully loaded YAML file: {file_path}")
                 return yaml_dict
         except Exception as e:
-            self.logger.error(f"Failed to load YAML file {file_path}: {e}")
+            self.logger.exception(f"Failed to load YAML file {file_path}: {e}")
             raise e

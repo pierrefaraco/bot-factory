@@ -9,13 +9,14 @@ from ai_server.config.openapi import api, pydantic_error_messages
 from typing import Callable
 import os
 import json
+import time
 
 from ai_server.services.message_svc import MessageService
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.decorators.role_required import role_required
 from ai_server.services.rag_svc import RagService, message_service
-from ai_server.api_controllers.rest_bot_parameters import bot_parameters_svc
+from ai_server.rest.rest_bot_parameters import bot_parameters_svc
 from ai_server.services.knowledge_svc import KnowledgeSvc
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.dao.database import User
@@ -84,37 +85,52 @@ def _check_bot_access_permission(user: User, bot_id: int) -> bool:
 @api.validate(json=ChatRequest, tags=["rag"], security={"BearerAuth": []})
 def chat():
     """Basic chat endpoint"""
+    logger.info(f"POST {CONTROLLER_PATH}/chat - chat called")
     try:
         if not request.is_json:
+            logger.warning("chat rejected: Content-Type is not application/json")
             return jsonify(
                 {"error": "Content-Type must be application/json"}
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
         validated_data = ChatRequest.model_validate(data).model_dump()
+        logger.debug(f"chat question length={len(validated_data['question'])}")
 
         user_id = get_jwt_identity()
         user: User = user_svc.get_user_by_id(user_id)
         if not user:
+            logger.warning(f"chat rejected: user {user_id} not found")
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
         selected_bot_id = user.selected_bot_id
         if not selected_bot_id:
+            logger.warning(f"chat rejected: user {user_id} has no selected bot")
             return jsonify(
                 {"error": f"You have to select a bot on the app"}
             ), HTTPStatus.CONFLICT
         # Check bot access permission
         if not _check_bot_access_permission(user, selected_bot_id):
+            logger.warning(
+                f"chat forbidden: user {user_id} has no access to bot {selected_bot_id}"
+            )
             return jsonify(
                 {"error": f"You don't have permission to access bot {selected_bot_id}"}
             ), HTTPStatus.FORBIDDEN
 
+        started_at = time.perf_counter()
         response = rag_svc.ask(selected_bot_id, user_id, validated_data["question"])
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.info(
+            f"chat succeeded for user_id={user_id} bot_id={selected_bot_id} "
+            f"elapsed_ms={elapsed_ms:.1f} - status={HTTPStatus.OK}"
+        )
         return jsonify({"response": response}), HTTPStatus.OK
 
     except ValidationError as e:
+        logger.warning(f"chat validation error: {pydantic_error_messages(e)}")
         return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
-        logger.error(f"Chat error: {exc}")
+        logger.exception(f"Chat error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -138,29 +154,37 @@ def chat():
 # actually consumed).
 def trigfirstmessage():
     """Trigger first welcome message for a bot"""
+    logger.info(f"GET {CONTROLLER_PATH}/trigfirstmessage - trigfirstmessage called")
     try:
         user_id = get_jwt_identity()
         user: User = user_svc.get_user_by_id(user_id)
         if not user:
+            logger.warning(f"trigfirstmessage rejected: user {user_id} not found")
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
         bot_id = user.selected_bot_id
         if not bot_id:
+            logger.warning(f"trigfirstmessage rejected: user {user_id} has no selected bot")
             return jsonify({"error": "Bot_id is required"}), HTTPStatus.BAD_REQUEST
 
         try:
             bot_id = int(bot_id)
         except ValueError:
+            logger.warning(f"trigfirstmessage rejected: invalid bot_id format {bot_id!r}")
             return jsonify({"error": "Invalid bot_id format"}), HTTPStatus.BAD_REQUEST
 
         # Check bot access permission
         if not _check_bot_access_permission(user, bot_id):
+            logger.warning(
+                f"trigfirstmessage forbidden: user {user_id} has no access to bot {bot_id}"
+            )
             return jsonify(
                 {"error": f"You don't have permission to access bot {bot_id}"}
             ), HTTPStatus.FORBIDDEN
 
         question = bot_parameters_svc.get_welcome_message(user.name, bot_id)
         stream_response = request.args.get("stream", "TRUE").upper() == "TRUE"
+        logger.debug(f"trigfirstmessage params: bot_id={bot_id} stream={stream_response}")
         if stream_response:
             data = json.loads(request.args.get("data", "{}"))
             session = message_service.get_session(bot_id, user_id)
@@ -174,6 +198,9 @@ def trigfirstmessage():
             )
             response_iterator = generate(rag_svc)
 
+            logger.info(
+                f"trigfirstmessage streaming started for user_id={user_id} bot_id={bot_id}"
+            )
             return Response(
                 stream_with_context(response_iterator),
                 mimetype="text/event-stream",
@@ -204,16 +231,22 @@ def trigfirstmessage():
             )
         else:
             delete_session_history(bot_id)
+            started_at = time.perf_counter()
             response = rag_svc.ask(bot_id, user_id, question, hide=True)
-            logger.debug(f"RAG response generated for bot {bot_id}, user {user_id}")
+            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            logger.info(
+                f"trigfirstmessage succeeded for user_id={user_id} bot_id={bot_id} "
+                f"elapsed_ms={elapsed_ms:.1f} - status={HTTPStatus.OK}"
+            )
             return jsonify({"response": response}), HTTPStatus.OK
 
     except json.JSONDecodeError:
+        logger.warning("trigfirstmessage rejected: invalid JSON in data parameter")
         return jsonify(
             {"error": "Invalid JSON in data parameter"}
         ), HTTPStatus.BAD_REQUEST
     except Exception as exc:
-        logger.error(f"First message error: {exc}")
+        logger.exception(f"First message error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -226,41 +259,51 @@ def trigfirstmessage():
 # Response bodies via get_data() before Werkzeug can stream them).
 def streamchat():
     """Stream chat endpoint with real-time responses"""
+    logger.info(f"GET {CONTROLLER_PATH}/streamchat - streamchat called")
     try:
         user_id = get_jwt_identity()
         user: User = user_svc.get_user_by_id(user_id)
 
         if not user:
+            logger.warning(f"streamchat rejected: user {user_id} not found")
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
         question = request.args.get("question")
         bot_id = request.args.get("bot_id")
 
         if not question or not question.strip():
+            logger.warning(f"streamchat rejected: missing question for user {user_id}")
             return jsonify(
                 {"error": "Question parameter is required"}
             ), HTTPStatus.BAD_REQUEST
         if not bot_id:
+            logger.warning(f"streamchat rejected: missing bot_id for user {user_id}")
             return jsonify({"error": "Bot_id is required"}), HTTPStatus.BAD_REQUEST
 
         try:
             bot_id = int(bot_id)
         except ValueError:
+            logger.warning(f"streamchat rejected: invalid bot_id format {bot_id!r}")
             return jsonify({"error": "Invalid bot_id format"}), HTTPStatus.BAD_REQUEST
 
         # Check bot access permission
         if not _check_bot_access_permission(user, bot_id):
+            logger.warning(
+                f"streamchat forbidden: user {user_id} has no access to bot {bot_id}"
+            )
             return jsonify(
                 {"error": f"You don't have permission to access bot {bot_id}"}
             ), HTTPStatus.FORBIDDEN
 
         data = json.loads(request.args.get("data", "{}"))
+        logger.debug(f"streamchat question length={len(question)}")
         session = message_service.get_session(bot_id, user_id)
         generate: Callable = rag_svc.ask_with_stream(
             bot_id, user_id, data, question, session_id=session.id if session else -1
         )
         response_iterator = generate(rag_svc)
 
+        logger.info(f"streamchat streaming started for user_id={user_id} bot_id={bot_id}")
         return Response(
             stream_with_context(response_iterator),
             mimetype="text/event-stream",
@@ -278,11 +321,12 @@ def streamchat():
         )
 
     except json.JSONDecodeError:
+        logger.warning("streamchat rejected: invalid JSON in data parameter")
         return jsonify(
             {"error": "Invalid JSON in data parameter"}
         ), HTTPStatus.BAD_REQUEST
     except Exception as exc:
-        logger.error(f"Stream chat error: {exc}")
+        logger.exception(f"Stream chat error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -293,19 +337,26 @@ def streamchat():
 @api.validate(tags=["rag"], security={"BearerAuth": []})
 def transmit_to_alfred(bot_id):
     """Transmit chapters to vector database"""
+    logger.info(f"POST {CONTROLLER_PATH}/transmit_to_alfred/{bot_id} - transmit_to_alfred called")
     try:
         user_id = get_jwt_identity()
         logger.info(
             f"User {user_id} transmitting chapters for bot {bot_id} to vector DB"
         )
 
+        started_at = time.perf_counter()
         knowledge_svc.recordChaptersToVectorDB(bot_id)
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.info(
+            f"transmit_to_alfred succeeded for bot_id={bot_id} "
+            f"elapsed_ms={elapsed_ms:.1f} - status={HTTPStatus.OK}"
+        )
         return jsonify(
             {"message": "Chapters transmitted to Alfred successfully"}
         ), HTTPStatus.OK
 
     except Exception as exc:
-        logger.error(f"Transmit to Alfred error: {exc}")
+        logger.exception(f"Transmit to Alfred error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -316,19 +367,26 @@ def transmit_to_alfred(bot_id):
 @api.validate(tags=["rag"], security={"BearerAuth": []})
 def get_session_history(bot_id: int):
     """Get session history for a bot"""
+    logger.info(f"GET {CONTROLLER_PATH}/{bot_id} - get_session_history called")
     try:
         user_id = get_jwt_identity()
         session = message_service.get_session(bot_id, user_id)
         if session is None:
+            logger.info(f"get_session_history({bot_id}) no session - status={HTTPStatus.NO_CONTENT}")
             return jsonify([]), HTTPStatus.NO_CONTENT
         messages = message_service.load_session_history(session_id=session.id)
         if not messages:
+            logger.info(f"get_session_history({bot_id}) no messages - status={HTTPStatus.NO_CONTENT}")
             return jsonify([]), HTTPStatus.NO_CONTENT
 
+        logger.info(
+            f"get_session_history({bot_id}) succeeded count={len(messages)} "
+            f"- status={HTTPStatus.OK}"
+        )
         return jsonify([msg.to_dict() for msg in messages]), HTTPStatus.OK
 
     except Exception as e:
-        logger.error(f"Error loading session history: {e}")
+        logger.exception(f"Error loading session history: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -339,21 +397,26 @@ def get_session_history(bot_id: int):
 @api.validate(tags=["rag"], security={"BearerAuth": []})
 def delete_selected_bot_session_history():
     """Delete session history for the selected bot"""
+    logger.info(f"DELETE {CONTROLLER_PATH} - delete_selected_bot_session_history called")
     try:
         user_id = get_jwt_identity()
         user: User = user_svc.get_user_by_id(user_id)
         if not user:
+            logger.warning(f"delete_selected_bot_session_history rejected: user {user_id} not found")
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
         bot_id = user.selected_bot_id
         if not bot_id:
+            logger.warning(
+                f"delete_selected_bot_session_history rejected: user {user_id} has no selected bot"
+            )
             return jsonify({"error": "Bot_id is required"}), HTTPStatus.BAD_REQUEST
 
         bot_id = int(bot_id)
         return _delete_session_history(bot_id, user_id)
 
     except Exception as e:
-        logger.error(f"Error deleting session history: {e}")
+        logger.exception(f"Error deleting session history: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -364,11 +427,12 @@ def delete_selected_bot_session_history():
 @api.validate(tags=["rag"], security={"BearerAuth": []})
 def delete_session_history(bot_id: int):
     """Delete session history for a bot"""
+    logger.info(f"DELETE {CONTROLLER_PATH}/{bot_id} - delete_session_history called")
     try:
         user_id = get_jwt_identity()
         return _delete_session_history(bot_id, user_id)
     except Exception as e:
-        logger.error(f"Error deleting session history: {e}")
+        logger.exception(f"Error deleting session history: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -379,7 +443,12 @@ def _delete_session_history(bot_id: int, user_id: int):
 
     session = message_service.get_session(bot_id, user_id)
     if session is None:
+        logger.info(f"_delete_session_history({bot_id}) no session - status={HTTPStatus.OK}")
         return jsonify({"deleted_message_count": 0}), HTTPStatus.OK
 
     deleted_message_count = message_service.delete_session_history(session.id)
+    logger.info(
+        f"_delete_session_history({bot_id}) succeeded "
+        f"deleted_message_count={deleted_message_count} - status={HTTPStatus.OK}"
+    )
     return jsonify({"deleted_message_count": deleted_message_count}), HTTPStatus.OK

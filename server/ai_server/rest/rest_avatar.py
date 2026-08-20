@@ -67,8 +67,10 @@ logger = BotFactoryLogger()
 @api.validate(json=AvatarRandomRequest, tags=["avatar"], security={"BearerAuth": []})
 def create_random_avatar():
     """Create or update an avatar"""
+    logger.info(f"POST {CONTROLLER_PATH}/random - create_random_avatar called")
     try:
         if not request.is_json:
+            logger.warning("create_random_avatar rejected: Content-Type is not application/json")
             return jsonify(
                 {"error": "Content-Type must be application/json"}
             ), HTTPStatus.BAD_REQUEST
@@ -76,21 +78,30 @@ def create_random_avatar():
         data = request.get_json()
 
         validated_data = AvatarRandomRequest.model_validate(data).model_dump()
+        logger.debug(f"create_random_avatar params: bot_id={validated_data['bot_id']}")
         avatar_dto: AvatarDto = avatar_service.create_random_avatar(
             validated_data["bot_id"]
         )
         status_code = HTTPStatus.CREATED
         if not avatar_dto:
+            logger.warning(
+                f"create_random_avatar failed for bot_id={validated_data['bot_id']}"
+            )
             return jsonify(
                 {"error": "Failed to process random avatar"}
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
+        logger.info(
+            f"create_random_avatar succeeded for bot_id={validated_data['bot_id']} "
+            f"avatar_id={avatar_dto.id} - status={status_code}"
+        )
         return jsonify(avatar_dto.to_dict()), status_code
 
     except ValidationError as e:
+        logger.warning(f"create_random_avatar validation error: {pydantic_error_messages(e)}")
         return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
-        logger.error(f"Avatar random create error: {e}")
+        logger.exception(f"Avatar random create error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -101,19 +112,24 @@ def create_random_avatar():
 @api.validate(json=AvatarPatchRequest, tags=["avatar"], security={"BearerAuth": []})
 def patch_avatar():
     """Create or update an avatar"""
+    logger.info(f"PATCH {CONTROLLER_PATH} - patch_avatar called")
     try:
         if not request.is_json:
+            logger.warning("patch_avatar rejected: Content-Type is not application/json")
             return jsonify(
                 {"error": "Content-Type must be application/json"}
             ), HTTPStatus.BAD_REQUEST
         data = request.get_json()
+        logger.debug(f"patch_avatar payload keys: {list(data.keys()) if data else []}")
         avatar_service.patch_avatar(data)
+        logger.info(f"patch_avatar succeeded for bot_id={data.get('bot_id')} - status={HTTPStatus.NO_CONTENT}")
         return "", HTTPStatus.NO_CONTENT
 
     except ValidationError as e:
+        logger.warning(f"patch_avatar validation error: {pydantic_error_messages(e)}")
         return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
-        logger.error(f"Avatar create/update error: {e}")
+        logger.exception(f"Avatar create/update error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -124,32 +140,45 @@ def patch_avatar():
 @api.validate(json=AvatarRequest, tags=["avatar"], security={"BearerAuth": []})
 def create_or_update_avatar():
     """Create or update an avatar"""
+    logger.info(f"{request.method} {CONTROLLER_PATH} - create_or_update_avatar called")
     try:
         if not request.is_json:
+            logger.warning("create_or_update_avatar rejected: Content-Type is not application/json")
             return jsonify(
                 {"error": "Content-Type must be application/json"}
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
         validated_data = AvatarRequest.model_validate(data).model_dump(exclude_unset=True)
+        logger.debug(f"create_or_update_avatar params: bot_id={validated_data.get('bot_id')}")
         if request.method == "POST":
             avatar_dto: AvatarDto = avatar_service.create(validated_data)
+            logger.info(
+                f"create_or_update_avatar (create) succeeded for bot_id={validated_data.get('bot_id')} "
+                f"avatar_id={avatar_dto.id} - status={HTTPStatus.CREATED}"
+            )
             return jsonify(avatar_dto.to_dict()), HTTPStatus.CREATED
 
         elif request.method == "PUT":
             avatar_dto: AvatarDto = avatar_service.update_and_return_datat(
                 validated_data
             )
+            logger.info(
+                f"create_or_update_avatar (update) succeeded for bot_id={validated_data.get('bot_id')} "
+                f"avatar_id={avatar_dto.id} - status={HTTPStatus.OK}"
+            )
             return jsonify(avatar_dto.to_dict()), HTTPStatus.OK
 
+        logger.warning(f"create_or_update_avatar unsupported method {request.method}")
         return jsonify(
             {"error": "Failed to process avatar"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     except ValidationError as e:
+        logger.warning(f"create_or_update_avatar validation error: {pydantic_error_messages(e)}")
         return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
-        logger.error(f"Avatar create/update error: {e}")
+        logger.exception(f"Avatar create/update error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -160,16 +189,19 @@ def create_or_update_avatar():
 @api.validate(tags=["avatar"], security={"BearerAuth": []})
 def get_avatar_by_bot_id(bot_id: int):
     """Get avatar by bot ID"""
+    logger.info(f"GET {CONTROLLER_PATH}/{bot_id} - get_avatar_by_bot_id called")
     try:
         avatar_dto: AvatarDto = avatar_service.get_avatar_by_bot_id(bot_id)
 
         if not avatar_dto:
+            logger.warning(f"get_avatar_by_bot_id({bot_id}) not found")
             return jsonify({"error": "Avatar not found"}), HTTPStatus.NOT_FOUND
 
+        logger.info(f"get_avatar_by_bot_id({bot_id}) succeeded - status={HTTPStatus.OK}")
         return jsonify(avatar_dto.to_dict()), HTTPStatus.OK
 
     except Exception as e:
-        logger.error(f"Get avatar error: {e}")
+        logger.exception(f"Get avatar error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -180,16 +212,19 @@ def get_avatar_by_bot_id(bot_id: int):
 @api.validate(tags=["avatar"], security={"BearerAuth": []})
 def delete_avatar(bot_id):
     """Delete avatar by bot ID"""
+    logger.info(f"DELETE {CONTROLLER_PATH}/{bot_id} - delete_avatar called")
     try:
         success = avatar_service.delete_avatar_by_bot_id(bot_id)
 
         if not success:
+            logger.warning(f"delete_avatar({bot_id}) not found")
             return jsonify({"error": "Avatar not found"}), HTTPStatus.NOT_FOUND
 
+        logger.info(f"delete_avatar({bot_id}) succeeded - status={HTTPStatus.NO_CONTENT}")
         return "", HTTPStatus.NO_CONTENT
 
     except Exception as e:
-        logger.error(f"Delete avatar error: {e}")
+        logger.exception(f"Delete avatar error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR

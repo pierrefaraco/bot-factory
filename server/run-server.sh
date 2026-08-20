@@ -48,4 +48,4 @@ set +a
 
 # == Flask run ==
 echo "Starting Flask server on port $FLASK_PORT..."
-uv run flask run --host 0.0.0.0 -p $FLASK_PORT --no-reload
+uv run flask run --host 0.0.0.0 -p $FLASK_PORT #--no-reload

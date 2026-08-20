@@ -3,7 +3,6 @@ from sqlalchemy import or_
 from werkzeug.security import generate_password_hash, check_password_hash
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.dao.database import Bot, BotAssignment, Message, Session, TokenUsage, User, db
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.exceptions.api_error import ApiError
@@ -172,6 +171,9 @@ class UserAdminService(BaseService[UserDto]):
 
         db.session.commit()
 
+        self.logger.info(
+            f"User created id={new_user.id} email={data['email']} roles={data['roles']}"
+        )
         return self.get_user_by_email(data["email"])
 
     def _perform_assign_bot(self, user_data) -> list[BotAssignmentDto]:
@@ -224,7 +226,7 @@ class UserAdminService(BaseService[UserDto]):
             raise NotFoundError("User", str(entity_id))
 
         user_dto = self.user_to_dto(user)
-        self.logger.info(f"{user_dto}")
+        self.logger.debug(f"Fetched user id={entity_id}")
         return user_dto
 
     def get_user_by_id(self, user_id: int) -> Optional[User]:
@@ -259,6 +261,7 @@ class UserAdminService(BaseService[UserDto]):
         try:
             return self.get_dto_by_id(user_id)
         except (ServiceError, NotFoundError):
+            self.logger.debug(f"get_user_dto_by_id: user {user_id} not found")
             return None
 
     def get_all(self, caller_id: int) -> List[UserDto]:
@@ -304,6 +307,7 @@ class UserAdminService(BaseService[UserDto]):
                 dto.owned_bots_count = Bot.query.filter_by(
                     user_account_id=user.id
                 ).count()
+        self.logger.debug(f"get_all users: caller_id={caller_id} count={len(dtos)}")
         return dtos
 
     def get_all_users(self, caller_id: int) -> List[UserDto]:
@@ -364,8 +368,13 @@ class UserAdminService(BaseService[UserDto]):
         for key, value in update_fields.items():
             if hasattr(user, key) and value is not None:
                 setattr(user, key, value)
+            elif not hasattr(user, key):
+                self.logger.debug(
+                    f"User {user_id} update: ignoring unknown field '{key}'"
+                )
 
         db.session.commit()
+        self.logger.info(f"User {user_id} updated fields={list(update_fields.keys())}")
         return self.user_to_dto(user)
 
     def patch_user(self, parent_id: int, guest_id: int, data: dict) -> UserDto:
@@ -389,6 +398,9 @@ class UserAdminService(BaseService[UserDto]):
             if not bot:
                 raise NotFoundError("Selected Bot", str(selected_bot_id))
             parent_user.selected_bot_id = selected_bot_id
+            self.logger.info(
+                f"User {parent_id} selected_bot_id set to {selected_bot_id}"
+            )
 
         user_dto: UserDto = self.user_to_dto(parent_user)
 
@@ -431,6 +443,9 @@ class UserAdminService(BaseService[UserDto]):
         # Check for children users
         children = User.query.filter_by(parent_id=entity_id).all()
         if children:
+            self.logger.warning(
+                f"delete user {entity_id} rejected: {len(children)} child user(s) still attached"
+            )
             raise ServiceError(
                 "Cannot delete user with children. Please delete or reassign children first."
             )
@@ -446,6 +461,10 @@ class UserAdminService(BaseService[UserDto]):
         session_ids = [
             row.id for row in Session.query.filter_by(user_id=entity_id).all()
         ]
+        self.logger.info(
+            f"Deleting user {entity_id}: cascading {len(session_ids)} session(s), "
+            "their messages, token usage, bot assignments and owned bots"
+        )
         if session_ids:
             Message.query.filter(Message.session_id.in_(session_ids)).delete(
                 synchronize_session=False
@@ -462,6 +481,7 @@ class UserAdminService(BaseService[UserDto]):
 
         db.session.delete(user)
         db.session.commit()
+        self.logger.info(f"User {entity_id} deleted successfully")
         return True
 
     def delete_user(self, user_id: int) -> bool:
@@ -481,12 +501,15 @@ class UserAdminService(BaseService[UserDto]):
             return self.delete(user_id)
         except ServiceError as e:
             if "children" in str(e):
+                self.logger.warning(f"delete_user({user_id}) blocked: has children")
                 raise ApiError(
                     "Cannot delete user with children. Please delete or reassign children first.",
                     400,
                 )
+            self.logger.warning(f"delete_user({user_id}) failed: {e}")
             raise ApiError("User not found", 404)
         except NotFoundError:
+            self.logger.warning(f"delete_user({user_id}) failed: user not found")
             raise ApiError("User not found", 404)
 
     def get_user_by_email(self, email: str) -> Optional[UserDto]:
@@ -537,7 +560,9 @@ class UserAdminService(BaseService[UserDto]):
             User.roles.contains(role),
             or_(User.roles != ADMIN_ROLE, User.id == int(caller_id)),
         ).all()
-        return [self.user_to_dto(user) for user in users]
+        dtos = [self.user_to_dto(user) for user in users]
+        self.logger.debug(f"get_users_by_role role={role} caller_id={caller_id} count={len(dtos)}")
+        return dtos
 
     def get_children_users_count(self, parent_id: int) -> List[UserDto]:
         """
@@ -578,7 +603,9 @@ class UserAdminService(BaseService[UserDto]):
     def _perform_get_children(self, parent_id: int) -> List[UserDto]:
         users = User.query.filter_by(parent_id=parent_id).all()
 
-        return [self._get_assignated_bots(user) for user in users]
+        dtos = [self._get_assignated_bots(user) for user in users]
+        self.logger.debug(f"get_children_users parent_id={parent_id} count={len(dtos)}")
+        return dtos
 
     def _get_assignated_bots(self, user) -> List[UserDto]:
         user_dto = self.user_to_dto(user)
@@ -612,10 +639,13 @@ class UserAdminService(BaseService[UserDto]):
     def _perform_change_role(self, user_id: int, new_role: str) -> UserDto:
         user = User.query.filter_by(id=user_id).first()
         if not user:
+            self.logger.warning(f"change_role({user_id}) failed: user not found")
             raise ApiError("User not found", 404)
 
+        old_role = user.roles
         user.roles = new_role
         db.session.commit()
+        self.logger.info(f"User {user_id} role changed: {old_role} -> {new_role}")
         return self.user_to_dto(user)
 
     def change_password(
@@ -649,13 +679,17 @@ class UserAdminService(BaseService[UserDto]):
     ) -> bool:
         user = User.query.filter_by(id=user_id).first()
         if not user:
+            self.logger.warning(f"change_password({user_id}) failed: user not found")
             raise ApiError("User not found", 404)
 
         if not check_password_hash(user.password_hash, old_password):
+            # Never log password/hash values, only the outcome.
+            self.logger.warning(f"change_password({user_id}) failed: invalid old password")
             raise ApiError("Invalid old password", 401)
 
         user.password_hash = generate_password_hash(new_password)
         db.session.commit()
+        self.logger.info(f"Password changed for user {user_id}")
         return True
 
     def deactivate_user(self, user_id: int) -> UserDto:
@@ -679,13 +713,13 @@ class UserAdminService(BaseService[UserDto]):
     def _perform_deactivate(self, user_id: int) -> UserDto:
         user = User.query.filter_by(id=user_id).first()
         if not user:
+            self.logger.warning(f"deactivate_user({user_id}) failed: user not found")
             raise ApiError("User not found", 404)
 
-        self.logger.info(
-            f"Deactivating user {user_id}, current status: {user.is_active}"
-        )
+        was_active = user.is_active
         user.is_active = False
         db.session.commit()
+        self.logger.info(f"User {user_id} deactivated (was_active={was_active})")
         return self.user_to_dto(user)
 
     def activate_user(self, user_id: int) -> UserDto:
@@ -709,10 +743,13 @@ class UserAdminService(BaseService[UserDto]):
     def _perform_activate(self, user_id: int) -> UserDto:
         user = User.query.filter_by(id=user_id).first()
         if not user:
+            self.logger.warning(f"activate_user({user_id}) failed: user not found")
             raise ApiError("User not found", 404)
 
+        was_active = user.is_active
         user.is_active = True
         db.session.commit()
+        self.logger.info(f"User {user_id} activated (was_active={was_active})")
         return self.user_to_dto(user)
 
     def reassign_children(self, old_parent_id: int, new_parent_id: int) -> bool:
@@ -744,15 +781,28 @@ class UserAdminService(BaseService[UserDto]):
         new_parent = User.query.filter_by(id=new_parent_id).first()
 
         if not new_parent:
+            self.logger.warning(
+                f"reassign_children({old_parent_id} -> {new_parent_id}) failed: new parent not found"
+            )
             raise ApiError("New parent user not found", 404)
 
         # Update children's parent_id
+        reassigned_count = 0
+        skipped_count = 0
         for child_dto in children_dtos:
             child = User.query.filter_by(id=child_dto.id).first()
             if child:
                 child.parent_id = new_parent_id
+                reassigned_count += 1
+            else:
+                skipped_count += 1
 
         db.session.commit()
+        self.logger.info(
+            f"Reassigned {reassigned_count} child(ren) from parent {old_parent_id} "
+            f"to {new_parent_id}"
+            + (f", {skipped_count} skipped (not found)" if skipped_count else "")
+        )
         return True
 
     @staticmethod
@@ -769,6 +819,7 @@ class UserAdminService(BaseService[UserDto]):
         try:
             user = User.query.get(user_id)
             if not user:
+                logger.warning(f"get_selected_bot({user_id}) failed: user not found")
                 return jsonify({"error": "User not found"}), 404
 
             if not user.selected_bot_id:
@@ -791,5 +842,5 @@ class UserAdminService(BaseService[UserDto]):
                 }
             ), 200
         except Exception as exc:
-            logger.error(f"Error retrieving selected bot: {exc}")
+            logger.exception(f"Error retrieving selected bot for user {user_id}: {exc}")
             return jsonify({"error": "Internal server error"}), 500

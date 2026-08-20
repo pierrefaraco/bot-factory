@@ -98,11 +98,15 @@ class BotService(BaseService[BotDto]):
         return bot is not None and int(bot.user_account_id) == int(user_account_id)
 
     def create_random_bot(self, user_account_id) -> BotDto:
+        self.logger.info(f"create_random_bot starting for user_account_id={user_account_id}")
         bot = Bot(user_account_id=user_account_id, prompt="")
         db.session.add(bot)
 
         user: User = User.query.filter_by(id=user_account_id).first()
         if not user:
+            self.logger.warning(
+                f"create_random_bot rejected: user_account_id={user_account_id} not found"
+            )
             raise Exception("User not found")
         db.session.commit()
         avatar_dto = self.avatar_svc.create_random_avatar(bot.id)
@@ -110,6 +114,9 @@ class BotService(BaseService[BotDto]):
             user.name, bot.id
         )
         self.template_svc.importTemplateInDB(bot.id, "start")
+        self.logger.info(
+            f"create_random_bot succeeded bot_id={bot.id} user_account_id={user_account_id}"
+        )
         return self._big_bot_to_dto(bot, avatar_dto, parameters_dto)
 
     def create(self, data: Dict[str, Any]) -> BotDto:
@@ -136,6 +143,9 @@ class BotService(BaseService[BotDto]):
         )
         db.session.add(bot)
         db.session.commit()
+        self.logger.info(
+            f"Bot created bot_id={bot.id} user_account_id={data['user_account_id']}"
+        )
         return self._bot_to_dto(bot, None)
 
     def get_prompt(self, entity_id: int):
@@ -152,11 +162,14 @@ class BotService(BaseService[BotDto]):
         Returns:
             Bot instance if found, None otherwise
         """
-        self.logger.info(f"get_dto_by_id {view}")
-        return self._perform_get_by_id(
+        result = self._perform_get_by_id(
             entity_id,
             view,
         )
+        self.logger.debug(
+            f"get_dto_by_id bot_id={entity_id} view={view} found={result is not None}"
+        )
+        return result
 
     def _perform_get_by_id(self, entity_id: int, view: str) -> Optional[BotDto]:
         bot = Bot.query.filter_by(id=entity_id).first()
@@ -166,18 +179,17 @@ class BotService(BaseService[BotDto]):
         avatar = avatar if avatar is not None else AvatarDto()
         if view == "full":
             try:
-                self.logger.info(
-                    f"Get full view for bot bot_id={entity_id} view={view}"
-                )
                 bot_parameters = self.bot_parameters_svc.get_by_bot_id(entity_id)
                 return self._big_bot_to_dto(bot, avatar, bot_parameters)
             except Exception as e:
-                self.logger.error(
-                    f"Error getting full bot view for bot_id={entity_id}: {str(e)}"
+                # Handled fallback: full view degrades to minimal rather than
+                # failing the request, so this is a warning, not an error.
+                self.logger.warning(
+                    f"get_dto_by_id({entity_id}) full view failed, falling back "
+                    f"to minimal: {str(e)}"
                 )
                 return self._bot_to_dto(bot, avatar)
         else:
-            self.logger.info(f"Get minimal view for bot bot_id={entity_id} view={view}")
             return self._bot_to_dto(bot, avatar)
 
     def get_all(self) -> List[BotDto]:
@@ -194,6 +206,7 @@ class BotService(BaseService[BotDto]):
 
     def _perform_get_all(self) -> List[BotDto]:
         bots: List[Bot] = Bot.query.filter_by().all()
+        self.logger.debug(f"get_all fetched {len(bots)} bots")
         return [self._bot_to_dto(bot, None) for bot in bots]
 
     def update(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
@@ -222,6 +235,7 @@ class BotService(BaseService[BotDto]):
                 setattr(bot, key, value)
 
         db.session.commit()
+        self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
         return self._bot_to_dto(bot, None)
 
     def delete(self, entity_id: int) -> bool:
@@ -243,6 +257,7 @@ class BotService(BaseService[BotDto]):
             - BotAssignment
         """
 
+        self.logger.info(f"delete bot_id={entity_id} starting")
         # Delete context manually (not managed by database CASCADE)
         self.context_svc.delete_all(entity_id)
 
@@ -254,6 +269,7 @@ class BotService(BaseService[BotDto]):
     def _perform_delete(self, entity_id) -> bool:
         bot = Bot.query.get(entity_id)
         if not bot:
+            self.logger.warning(f"delete bot_id={entity_id} not found")
             return False
 
         # Cleared explicitly rather than left to the FK's ON DELETE SET NULL:
@@ -267,6 +283,7 @@ class BotService(BaseService[BotDto]):
 
         db.session.delete(bot)
         db.session.commit()
+        self.logger.info(f"Bot deleted bot_id={entity_id}")
         return True
 
     def get_bot_owner(self, bot_id: int) -> Optional[User]:
@@ -304,6 +321,9 @@ class BotService(BaseService[BotDto]):
 
     def _perform_get_by_user(self, user_account_id: int) -> list[BotDto]:
         bots: list[Bot] = Bot.query.filter_by(user_account_id=user_account_id).all()
+        self.logger.debug(
+            f"get_bots_by_user user_account_id={user_account_id} count={len(bots)}"
+        )
         return [
             self._bot_to_dto(bot, self.avatar_svc.get_avatar_by_bot_id(bot.id))
             for bot in bots
@@ -333,6 +353,10 @@ class BotService(BaseService[BotDto]):
             bots_dto.append(
                 self._bot_to_dto(bot, self.avatar_svc.get_avatar_by_bot_id(bot.id))
             )
+        self.logger.debug(
+            f"_perform_get_assigned_bots processed {len(bots_assigments)} assignments "
+            f"-> {len(bots_dto)} bots"
+        )
         return bots_dto
 
     def get_owned_and_assigned_bots(self, user_id: int) -> List[BotDto]:
@@ -352,6 +376,10 @@ class BotService(BaseService[BotDto]):
         assigned = self.get_assigned_bots(user_id)
         seen_ids = {bot.id for bot in owned}
         merged = owned + [bot for bot in assigned if bot.id not in seen_ids]
+        self.logger.debug(
+            f"get_owned_and_assigned_bots user_id={user_id} owned={len(owned)} "
+            f"assigned={len(assigned)} merged={len(merged)}"
+        )
         return merged
 
     def get_bot_count_by_user(self, user_account_id: int) -> int:

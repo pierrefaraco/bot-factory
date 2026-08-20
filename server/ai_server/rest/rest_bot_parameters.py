@@ -64,13 +64,16 @@ logger = BotFactoryLogger()
 )
 def create_or_update_bot_parameters():
     """Create bot parameters and regenerate the bot's system prompt."""
+    logger.info(f"{request.method} {CONTROLLER_PATH} - create_or_update_bot_parameters called")
     try:
         if not request.is_json:
+            logger.warning("create_or_update_bot_parameters rejected: Content-Type is not application/json")
             return jsonify(
                 {"error": "Content-Type must be application/json"}
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
+        logger.debug(f"create_or_update_bot_parameters payload keys: {list(data.keys()) if data else []}")
         validated_data = BotParametersRequest.model_validate(data).model_dump(
             exclude_unset=True
         )
@@ -78,22 +81,31 @@ def create_or_update_bot_parameters():
         user_id = get_jwt_identity()
         user: User = User.query.filter_by(id=user_id).first()
         if not user:
+            logger.warning(f"create_or_update_bot_parameters rejected: user {user_id} not found")
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
         bot_parameters_dto = bot_parameters_svc.create_bot_parameters(
             user.name, validated_data["bot_id"], validated_data
         )
         if bot_parameters_dto:
+            logger.info(
+                f"create_or_update_bot_parameters succeeded for bot_id={validated_data['bot_id']} "
+                f"user_id={user_id} - status={HTTPStatus.CREATED}"
+            )
             return jsonify(bot_parameters_dto.to_dict()), HTTPStatus.CREATED
 
+        logger.warning(
+            f"create_or_update_bot_parameters failed for bot_id={validated_data.get('bot_id')} user_id={user_id}"
+        )
         return jsonify(
             {"error": "Failed to process bot parameters"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
 
     except ValidationError as e:
+        logger.warning(f"create_or_update_bot_parameters validation error: {pydantic_error_messages(e)}")
         return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as e:
-        logger.error(f"Bot parameters create/update error: {e}")
+        logger.exception(f"Bot parameters create/update error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -112,22 +124,27 @@ def patch_bot_parameters_admin(bot_id):
     Empty-string values are ignored, except for the optional clearable fields
     (persona_description, answer_format).
     """
+    logger.info(f"PATCH {CONTROLLER_PATH}/{bot_id} - patch_bot_parameters_admin called")
     try:
         if not request.is_json:
+            logger.warning(f"patch_bot_parameters_admin({bot_id}) rejected: Content-Type is not application/json")
             return jsonify(
                 {"error": "Content-Type must be application/json"}
             ), HTTPStatus.BAD_REQUEST
 
         data = request.get_json()
+        logger.debug(f"patch_bot_parameters_admin({bot_id}) payload keys: {list(data.keys()) if data else []}")
         validated_data = data
 
         user_id = get_jwt_identity()
         user: User = User.query.filter_by(id=user_id).first()
         if not user:
+            logger.warning(f"patch_bot_parameters_admin({bot_id}) rejected: user {user_id} not found")
             return jsonify({"error": "User not found"}), HTTPStatus.UNAUTHORIZED
 
         # TODO: Add proper permission check for bot ownership
         if user.roles not in [ADMIN_ROLE, USER_ROLE]:
+            logger.warning(f"patch_bot_parameters_admin({bot_id}) forbidden for user_id={user_id}")
             return jsonify(
                 {"error": f"You don't have rights to patch bot {bot_id}"}
             ), HTTPStatus.FORBIDDEN
@@ -137,14 +154,17 @@ def patch_bot_parameters_admin(bot_id):
         )
 
         if not bot_parameters_dto:
+            logger.warning(f"patch_bot_parameters_admin({bot_id}) not found")
             return jsonify({"error": "Bot parameters not found"}), HTTPStatus.NOT_FOUND
 
+        logger.info(f"patch_bot_parameters_admin({bot_id}) succeeded - status={HTTPStatus.OK}")
         return jsonify(bot_parameters_dto.to_dict()), HTTPStatus.OK
 
     except ValidationError as e:
+        logger.warning(f"patch_bot_parameters_admin({bot_id}) validation error: {pydantic_error_messages(e)}")
         return jsonify({"error": pydantic_error_messages(e)}), HTTPStatus.BAD_REQUEST
     except Exception as exc:
-        logger.error(f"Bot parameters patch error: {exc}")
+        logger.exception(f"Bot parameters patch error: {exc}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -155,15 +175,18 @@ def patch_bot_parameters_admin(bot_id):
 @api.validate(tags=["bot-parameters"], security={"BearerAuth": []})
 def get_bot_parameters_by_bot_id(bot_id: int):
     """Get bot parameters by bot ID"""
+    logger.info(f"GET {CONTROLLER_PATH}/{bot_id} - get_bot_parameters_by_bot_id called")
     try:
         bot_parameters_dto: BotParametersDto = bot_parameters_svc.get_by_bot_id(bot_id)
         if not bot_parameters_dto:
+            logger.warning(f"get_bot_parameters_by_bot_id({bot_id}) not found")
             return jsonify({"error": "Bot parameters not found"}), HTTPStatus.NOT_FOUND
 
+        logger.info(f"get_bot_parameters_by_bot_id({bot_id}) succeeded - status={HTTPStatus.OK}")
         return jsonify(bot_parameters_dto.to_dict()), HTTPStatus.OK
 
     except Exception as e:
-        logger.error(f"Get bot parameters error: {e}")
+        logger.exception(f"Get bot parameters error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -174,15 +197,18 @@ def get_bot_parameters_by_bot_id(bot_id: int):
 @api.validate(tags=["bot-parameters"], security={"BearerAuth": []})
 def delete_bot_parameters(bot_id):
     """Delete bot parameters by bot ID"""
+    logger.info(f"DELETE {CONTROLLER_PATH}/{bot_id} - delete_bot_parameters called")
     try:
         success = bot_parameters_svc.delete_by_bot_id(bot_id)
         if not success:
+            logger.warning(f"delete_bot_parameters({bot_id}) not found")
             return jsonify({"error": "Bot parameters not found"}), HTTPStatus.NOT_FOUND
 
+        logger.info(f"delete_bot_parameters({bot_id}) succeeded - status={HTTPStatus.NO_CONTENT}")
         return "", HTTPStatus.NO_CONTENT
 
     except Exception as e:
-        logger.error(f"Delete bot parameters error: {e}")
+        logger.exception(f"Delete bot parameters error: {e}")
         return jsonify(
             {"error": "Internal server error"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR

@@ -1,6 +1,5 @@
 import datetime
 from multiprocessing import AuthenticationError
-from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.base_service import BaseService
 from google.oauth2 import id_token
 from google.auth.transport import requests
@@ -20,14 +19,15 @@ class GoogleAuthentSvc(BaseService):
     def __init__(self):
         super().__init__()
         self.user_admin_svc = UserAdminService()
-        self.app_logger = BotFactoryLogger()
 
     def verify_google_token(self, credential):
         try:
             id_info = id_token.verify_oauth2_token(
                 credential, requests.Request(), CLIENT_ID
             )
-            self.app_logger.info(f"id_info {id_info}")
+            # Never log the full id_info payload: it carries PII (name,
+            # picture, locale...) beyond what's needed for the audit trail.
+            self.logger.info(f"Google OAuth token verified for email={id_info['email']}")
 
             user: User = User.query.filter_by(mail=id_info["email"]).first()
 
@@ -40,12 +40,16 @@ class GoogleAuthentSvc(BaseService):
                 self.logger.warning(msg)
                 raise AuthenticationError(msg)
 
+            self.logger.info(f"Google OAuth login succeeded for user_id={user_dto.id}")
             return self.build_token(user_dto)
         except ValueError as e:
-            self.app_logger.error(f"Token invalide: {e}")
+            # Expected validation failure (invalid/expired Google token), not
+            # a system error, and never log the credential/token value itself.
+            self.logger.warning(f"Invalid Google OAuth token: {e}")
             return None
 
     def record_user(self, id_info: dict) -> UserDto:
+        self.logger.info(f"Auto-provisioning new user from Google OAuth: email={id_info['email']}")
         return self.user_admin_svc.register_new_user(
             id_info["email"], id_info["name"], ""
         )

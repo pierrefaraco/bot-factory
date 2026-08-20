@@ -63,11 +63,13 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         )
         bot = Bot.query.get(data["bot_id"])
         if not bot:
+            logger.warning(f"_perform_create rejected: bot_id={data['bot_id']} not found")
             raise NotFoundError("Bot", str(data["bot_id"]))
 
         if int(bot.user_account_id) != int(data["assigned_by"]):
-            logger.info(
-                f"bot.user_account_id {bot.user_account_id} data['assigned_by']: {data['assigned_by']:}"
+            logger.warning(
+                f"_perform_create rejected: bot_id={data['bot_id']} owner={bot.user_account_id} "
+                f"does not match assigned_by={data['assigned_by']}"
             )
             raise ServiceError(
                 f"Bot {data['bot_id']} does not belong to user {data['assigned_by']}"
@@ -79,12 +81,15 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         # User rows in the Users tab, so this used to 500 for them).
         user: User = User.query.get(data["user_id"])
         if not user:
+            logger.warning(f"_perform_create rejected: user_id={data['user_id']} not found")
             raise NotFoundError("User", str(data["user_id"]))
 
         if user.roles not in (GUEST_ROLE, USER_ROLE):
+            logger.warning(
+                f"_perform_create rejected: user_id={data['user_id']} role={user.roles} "
+                "is not GUEST or USER"
+            )
             raise ServiceError(f"User {data['user_id']} is not a GUEST or USER account")
-        logger.info(f"user {user} ")
-        logger.info(f"data {data} ")
         # Guests are only assignable by their own parent -- Users have no
         # equivalent parent relationship to check here, and the calling
         # route (PATCH /users/<id>) already ran authorize_user_scope, which
@@ -92,6 +97,10 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         # (Admin, since a User has no guests of their own to assign bots
         # through this same endpoint anyway).
         if user.roles == GUEST_ROLE and int(user.parent_id) != int(data["assigned_by"]):
+            logger.warning(
+                f"_perform_create rejected: guest user_id={data['user_id']} is not a child "
+                f"of assigned_by={data['assigned_by']}"
+            )
             raise ServiceError(
                 f"Guest user {data['user_id']} is not a child of user {data['assigned_by']}"
             )
@@ -106,6 +115,10 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             existing_assignment.is_active = data.get("is_active", True)
             existing_assignment.assigned_by = data["assigned_by"]
             db.session.commit()
+            logger.info(
+                f"Bot assignment reactivated/updated: assignment_id={existing_assignment.id} "
+                f"bot_id={data['bot_id']} user_id={data['user_id']} is_active={existing_assignment.is_active}"
+            )
             return self._assignment_to_dto(existing_assignment)
 
         # Create new assignment
@@ -118,6 +131,10 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
 
         db.session.add(assignment)
         db.session.commit()
+        logger.info(
+            f"Bot assignment created: assignment_id={assignment.id} "
+            f"bot_id={data['bot_id']} user_id={data['user_id']}"
+        )
         return self._assignment_to_dto(assignment)
 
     def get_dto_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
@@ -289,6 +306,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
     def _perform_update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
         assignment = BotAssignment.query.get(entity_id)
         if not assignment:
+            logger.warning(f"_perform_update rejected: assignment_id={entity_id} not found")
             raise NotFoundError("Assignment", str(entity_id))
 
         # Only allow updating is_active field
@@ -296,6 +314,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             assignment.is_active = data["is_active"]
 
         db.session.commit()
+        logger.info(
+            f"Bot assignment updated: assignment_id={entity_id} is_active={assignment.is_active}"
+        )
         return self._assignment_to_dto(assignment)
 
     def delete_all_bot_assignments(self, bot_id) -> bool:
@@ -305,6 +326,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         ).all()
         for assignment in assignments:
             self.delete(assignment.id)
+        logger.info(
+            f"Deleted all bot assignments for bot_id={bot_id}: count={len(assignments)}"
+        )
         return True
 
     def delete(self, entity_id: int) -> bool:
@@ -328,10 +352,15 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
     def _perform_delete(self, entity_id: int) -> bool:
         assignment = BotAssignment.query.get(entity_id)
         if not assignment:
+            logger.warning(f"_perform_delete rejected: assignment_id={entity_id} not found")
             raise NotFoundError("Assignment", str(entity_id))
 
+        bot_id, user_id = assignment.bot_id, assignment.user_id
         db.session.delete(assignment)
         db.session.commit()
+        logger.info(
+            f"Bot assignment deleted: assignment_id={entity_id} bot_id={bot_id} user_id={user_id}"
+        )
         return True
 
     def remove_assignment(self, bot_id: int, user_id: int) -> bool:
@@ -359,17 +388,25 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         if not assignment:
             return False
 
+        assignment_id = assignment.id
         db.session.delete(assignment)
         db.session.commit()
+        logger.info(
+            f"Bot assignment removed: assignment_id={assignment_id} bot_id={bot_id} user_id={user_id}"
+        )
         return True
 
     def _perform_remove_bot_for_user(self, user_id: int) -> bool:
         assignments = BotAssignment.query.filter_by(user_id=user_id).all()
 
         if not assignments:
+            logger.debug(f"No bot assignments to remove for user_id={user_id}")
             return False
 
         for assignment in assignments:
             db.session.delete(assignment)
         db.session.commit()
+        logger.info(
+            f"Removed all bot assignments for user_id={user_id}: count={len(assignments)}"
+        )
         return True

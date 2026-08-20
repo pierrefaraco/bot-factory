@@ -1,8 +1,20 @@
+import logging
 from logging.config import dictConfig
 
 BOT_FACTORY_LOGGER = "bot_factory_logger"
-LOG_FORMAT = "%(asctime)s - %(name)s | %(levelname)s | %(message)s"
+LOG_FORMAT = "%(asctime)s - %(name)s | %(levelname)s | %(filename)s:%(lineno)d - %(class_name)s | %(message)s"
 LOG_DATE_FMT = "%Y-%m-%d %H:%M:%S.%z"
+
+
+class ClassNameFilter(logging.Filter):
+    """Ensure every LogRecord has a class_name attribute so LOG_FORMAT can
+    reference %(class_name)s even for records that don't set it explicitly
+    (e.g. via BotFactoryLogger's `extra={"class_name": ...}`)."""
+
+    def filter(self, record):
+        if not hasattr(record, "class_name"):
+            record.class_name = "-"
+        return True
 
 
 class LogManager:
@@ -14,6 +26,11 @@ class LogManager:
         # *** Final object building.
         log_config = {
             "version": 1,
+            "filters": {
+                "class_name_filter": {
+                    "()": ClassNameFilter,
+                },
+            },
             "formatters": my_formats["formatters"],
             "handlers": my_handlers["handlers"],
             "loggers": my_loggers["loggers"],
@@ -44,16 +61,19 @@ class LogManager:
                 "default_handler": {
                     "class": "logging.StreamHandler",
                     "formatter": "standard_format",
+                    "filters": ["class_name_filter"],
                     "stream": "ext://sys.stdout",
                 },
                 "application_logs_handler": {
                     "class": "logging.StreamHandler",
                     "formatter": "standard_format",
+                    "filters": ["class_name_filter"],
                     "stream": "ext://sys.stdout",
                 },
                 "flask_log_handler": {
                     "class": "logging.StreamHandler",
                     "formatter": "standard_format",
+                    "filters": ["class_name_filter"],
                     "stream": "ext://sys.stdout",
                 },
             }

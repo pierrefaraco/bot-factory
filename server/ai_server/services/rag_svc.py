@@ -33,7 +33,8 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from ai_server.dao.database import Session, Message, db
 from sqlalchemy.exc import SQLAlchemyError
-from ai_server.api_controllers.rest_bot_parameters import bot_parameters_svc
+from ai_server.rest.rest_bot_parameters import bot_parameters_svc
+import time
 
 langchain.debug = False
 
@@ -77,6 +78,7 @@ class RagService:
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
 
+        start = time.perf_counter()
         # Passer user_id et bot_id pour activer le tracking de tokens
         llm = self.llm_service.get_llm(
             user_id=user_id, bot_id=bot_id, session_id=session_id
@@ -100,6 +102,11 @@ class RagService:
             history_messages_key="chat_history",
             output_messages_key="answer",
         )
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.debug(
+            f"RAG chain built for bot_id={bot_id} user_id={user_id} "
+            f"session_id={session_id} in {elapsed_ms}ms"
+        )
 
     def get_session_history(self, session_id: str) -> BaseChatMessageHistory:
         if session_id not in self.store:
@@ -107,18 +114,62 @@ class RagService:
         return self.store[session_id]
 
     def ingest_pdf(self, pdf_file_path: str, collection_name="MY_COLLECTION"):
-        self.db_service.ingest(pdf_file_path, collection_name)
+        logger.info(f"Ingesting PDF '{pdf_file_path}' into collection={collection_name}")
+        start = time.perf_counter()
+        try:
+            self.db_service.ingest(pdf_file_path, collection_name)
+        except Exception as e:
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+            logger.exception(
+                f"PDF ingestion failed for '{pdf_file_path}' collection={collection_name} "
+                f"after {elapsed_ms}ms: {e}"
+            )
+            raise
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.info(
+            f"PDF ingestion succeeded for '{pdf_file_path}' collection={collection_name} "
+            f"in {elapsed_ms}ms"
+        )
 
     def ingest_directory(self, pdf_directory: str, collection_name="MY_COLLECTION"):
-        self.db_service.ingest_directory(pdf_directory, collection_name)
+        logger.info(f"Ingesting directory '{pdf_directory}' into collection={collection_name}")
+        start = time.perf_counter()
+        try:
+            self.db_service.ingest_directory(pdf_directory, collection_name)
+        except Exception as e:
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+            logger.exception(
+                f"Directory ingestion failed for '{pdf_directory}' collection={collection_name} "
+                f"after {elapsed_ms}ms: {e}"
+            )
+            raise
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.info(
+            f"Directory ingestion succeeded for '{pdf_directory}' collection={collection_name} "
+            f"in {elapsed_ms}ms"
+        )
 
     def ask(self, bot_id: int, user_id: int, query: str, hide: bool = False):
         logger.debug(f"RAG query for bot {bot_id}, user {user_id}")
-        collection_name = f"Collection{bot_id}"
-        self.db_service.build(collection_name)
-        # Passer user_id pour activer le tracking de tokens
-        self.build(bot_id, user_id=user_id)
-        return self.invoke_and_save(bot_id, user_id, query, hide)
+        start = time.perf_counter()
+        try:
+            collection_name = f"Collection{bot_id}"
+            self.db_service.build(collection_name)
+            # Passer user_id pour activer le tracking de tokens
+            self.build(bot_id, user_id=user_id)
+            result = self.invoke_and_save(bot_id, user_id, query, hide)
+        except Exception as e:
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+            logger.exception(
+                f"RAG ask failed for bot_id={bot_id} user_id={user_id} after {elapsed_ms}ms: {e}"
+            )
+            raise
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.info(
+            f"RAG ask succeeded for bot_id={bot_id} user_id={user_id} "
+            f"answer_length={len(result)} in {elapsed_ms}ms"
+        )
+        return result
 
     def ask_with_stream(
         self,
@@ -140,6 +191,7 @@ class RagService:
         self.build(bot_id, user_id=user_id, session_id=session_id)
 
         def generate(data) -> Iterator[str]:
+            start = time.perf_counter()
             try:
                 answer_str = ""
                 chunk_iterator = self.conversational_rag_chain.stream(
@@ -152,13 +204,20 @@ class RagService:
                         answer_str += answer
                         yield f"data: {json.dumps({'answer': answer})}\n\n"
                 message_service.save_message(bot_id, user_id, "assistant", answer_str)
-                logger.debug(
-                    f"RAG streaming completed for bot {bot_id}, response length: {len(answer_str)}"
+                elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+                logger.info(
+                    f"RAG streaming completed for bot_id={bot_id} user_id={user_id} "
+                    f"session_id={session_id}, response length={len(answer_str)}, "
+                    f"in {elapsed_ms}ms"
                 )
                 yield "data: [DONE]\n\n"
 
             except Exception as e:
-                logger.error(f"RAG streaming error for bot {bot_id}: {e}")
+                elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+                logger.exception(
+                    f"RAG streaming error for bot_id={bot_id} user_id={user_id} "
+                    f"session_id={session_id} after {elapsed_ms}ms: {e}"
+                )
                 error_data = json.dumps({"error": str(e)})
                 yield f"data: {json.dumps(error_data)}\n\n"
 
@@ -169,10 +228,17 @@ class RagService:
         message_service.save_message(bot_id, user_id, "user", input_text, hide)
 
         # Get the AI response
+        logger.debug(f"Invoking RAG chain for bot_id={bot_id} user_id={user_id}")
+        start = time.perf_counter()
         result = self.conversational_rag_chain.invoke(
             {"input": input_text},
             config={"configurable": {"session_id": f"{bot_id}_{user_id}"}},
         )["answer"]
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+        logger.info(
+            f"RAG chain invocation succeeded for bot_id={bot_id} user_id={user_id} "
+            f"answer_length={len(result)} in {elapsed_ms}ms"
+        )
 
         # Save the AI answer with role "ai"
         message_service.save_message(bot_id, user_id, "assistant", result)
@@ -192,7 +258,7 @@ class RagService:
                         {"role": message.role, "content": message.content}
                     )
         except SQLAlchemyError as e:
-            logger.error(f"Failed to load session history for {session_id}: {e}")
+            logger.exception(f"Failed to load session history for {session_id}: {e}")
         finally:
             db.session.close()
         return chat_history

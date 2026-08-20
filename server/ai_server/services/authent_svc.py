@@ -62,7 +62,7 @@ class AuthenticationService(BaseService):
             self.logger.warning(f"Invalid password for user: {mail}")
             raise AuthenticationError("Invalid credentials")
 
-        self.logger.info(f"{mail} successfully authenticated")
+        self.logger.info(f"{mail} (user_id={user.id}) successfully authenticated")
 
         return self.build_token(user)
 
@@ -96,6 +96,7 @@ class AuthenticationService(BaseService):
         self._start_revoke_jti(jwt["jti"])
         identity = get_jwt_identity()
         access_token = create_access_token(identity=identity)
+        self.logger.info(f"JWT token refreshed successfully for user_id={identity}")
         return access_token
 
     def _start_revoke_jti(self, jti: str) -> None:

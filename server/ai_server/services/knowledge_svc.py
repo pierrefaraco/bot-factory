@@ -1,4 +1,5 @@
 import pprint
+import time
 import uuid
 from ai_server.config.config import flask_config
 from abc import ABCMeta
@@ -67,6 +68,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         if file and pdf_file.endswith(".pdf"):
             pdf_file_path = os.path.join(self.upload_folder, pdf_file)
             file.save(pdf_file_path)
+            logger.debug(f"save_pdf: saved {pdf_file} to {pdf_file_path}")
             return pdf_file_path
         else:
             raise ValueError("Le fichier doit être un PDF.")
@@ -109,6 +111,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             )
             db.session.add(knowledge)
         db.session.commit()
+        logger.info(
+            f"save_knowledges_dto: saved {len(knowledges_dto)} knowledges for bot_id={bot_id}"
+        )
 
     def save_imported_knowledges(
         self, bot_id: int, imported_knowledges: List[Dict]
@@ -137,6 +142,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
     def _perform_save_imported_knowledges(
         self, bot_id: int, imported_knowledges: List[Dict]
     ) -> List[KnowledgeDto]:
+        logger.info(
+            f"save_imported_knowledges: importing {len(imported_knowledges)} "
+            f"knowledges for bot_id={bot_id}"
+        )
         for knowledge in imported_knowledges:
             knowledge_entity = Knowledge(
                 bot_id,
@@ -152,6 +161,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         self.recordChaptersToVectorDB(bot_id)
 
         knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
+        logger.info(
+            f"save_imported_knowledges: imported {len(imported_knowledges)} knowledges "
+            f"for bot_id={bot_id}, total now {len(knowledges)}"
+        )
         return [self._knowledge_to_dto(ch) for ch in knowledges]
 
     def save_knowledge(
@@ -306,6 +319,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         created_knowledge: Knowledge = Knowledge.query.filter_by(
             name=knowledge_name, bot_id=bot_id
         ).first()
+        logger.info(
+            f"create_knowledge_entity: created knowledge_id={created_knowledge.id} "
+            f"bot_id={bot_id} dad_id={knowledge_dad_id} indice={indice}"
+        )
         self.recordChaptersToVectorDB(bot_id)
         return self._knowledge_to_dto(created_knowledge)
 
@@ -324,6 +341,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         )
         db.session.add(knowledge)
         db.session.commit()
+        logger.info(
+            f"create_empty_knowledge: created knowledge_id={knowledge.id} "
+            f"bot_id={bot_id} dad_id={knowledge_dad_id} indice={indice}"
+        )
         self.recordChaptersToVectorDB(bot_id)
         return self._knowledge_to_dto(knowledge)
 
@@ -363,6 +384,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         )
         db.session.add(knowledge)
         db.session.commit()
+        logger.info(
+            f"create (generic): created knowledge_id={knowledge.id} bot_id={knowledge.bot_id}"
+        )
         return self._knowledge_to_dto(knowledge)
 
     def _compute_indice(self, bot_id: int, knowledge_dad_id: str) -> int:
@@ -442,6 +466,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         knowledge.indice = indice
         knowledge.pdf_file = pdf_file
         db.session.commit()
+        logger.info(
+            f"update_knowledge_entity: updated knowledge_id={knowledge.id} bot_id={bot_id}"
+        )
         self.recordChaptersToVectorDB(bot_id)
         return self._knowledge_to_dto(knowledge)
 
@@ -587,12 +614,17 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         if not knowledge:
             raise NotFoundError("Chapter", str(entity_id))
 
+        updated_fields = []
         for key, value in data.items():
             if hasattr(knowledge, key) and value is not None:
                 setattr(knowledge, key, value)
+                updated_fields.append(key)
 
         knowledge.date = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
         db.session.commit()
+        logger.info(
+            f"update (generic): updated knowledge_id={entity_id} fields={updated_fields}"
+        )
         return self._knowledge_to_dto(knowledge)
 
     def delete(self, entity_id: int) -> bool:
@@ -620,6 +652,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
 
         bot_id = knowledge.bot_id
         self._delete_knowledge(knowledge)
+        logger.info(f"delete: deleted knowledge_id={entity_id} bot_id={bot_id}")
         self.recordChaptersToVectorDB(bot_id)
         return True
 
@@ -639,7 +672,8 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         """
         try:
             return self.delete(knowledge_id)
-        except (ServiceError, NotFoundError):
+        except (ServiceError, NotFoundError) as e:
+            logger.warning(f"delete_knowledge({knowledge_id}) failed: {e}")
             return False
 
     def _delete_knowledge(self, knowledge_to_delete: Knowledge) -> None:
@@ -688,7 +722,12 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
     def _perform_delete_all(self, bot_id: int) -> bool:
         try:
             # Delete associated collection from vector database
+            start = time.perf_counter()
             self.rag_svc.db_service.delete_all(f"Collection{bot_id}")
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.debug(
+                f"delete_all: vector DB collection Collection{bot_id} deleted in {elapsed_ms:.1f}ms"
+            )
 
             # Get and delete all knowledges associated with the bot
             knowledges = Knowledge.query.filter_by(bot_id=bot_id).all()
@@ -698,13 +737,14 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             # Commit the transaction
             db.session.commit()
             logger.info(
-                f"All data associated with bot {bot_id} has been successfully deleted."
+                f"delete_all: deleted {len(knowledges)} knowledges and vector data "
+                f"for bot_id={bot_id}"
             )
             return True
         except Exception as e:
             # Handle exceptions and rollback transaction on error
             db.session.rollback()
-            logger.error(f"An error occurred while deleting data: {e}")
+            logger.exception(f"delete_all: failed to delete data for bot_id={bot_id}: {e}")
             return False
 
     def recordChaptersToVectorDB(self, bot_id: int) -> None:
@@ -720,12 +760,16 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         result = self._perform_record_knowledges(bot_id)
 
     def _perform_record_knowledges(self, bot_id: int) -> None:
+        start = time.perf_counter()
         knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
         sorted_knowledges = []
         self.get_sorted_knowledges(knowledges, sorted_knowledges, ROOT_CHAPTER_ID, 0)
         to_save_in_vector_db = ""
         pdf_file_paths = []
-        logger.info(f"knowledges number: {len(sorted_knowledges)}")
+        logger.info(
+            f"recordChaptersToVectorDB: recording {len(sorted_knowledges)} knowledges "
+            f"for bot_id={bot_id}"
+        )
 
         for sch in sorted_knowledges:
             indent_str = "#"
@@ -754,6 +798,13 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             self.rag_svc.db_service.ingest_pdf(
                 pdf_file_path, collection_name=f"Collection{bot_id}"
             )
+
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"recordChaptersToVectorDB: bot_id={bot_id} - "
+            f"{len(sorted_knowledges)} knowledges, {len(pdf_file_paths)} PDFs ingested "
+            f"in {elapsed_ms:.1f}ms"
+        )
 
     def get_sorted_knowledges(
         self,

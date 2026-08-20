@@ -32,6 +32,7 @@ class TemplateSvc:
         self.logger = BotFactoryLogger()
 
     def importTemplateInDB(self, bot_id, template_name):
+        self.logger.info(f"Importing template '{template_name}' for bot_id={bot_id}")
 
         # Itemize data files under proj/resources/images:
         templates_dir = files("ai_server.resources.templates")
@@ -42,6 +43,11 @@ class TemplateSvc:
             encoding="utf-8"
         )
         matches = re.findall(REG_EXP, template_to_load)
+        if not matches:
+            self.logger.warning(
+                f"Template '{template_name}' parsed with 0 chapter matches for bot_id={bot_id} "
+                "- resulting bot will have an empty knowledge base"
+            )
         chapters_dto: list[KnowledgeDto] = []
         for match in matches:
             self.logger.debug(
@@ -57,8 +63,8 @@ class TemplateSvc:
                 match[4],
             )
             chapters_dto.append(chapter_dto)
-        self.logger.info(
-            f"Importing {len(chapters_dto)} chapters from template for user {bot_id}"
-        )
         self.knowledge_svc.save_knowledges_dto(bot_id, chapters_dto)
+        self.logger.info(
+            f"Template import completed for bot_id={bot_id}: {len(chapters_dto)} chapters saved"
+        )
         return chapters_dto

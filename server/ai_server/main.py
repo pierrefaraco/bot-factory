@@ -6,7 +6,7 @@ from flask import Flask, jsonify
 from flask.wrappers import Response
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from ai_server.api_controllers import (
+from ai_server.rest import (
     rest_authent,
     rest_bot,
     rest_bot_assignment,
@@ -21,7 +21,7 @@ from ai_server.config.constant import ADMIN_ROLE
 from ai_server.config.openapi import api as openapi
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.log.log_manager import LogManager
+from ai_server.log.log_config import LogManager
 from ai_server.dao.database import db
 from ai_server.services.chroma_db_svc import ChromaDbService
 from ai_server.services.user_admin_svc import UserAdminService

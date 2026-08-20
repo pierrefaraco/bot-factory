@@ -40,7 +40,7 @@ class PromptService:
         return self._bot_service
 
     def build_prompt(self):
-
+        self.logger.debug("Building contextualize_q_prompt template")
         self.contextualize_q_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", contextualize_q_system_prompt),
@@ -65,6 +65,7 @@ class PromptService:
         )
 
     def welcome_message_trigger(self, user_name, params, behaviour_dict) -> str:
+        self.logger.debug(f"Building welcome_message_trigger for bot_type={params.bot_type}")
         interlocutor_sentence = self.make_interlocutor_sentence(user_name, params)
         question = (
             f'As "{params.bot_type}", you address your interlocutor for an initial contact. '
@@ -127,10 +128,9 @@ class PromptService:
         )
         prompt = "\n".join(lines) + "\n"
 
-        self.logger.info(f"Updating prompt for bot_id {bot_id}")
+        self.logger.info(f"Updating prompt for bot_id={bot_id} length={len(prompt)}")
         self.logger.debug(f"New prompt for bot_id {bot_id}: {prompt}")
         self.bot_service.update(bot_id, {"prompt": prompt})
-        print(prompt)
 
     def make_interlocutor_sentence(self, user_name, params):
         interlocutor_sentence = f'Your interlocutor is "{params.interlocutor_type}".'

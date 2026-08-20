@@ -10,6 +10,7 @@ from typing import Any, Optional, Dict
 from ai_server.services.token_tracking_svc import TokenTrackingService
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 import json
+import time
 
 
 
@@ -33,34 +34,23 @@ class TokenCountingCallback(BaseCallbackHandler):
 
     def on_llm_end(self, response: Any, **kwargs) -> None:
         """Appelé à la fin d'un appel LLM"""
-        self.logger.debug("On LLM end, tracking tokens...")
         try:
             # Pour ChatMistralAI, les tokens sont dans les generations
             if hasattr(response, "generations") and response.generations:
                 # Prendre la première génération
-                self.logger.debug("Response generations found, extracting token usage")
                 generation = (
                     response.generations[0][0] if response.generations[0] else None
                 )
                 if generation and hasattr(generation, "generation_info"):
                     message = generation.message
-                    self.logger.debug(
-                        f"Response message found, extracting usage from message"
-                    )
                     if message and message.usage_metadata:
                         usage_metadata = message.usage_metadata
-                        self.logger.debug(
-                            f"Recording token usage - input: {usage_metadata.get('input_tokens')}, output: {usage_metadata.get('output_tokens')}, total: {usage_metadata.get('total_tokens')}"
-                        )
                         self.prompt_tokens = usage_metadata.get("output_tokens", 0)
                         self.completion_tokens = usage_metadata.get("input_tokens", 0)
                         self.total_tokens = usage_metadata.get("total_tokens", 0)
                         self.model_name = "mistral-medium"
                         if message and "response_metadata" in message:
                             response_metadata = message["response_metadata"]
-                            self.logger.debug(
-                                f"Response metadata found, model: {response_metadata.get('model')}"
-                            )
                             self.model_name = response_metadata.get("model")
 
                         user: User = self.user_svc.get_user_by_id(
@@ -80,6 +70,11 @@ class TokenCountingCallback(BaseCallbackHandler):
                             total_tokens=self.total_tokens,
                             session_id=self.session_id,
                             model_name=self.model_name,
+                        )
+                        self.logger.info(
+                            f"Token usage recorded (generations path) - user_id={self.user_id} "
+                            f"bot_id={self.bot_id} session_id={self.session_id} "
+                            f"model={self.model_name} total_tokens={self.total_tokens}"
                         )
                         return
 
@@ -102,12 +97,24 @@ class TokenCountingCallback(BaseCallbackHandler):
                         session_id=self.session_id,
                         model_name=self.model_name,
                     )
+                    self.logger.info(
+                        f"Token usage recorded (llm_output fallback path) - user_id={self.user_id} "
+                        f"bot_id={self.bot_id} session_id={self.session_id} "
+                        f"model={self.model_name} total_tokens={self.total_tokens}"
+                    )
+                    return
+
+            # Neither path yielded usable token data: usage silently goes untracked.
+            self.logger.warning(
+                f"No token usage data found in LLM response - user_id={self.user_id} "
+                f"bot_id={self.bot_id} session_id={self.session_id} (billing data lost for this call)"
+            )
         except Exception as e:
             # Logger l'erreur mais ne pas faire échouer l'appel LLM
-            self.logger.error(f"Error tracking tokens: {e}")
-            import traceback
-
-            self.logger.error(traceback.format_exc())
+            self.logger.exception(
+                f"Error tracking tokens for user_id={self.user_id} bot_id={self.bot_id} "
+                f"session_id={self.session_id}: {e}"
+            )
 
 
 @singleton
@@ -138,6 +145,10 @@ class LlmService:
         """
         # Si user_id et bot_id sont fournis, créer un callback de tracking
         if user_id is not None and bot_id is not None:
+            self.logger.debug(
+                f"get_llm: creating token-tracked LLM instance for user_id={user_id} "
+                f"bot_id={bot_id} session_id={session_id}"
+            )
             callback = TokenCountingCallback(
                 user_id=user_id, bot_id=bot_id, session_id=session_id
             )
@@ -161,7 +172,18 @@ class LlmService:
             La réponse du LLM parsée en dictionnaire (si JSON valide)
         """
         # Invoquer le LLM avec la question
-        response = self.llm.invoke(question)
+        self.logger.debug(f"system_ask_question: invoking LLM, question length={len(question)}")
+        start = time.perf_counter()
+        try:
+            response = self.llm.invoke(question)
+        except Exception as e:
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+            self.logger.exception(
+                f"system_ask_question: LLM call failed after {elapsed_ms}ms: {e}"
+            )
+            raise
+        elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+        self.logger.info(f"system_ask_question: LLM call succeeded in {elapsed_ms}ms")
 
         # Extraire le contenu de la réponse
         content = ""
@@ -174,7 +196,8 @@ class LlmService:
         try:
             return json.loads(content)
         except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse JSON response from LLM: {e}")
+            # Réponse LLM non-JSON : dégradation gérée, pas un échec de l'appel.
+            self.logger.warning(f"Failed to parse JSON response from LLM: {e}")
             self.logger.debug(
                 f"Raw content received: {content[:200]}..."
             )  # Limiter à 200 caractères pour éviter le spam

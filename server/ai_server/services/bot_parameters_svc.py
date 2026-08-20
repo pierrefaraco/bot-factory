@@ -79,6 +79,9 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters creation fails
         """
+        self.logger.info(
+            f"create_bot_parameters bot_id={bot_id} requested by user_name={user_name}"
+        )
         data = {
             "bot_id": bot_id,
             "bot_name": str(params.get("bot_name") or ""),
@@ -128,6 +131,10 @@ class BotParametersService(BaseService[BotParametersDto]):
         result = self._perform_create(data)
 
         if result is None:
+            self.logger.warning(
+                f"Bot parameters creation failed for bot_id={data.get('bot_id')}, "
+                "_perform_create returned None"
+            )
             raise ServiceError(
                 "Bot parameters creation failed, no BotParametersDto returned."
             )
@@ -158,6 +165,9 @@ class BotParametersService(BaseService[BotParametersDto]):
         )
         db.session.add(bot_params)
         db.session.commit()
+        self.logger.info(
+            f"BotParameters created id={bot_params.id} bot_id={bot_params.bot_id}"
+        )
         return self._bot_parameters_to_dto(bot_params)
 
     # 10 coherent bot personas used by create_random_parameters. Every value taken
@@ -341,6 +351,10 @@ class BotParametersService(BaseService[BotParametersDto]):
 
         profile = random.choice(self.RANDOM_BOT_PROFILES)
         data: Dict[str, Any] = {"bot_id": bot_id, **profile}
+        self.logger.info(
+            f"create_random_parameters bot_id={bot_id} selected profile "
+            f"bot_name={profile['bot_name']!r} bot_type={profile['bot_type']!r}"
+        )
 
         result = self._perform_create(data)
         self.update_prompt(user_name, bot_id)
@@ -397,6 +411,7 @@ class BotParametersService(BaseService[BotParametersDto]):
 
     def _perform_get_all(self) -> List[BotParametersDto]:
         bot_params_list: List[BotParameters] = BotParameters.query.filter_by().all()
+        self.logger.info(f"get_all BotParameters returned {len(bot_params_list)} record(s)")
         return [
             self._bot_parameters_to_dto(bot_params) for bot_params in bot_params_list
         ]
@@ -420,6 +435,10 @@ class BotParametersService(BaseService[BotParametersDto]):
             data,
         )
         if result is None:
+            self.logger.warning(
+                f"Bot parameters update failed for id={entity_id}, "
+                "_perform_update returned None"
+            )
             raise ServiceError(
                 "Bot parameters update failed, no BotParametersDto returned."
             )
@@ -430,11 +449,15 @@ class BotParametersService(BaseService[BotParametersDto]):
         if not bot_params:
             raise NotFoundError("BotParameters", str(entity_id))
 
+        self.logger.debug(f"update BotParameters id={entity_id} fields={list(data.keys())}")
         for key, value in data.items():
             if key != "user_name" and hasattr(bot_params, key):
                 setattr(bot_params, key, value)
 
         db.session.commit()
+        self.logger.info(
+            f"BotParameters updated id={entity_id} bot_id={bot_params.bot_id}"
+        )
 
         # Update prompt after update
         if "user_name" in data:
@@ -457,6 +480,10 @@ class BotParametersService(BaseService[BotParametersDto]):
         """
         result = self._perform_delete(entity_id)
         if result is None:
+            self.logger.warning(
+                f"Bot parameters delete failed for id={entity_id}, "
+                "_perform_delete returned None"
+            )
             raise ServiceError(
                 "Bot parameters delete failed, no bot parameters deleted."
             )
@@ -467,8 +494,10 @@ class BotParametersService(BaseService[BotParametersDto]):
         if not bot_params:
             raise NotFoundError("BotParameters", str(entity_id))
 
+        bot_id = bot_params.bot_id
         db.session.delete(bot_params)
         db.session.commit()
+        self.logger.info(f"BotParameters deleted id={entity_id} bot_id={bot_id}")
         return True
 
     def get_welcome_message(self, user_name: str, bot_id: int) -> str:
@@ -494,6 +523,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         return result
 
     def _perform_get_welcome_message(self, user_name: str, bot_id: int) -> str:
+        self.logger.debug(f"get_welcome_message bot_id={bot_id} user_name={user_name}")
         # bot_params_dto = self.get_dto_by_id(bot_id)
         behaviour_dict = yaml_svc.behaviour_dict
         # Convert DTO back to entity for prompt service
@@ -552,12 +582,16 @@ class BotParametersService(BaseService[BotParametersDto]):
         if not bot_params:
             raise NotFoundError("BotParameters", str(bot_id))
 
+        self.logger.debug(
+            f"update_by_bot_id bot_id={bot_id} fields={list(update_data.keys())}"
+        )
         # Update all fields that are present in the update_data
         for key, value in update_data.items():
             if hasattr(bot_params, key):
                 setattr(bot_params, key, value)
 
         db.session.commit()
+        self.logger.info(f"BotParameters updated bot_id={bot_id}")
         self.update_prompt(user_name, bot_id)
         return self._bot_parameters_to_dto(bot_params)
 
@@ -593,6 +627,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         # are ignored except for optional fields the user may want to clear,
         # and False is a valid value (e.g. voice_output).
         clearable_fields = {"persona_description", "answer_format"}
+        applied_fields = []
         for key, value in data.items():
             if (
                 key != "user_name"
@@ -601,8 +636,14 @@ class BotParametersService(BaseService[BotParametersDto]):
                 and hasattr(bot_params, key)
             ):
                 setattr(bot_params, key, value)
+                applied_fields.append(key)
 
+        self.logger.debug(
+            f"patch_bot_parameters bot_id={bot_id} applied_fields={applied_fields} "
+            f"skipped_fields={[k for k in data if k not in applied_fields and k != 'user_name']}"
+        )
         db.session.commit()
+        self.logger.info(f"BotParameters patched bot_id={bot_id}")
         self.update_prompt(user_name, bot_id)
         return self._bot_parameters_to_dto(bot_params)
 
@@ -627,10 +668,12 @@ class BotParametersService(BaseService[BotParametersDto]):
     def _perform_delete_by_bot_id(self, bot_id: int) -> bool:
         bot_params = BotParameters.query.filter_by(bot_id=bot_id).first()
         if not bot_params:
+            self.logger.warning(f"delete_by_bot_id bot_id={bot_id} not found")
             return False
 
         db.session.delete(bot_params)
         db.session.commit()
+        self.logger.info(f"BotParameters deleted bot_id={bot_id}")
         return True
 
     def update_prompt(self, user_name: str, bot_id: int):
@@ -657,6 +700,7 @@ class BotParametersService(BaseService[BotParametersDto]):
             prompt_svc.update_prompt(
                 user_name, bot_id, params, behaviour_dict, answer_dict
             )
+            self.logger.debug(f"Prompt updated for bot_id={bot_id} by user_name={user_name}")
         else:
             self.logger.warning(
                 f"No BotParameters found for bot_id {bot_id}, prompt not updated"

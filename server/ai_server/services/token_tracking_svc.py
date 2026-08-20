@@ -57,12 +57,16 @@ class TokenTrackingService:
             db.session.commit()
 
             self.logger.info(
-                f"Token usage recorded for user {user_id}: {total_tokens} tokens"
+                f"Token usage recorded: user_id={user_id} bot_id={bot_id} "
+                f"session_id={session_id} model={model_name} "
+                f"prompt={prompt_tokens} completion={completion_tokens} total={total_tokens}"
             )
             return True
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error recording token usage: {str(e)}")
+            self.logger.exception(
+                f"Error recording token usage for user_id={user_id} bot_id={bot_id}: {e}"
+            )
             db.session.rollback()
             return False
         finally:
@@ -85,10 +89,11 @@ class TokenTrackingService:
                 .scalar()
             )
 
+            self.logger.debug(f"get_user_total_tokens user_id={user_id} total={total or 0}")
             return total if total else 0
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting user total tokens: {str(e)}")
+            self.logger.exception(f"Error getting user total tokens for user_id={user_id}: {e}")
             return 0
         finally:
             db.session.close()
@@ -115,10 +120,11 @@ class TokenTrackingService:
                 .scalar()
             )
 
+            self.logger.debug(f"get_user_tokens_last_24h user_id={user_id} total={total or 0}")
             return total if total else 0
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting user tokens last 24h: {str(e)}")
+            self.logger.exception(f"Error getting user tokens last 24h for user_id={user_id}: {e}")
             return 0
         finally:
             db.session.close()
@@ -198,10 +204,15 @@ class TokenTrackingService:
                     for record in records
                 ]
 
+            self.logger.debug(
+                f"get_user_stats_last_24h user_id={user_id} "
+                f"total_tokens={result['total_tokens']} total_requests={result['total_requests']} "
+                f"include_records={include_records}"
+            )
             return result
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting user stats last 24h: {str(e)}")
+            self.logger.exception(f"Error getting user stats last 24h for user_id={user_id}: {e}")
             error_result = {
                 "user_id": user_id,
                 "period": "last_24h",
@@ -251,7 +262,7 @@ class TokenTrackingService:
             }
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting user token stats: {str(e)}")
+            self.logger.exception(f"Error getting user token stats for user_id={user_id}: {e}")
             return {
                 "user_id": user_id,
                 "total_prompt_tokens": 0,
@@ -276,8 +287,8 @@ class TokenTrackingService:
             Liste de dictionnaires contenant l'historique
         """
         # Calculer le timestamp d'il y a 24h
-        print(
-            f"Getting token history for user_id={user_id}, limit={limit}, last_24h={last_24h}"
+        self.logger.debug(
+            f"get_user_token_history user_id={user_id} limit={limit} last_24h={last_24h}"
         )
         try:
             query = db.session.query(TokenUsage)
@@ -301,7 +312,7 @@ class TokenTrackingService:
             ]
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting user token history: {str(e)}")
+            self.logger.exception(f"Error getting user token history for user_id={user_id}: {e}")
             return []
         finally:
             db.session.close()
@@ -341,7 +352,7 @@ class TokenTrackingService:
             }
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting bot token stats: {str(e)}")
+            self.logger.exception(f"Error getting bot token stats for bot_id={bot_id}: {e}")
             return {
                 "bot_id": bot_id,
                 "total_prompt_tokens": 0,
@@ -376,7 +387,7 @@ class TokenTrackingService:
                 .all()
             )
 
-            return [
+            result = [
                 {
                     "user_id": stat.user_id,
                     "total_prompt_tokens": stat.total_prompt_tokens or 0,
@@ -386,9 +397,11 @@ class TokenTrackingService:
                 }
                 for stat in stats
             ]
+            self.logger.info(f"get_all_users_token_stats returned {len(result)} users")
+            return result
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting all users token stats: {str(e)}")
+            self.logger.exception(f"Error getting all users token stats: {e}")
             return []
         finally:
             db.session.close()
@@ -457,7 +470,7 @@ class TokenTrackingService:
             # to avoid float precision loss, which would silently turn
             # tokens_24h into "42" instead of 42 for API consumers. Cast
             # both explicitly so the response is consistently numeric.
-            return {
+            result = {
                 "accounts": {
                     row.user_id: {
                         "tokens_24h": int(row.tokens_24h or 0),
@@ -473,9 +486,16 @@ class TokenTrackingService:
                     for row in guest_rows
                 },
             }
+            self.logger.info(
+                f"get_admin_token_usage_summary scope_user_id={scope_user_id} "
+                f"accounts={len(result['accounts'])} guests={len(result['guests'])}"
+            )
+            return result
 
         except SQLAlchemyError as e:
-            self.logger.error(f"Error getting admin token usage summary: {str(e)}")
+            self.logger.exception(
+                f"Error getting admin token usage summary (scope_user_id={scope_user_id}): {e}"
+            )
             return {"accounts": {}, "guests": {}}
         finally:
             db.session.close()

@@ -23,6 +23,7 @@ from ai_server.decorators.singleton import singleton
 from typing import List, Optional, Dict, Any
 import chromadb
 import os
+import time
 
 logger = BotFactoryLogger()
 
@@ -34,10 +35,10 @@ class ChromaDbService(BaseService[DocumentDto]):
     def __init__(self):
         super().__init__()
         self.config = flask_config
-        logger.info(f"{self.config.CHROMA_CONTAINER}")
-        logger.info(f"{self.config.COLLECTION}")
-        logger.info(f"{self.config.PERSIST}")
-        logger.info(f"{self.config.PERSIST_DIRECTORY}")
+        if self.config.CHROMA_CONTAINER:
+            logger.info(f"Chromadb start in a container, and persist data in dir: {self.config.PERSIST_DIRECTORY}")
+        else:
+             logger.info(f"Chromadb persist data in dir:  {self.config.PERSIST_DIRECTORY}")
         self.embedding_function = FastEmbedEmbeddings(
             model_name="BAAI/bge-small-en-v1.5"
         )
@@ -75,18 +76,27 @@ class ChromaDbService(BaseService[DocumentDto]):
             requests against a dead vector store.
         """
         logger.info("Checking ChromaDB connectivity...")
-        if self.config.CHROMA_CONTAINER:
-            client = chromadb.HttpClient(
-                host=self.config.CHROMA_HOST,
-                port=self.config.CHROMA_PORT,
-                settings=Settings(allow_reset=True),
+        start = time.perf_counter()
+        try:
+            if self.config.CHROMA_CONTAINER:
+                client = chromadb.HttpClient(
+                    host=self.config.CHROMA_HOST,
+                    port=self.config.CHROMA_PORT,
+                    settings=Settings(allow_reset=True),
+                )
+            elif self.config.PERSIST:
+                client = chromadb.PersistentClient(settings=Settings(allow_reset=True))
+            else:
+                client = chromadb.EphemeralClient()
+            client.heartbeat()
+        except Exception as e:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.exception(
+                f"ChromaDB connectivity check failed after {elapsed_ms:.1f}ms: {e}"
             )
-        elif self.config.PERSIST:
-            client = chromadb.PersistentClient(settings=Settings(allow_reset=True))
-        else:
-            client = chromadb.EphemeralClient()
-        client.heartbeat()
-        logger.info("ChromaDB connection OK.")
+            raise
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(f"ChromaDB connection OK ({elapsed_ms:.1f}ms).")
 
     def build_collection(self, collection_name: str) -> None:
         """
@@ -101,47 +111,52 @@ class ChromaDbService(BaseService[DocumentDto]):
         result = self._perform_build(collection_name)
 
     def _perform_build(self, collection_name: str) -> None:
-        logger.info(f"Building ChromaDB collection: {collection_name}")
-        if self.config.CHROMA_CONTAINER:
-            logger.info(
-                "The chromadb is in a container, chromadb is set on client mode."
-            )
-            self.client = chromadb.HttpClient(
-                host=self.config.CHROMA_HOST,
-                port=self.config.CHROMA_PORT,
-                settings=Settings(allow_reset=True),
-            )
-            self.db = Chroma(
-                client=self.client,
-                collection_name=collection_name,
-                embedding_function=self.embedding_function,
-            )
+        logger.debug(f"Building ChromaDB collection: {collection_name}")
+        start = time.perf_counter()
+        try:
+            if self.config.CHROMA_CONTAINER:
+                mode = "container (client mode)"
+                self.client = chromadb.HttpClient(
+                    host=self.config.CHROMA_HOST,
+                    port=self.config.CHROMA_PORT,
+                    settings=Settings(allow_reset=True),
+                )
+                self.db = Chroma(
+                    client=self.client,
+                    collection_name=collection_name,
+                    embedding_function=self.embedding_function,
+                )
 
-        if self.config.PERSIST and not self.config.CHROMA_CONTAINER:
-            logger.info(
-                f"The chroma db is on local machine, persistant folder is: {self.config.PERSIST_DIRECTORY}."
-            )
+            if self.config.PERSIST and not self.config.CHROMA_CONTAINER:
+                mode = f"local persistent (dir={self.config.PERSIST_DIRECTORY})"
+                self.client = chromadb.PersistentClient(settings=Settings(allow_reset=True))
 
-            self.client = chromadb.PersistentClient(settings=Settings(allow_reset=True))
+                self.db = Chroma(
+                    client=self.client,
+                    persist_directory=self.config.PERSIST_DIRECTORY,
+                    collection_name=collection_name,
+                    embedding_function=self.embedding_function,
+                )
 
-            self.db = Chroma(
-                client=self.client,
-                persist_directory=self.config.PERSIST_DIRECTORY,
-                collection_name=collection_name,
-                embedding_function=self.embedding_function,
+            if not self.config.PERSIST and not self.config.CHROMA_CONTAINER:
+                mode = "local ephemeral (no persistence)"
+                self.client = chromadb.EphemeralClient()
+                self.db = Chroma(
+                    client=self.client,
+                    collection_name=collection_name,
+                    embedding_function=self.embedding_function,
+                )
+            self.retriever = self.db.as_retriever()
+        except Exception as e:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.exception(
+                f"Failed to build ChromaDB collection '{collection_name}' after {elapsed_ms:.1f}ms: {e}"
             )
-
-        if not self.config.PERSIST and not self.config.CHROMA_CONTAINER:
-            logger.info(
-                "Chroma db on local machine is without persistence, PERSIST is set to false collection stored won't be saved"
-            )
-            self.client = chromadb.EphemeralClient()
-            self.db = Chroma(
-                client=self.client,
-                collection_name=collection_name,
-                embedding_function=self.embedding_function,
-            )
-        self.retriever = self.db.as_retriever()
+            raise
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"ChromaDB collection '{collection_name}' built - mode={mode} - {elapsed_ms:.1f}ms"
+        )
 
     def create(self, data: Dict[str, Any]) -> DocumentDto:
         """
@@ -166,7 +181,21 @@ class ChromaDbService(BaseService[DocumentDto]):
         self.build_collection(collection_name)
 
         doc = Document(page_content=data["content"], metadata=data.get("metadata", {}))
-        doc_ids = self.db.add_documents([doc])
+        start = time.perf_counter()
+        try:
+            doc_ids = self.db.add_documents([doc])
+        except Exception as e:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.exception(
+                f"ChromaDB add_documents failed for collection '{collection_name}' "
+                f"after {elapsed_ms:.1f}ms: {e}"
+            )
+            raise
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"Document created in collection '{collection_name}' "
+            f"id={doc_ids[0] if doc_ids else None} - {elapsed_ms:.1f}ms"
+        )
 
         return DocumentDto(
             id=doc_ids[0] if doc_ids else None,
@@ -201,7 +230,21 @@ class ChromaDbService(BaseService[DocumentDto]):
         self, docs: List[Document], collection_name: str
     ) -> List[str]:
         self.build_collection(collection_name)
-        return self.db.add_documents(docs)
+        start = time.perf_counter()
+        try:
+            doc_ids = self.db.add_documents(docs)
+        except Exception as e:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.exception(
+                f"ChromaDB add_documents failed for collection '{collection_name}' "
+                f"({len(docs)} docs) after {elapsed_ms:.1f}ms: {e}"
+            )
+            raise
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"Saved {len(doc_ids)} documents to collection '{collection_name}' - {elapsed_ms:.1f}ms"
+        )
+        return doc_ids
 
     def ingest_pdf_file(self, pdf_file_path: str, collection_name: str) -> List[str]:
         """
@@ -228,6 +271,7 @@ class ChromaDbService(BaseService[DocumentDto]):
     def _perform_ingest_pdf(
         self, pdf_file_path: str, collection_name: str
     ) -> List[str]:
+        filename = os.path.basename(pdf_file_path)
         docs = PyPDFLoader(file_path=pdf_file_path).load()
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1024, chunk_overlap=100
@@ -235,6 +279,10 @@ class ChromaDbService(BaseService[DocumentDto]):
         chunks = text_splitter.split_documents(docs)
         chunks = filter_complex_metadata(chunks)
         embedding_function = FastEmbedEmbeddings()
+        logger.debug(
+            f"PDF '{filename}' loaded: {len(docs)} pages, {len(chunks)} chunks - "
+            f"ingesting into collection '{collection_name}'"
+        )
 
         return self.save_documents(docs, collection_name)
 
@@ -272,6 +320,10 @@ class ChromaDbService(BaseService[DocumentDto]):
         chunks = text_splitter.split_documents(docs)
         chunks = filter_complex_metadata(chunks)
         embedding_function = FastEmbedEmbeddings()
+        logger.debug(
+            f"Directory '{directory_path}' loaded: {len(docs)} files, {len(chunks)} chunks - "
+            f"ingesting into collection '{collection_name}'"
+        )
         return self.save_documents(docs, collection_name)
 
     def ingest_text_content(self, content: str, collection_name: str) -> List[str]:
@@ -302,7 +354,9 @@ class ChromaDbService(BaseService[DocumentDto]):
         )
         texts = text_splitter.split_text(content)
         docs = [Document(page_content=t) for t in texts]
-        logger.info(f"About to save {len(docs)} documents")
+        logger.debug(
+            f"Text content split into {len(docs)} chunks - ingesting into collection '{collection_name}'"
+        )
         return self.save_documents(docs, collection_name)
 
     def get_dto_by_id(self, entity_id: str) -> DocumentDto:
@@ -328,9 +382,13 @@ class ChromaDbService(BaseService[DocumentDto]):
             raise ServiceError("Database not initialized. Call build_collection first.")
 
         # ChromaDB doesn't have direct get by ID, so we'll search in the current collection
+        start = time.perf_counter()
         results = self.db.get(ids=[entity_id])
+        elapsed_ms = (time.perf_counter() - start) * 1000
         if not results["documents"]:
+            logger.warning(f"Document '{entity_id}' not found in ChromaDB ({elapsed_ms:.1f}ms)")
             raise NotFoundError("Document", str(entity_id))
+        logger.debug(f"Document '{entity_id}' fetched from ChromaDB ({elapsed_ms:.1f}ms)")
 
         return DocumentDto(
             id=entity_id,
@@ -358,6 +416,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         if not self.db:
             raise ServiceError("Database not initialized. Call build_collection first.")
 
+        start = time.perf_counter()
         results = self.db.get()
         documents = []
 
@@ -371,6 +430,8 @@ class ChromaDbService(BaseService[DocumentDto]):
                 )
             )
 
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(f"Fetched {len(documents)} documents from ChromaDB ({elapsed_ms:.1f}ms)")
         return documents
 
     def update(self, entity_id: str, data: Dict[str, Any]) -> DocumentDto:
@@ -397,6 +458,7 @@ class ChromaDbService(BaseService[DocumentDto]):
 
     def _perform_update(self, entity_id: str, data: Dict[str, Any]) -> DocumentDto:
         # ChromaDB doesn't support direct updates, so we delete and recreate
+        logger.debug(f"Updating document '{entity_id}' via delete+recreate (no native update in ChromaDB)")
         self.delete(entity_id)
         return self.create(
             {
@@ -428,7 +490,10 @@ class ChromaDbService(BaseService[DocumentDto]):
         if not self.db:
             raise ServiceError("Database not initialized. Call build_collection first.")
 
+        start = time.perf_counter()
         self.db.delete([entity_id])
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(f"Document '{entity_id}' deleted from ChromaDB ({elapsed_ms:.1f}ms)")
         return True
 
     def delete_all_documents(self, collection_name: str) -> bool:
@@ -451,12 +516,16 @@ class ChromaDbService(BaseService[DocumentDto]):
 
     def _perform_delete_all(self, collection_name: str) -> bool:
         self.build_collection(collection_name)
-        ids = []
-        for doc_id in self.db.get()["ids"]:
-            logger.info(doc_id)
-            ids.append(doc_id)
+        ids = self.db.get()["ids"]
         if ids:
+            start = time.perf_counter()
             self.db.delete(ids)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.info(
+                f"Deleted all {len(ids)} documents from collection '{collection_name}' ({elapsed_ms:.1f}ms)"
+            )
+        else:
+            logger.debug(f"No documents to delete in collection '{collection_name}'")
         return True
 
     def delete_documents_by_ids(self, collection_name: str, ids: List[str]) -> bool:
@@ -483,9 +552,13 @@ class ChromaDbService(BaseService[DocumentDto]):
 
     def _perform_delete_by_ids(self, collection_name: str, ids: List[str]) -> bool:
         self.build_collection(collection_name)
-        logger.info(f"About to delete {len(ids)} documents in {collection_name}")
+        logger.debug(f"Deleting {len(ids)} documents from collection '{collection_name}'")
+        start = time.perf_counter()
         self.db.delete(ids)
-        logger.info(f"{len(ids)} docs deleted from collection {collection_name}.")
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"Deleted {len(ids)} documents from collection '{collection_name}' ({elapsed_ms:.1f}ms)"
+        )
         return True
 
     def get_database(self) -> Chroma:
@@ -556,13 +629,16 @@ class ChromaDbService(BaseService[DocumentDto]):
             List of document IDs
         """
         if file_path.lower().endswith(".pdf"):
+            logger.debug(f"ingest() routing '{os.path.basename(file_path)}' to PDF ingestion")
             return self.ingest_pdf(file_path, collection_name)
         else:
             # Assume it's a text file or directory
             if os.path.isdir(file_path):
+                logger.debug(f"ingest() routing '{file_path}' to directory ingestion")
                 return self.ingest_directory(file_path, collection_name)
             else:
                 # Read as text file
+                logger.debug(f"ingest() routing '{os.path.basename(file_path)}' to text ingestion")
                 with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
                 return self.ingest_text(content, collection_name)
