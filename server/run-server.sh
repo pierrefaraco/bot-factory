@@ -46,6 +46,9 @@ set -a
 source .env
 set +a
 
-# == Flask run ==
-echo "Starting Flask server on port $FLASK_PORT..."
-uv run flask run --host 0.0.0.0 -p $FLASK_PORT #--no-reload
+# == ASGI run ==
+# Serves ai_server/asgi.py's FastAPI app, which mounts the existing Flask
+# app for every route not yet migrated (see server/CLAUDE.md migration
+# notes) -- same port, same URLs as the previous `flask run`.
+echo "Starting ASGI server on port $FLASK_PORT..."
+uv run uvicorn ai_server.asgi:app --host 0.0.0.0 --port $FLASK_PORT --reload

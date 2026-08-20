@@ -33,7 +33,6 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from ai_server.dao.database import Session, Message, db
 from sqlalchemy.exc import SQLAlchemyError
-from ai_server.rest.rest_bot_parameters import bot_parameters_svc
 import time
 
 langchain.debug = False

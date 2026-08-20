@@ -18,11 +18,11 @@ class ClassNameFilter(logging.Filter):
 
 
 class LogManager:
-    def setup_logger(self, app):
+    def setup_logger(self, logging_level: str):
         """Build a config object to setup the Python logging framework and inject it with the dictConfig method"""
-        my_formats = self.__setup_formats(app)
-        my_handlers = self.__setup_handlers(app)
-        my_loggers = self.__setup_loggers(app)
+        my_formats = self.__setup_formats()
+        my_handlers = self.__setup_handlers()
+        my_loggers = self.__setup_loggers(logging_level)
         # *** Final object building.
         log_config = {
             "version": 1,
@@ -42,7 +42,7 @@ class LogManager:
     def apply_log_config(self, log_config):
         dictConfig(log_config)
 
-    def __setup_formats(self, app):
+    def __setup_formats(self):
         """Define avaiable formats for handlers."""
         return {
             "formatters": {
@@ -53,9 +53,8 @@ class LogManager:
             }
         }
 
-    def __setup_handlers(self, app):
+    def __setup_handlers(self):
         """Define avaiable handlers for loggers."""
-        app.logger.handlers = []
         return {
             "handlers": {
                 "default_handler": {
@@ -70,7 +69,7 @@ class LogManager:
                     "filters": ["class_name_filter"],
                     "stream": "ext://sys.stdout",
                 },
-                "flask_log_handler": {
+                "server_log_handler": {
                     "class": "logging.StreamHandler",
                     "formatter": "standard_format",
                     "filters": ["class_name_filter"],
@@ -79,9 +78,8 @@ class LogManager:
             }
         }
 
-    def __setup_loggers(self, app):
-        """Define a defaut logger, one for the application logs and configure existing flask loggers."""
-        logging_level = app.config["LOGGER_LVL"]
+    def __setup_loggers(self, logging_level: str):
+        """Define a defaut logger, one for the application logs and configure uvicorn's own loggers."""
         return {
             "loggers": {  # root logger
                 "": {
@@ -94,14 +92,19 @@ class LogManager:
                     "handlers": ["application_logs_handler"],
                     "propagate": False,
                 },
-                "werkzeug": {
+                "uvicorn": {
                     "level": logging_level,
-                    "handlers": ["flask_log_handler"],
+                    "handlers": ["server_log_handler"],
                     "propagate": False,
                 },
-                "flaskr": {
+                "uvicorn.error": {
                     "level": logging_level,
-                    "handlers": ["flask_log_handler"],
+                    "handlers": ["server_log_handler"],
+                    "propagate": False,
+                },
+                "uvicorn.access": {
+                    "level": logging_level,
+                    "handlers": ["server_log_handler"],
                     "propagate": False,
                 },
             }

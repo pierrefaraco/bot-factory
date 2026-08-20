@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ai-server"
 version = "1.0.0"
-description = "AI Bot Factory - Python Flask Backend Server"
+description = "AI Bot Factory - Python FastAPI Backend Server"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -18,15 +18,13 @@ dependencies = [
     "wheel",
 
     # Web Framework
-    "Flask==2.3.3",
-    "Flask-CORS==4.0.0",
-    "Flask-JWT-Extended==4.5.2",
     "Werkzeug==3.0.1",
-    "spectree>=1.2.10",
     "pydantic[email]>=2.5",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.9",
 
     # Database
-    "Flask-SQLAlchemy==3.1.1",
     "sqlalchemy==2.0.40",
     "pymysql==1.1.0",
     "alembic==1.13.1",

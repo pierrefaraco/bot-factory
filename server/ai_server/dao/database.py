@@ -1,19 +1,22 @@
 # from typing import Text
+import contextvars
+from contextlib import contextmanager
 from typing import Optional
 from sqlalchemy import ForeignKey
 from sqlalchemy import String, Integer
 import sqlalchemy
+from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import scoped_session, sessionmaker
 import datetime
 from sqlalchemy import Enum
 from datetime import datetime, timezone
 from enum import Enum
 from sqlalchemy import DateTime
+
+from ai_server.config.config import AppConfig
 
 ROOT_CHAPTER_ID = "this_is_a_root_chapter"
 
@@ -22,7 +25,70 @@ class Base(DeclarativeBase):
     pass
 
 
-db = SQLAlchemy(model_class=Base)
+# Flask-SQLAlchemy previously backed Model.query/db.session with a
+# scoped_session tied to Flask's own app-context contextvar, torn down
+# automatically when that context popped. Every route is now native
+# FastAPI, so this scopes the same way but on a contextvar this module
+# owns directly instead: db_session_scope() (used by
+# ai_server/dependencies/db_session.py's with_db_session /
+# stream_with_db_session) sets it to a fresh, unique value for one
+# request -- or one streamed chunk, for a long-lived streaming response --
+# and calls SessionLocal.remove() when that unit of work ends, so a
+# Session never survives past the request that created it, same lifecycle
+# as before without needing a Flask app context to provide it.
+_db_scope_id = contextvars.ContextVar("db_scope_id", default=None)
+
+
+def _scopefunc():
+    return _db_scope_id.get()
+
+
+_engine = None
+
+
+def _get_engine():
+    # Lazy: Flask-SQLAlchemy didn't build its engine until db.init_app(app)
+    # ran against a real app's already-loaded config, so importing this
+    # module on its own (e.g. test/factories.py, for the model classes)
+    # never required DATABASE_URL to be set. create_engine(None) fails
+    # immediately (invalid URL), so building it eagerly at import time here
+    # would newly require every such import to have DATABASE_URL set too --
+    # deferring to first actual use preserves the original laziness.
+    global _engine
+    if _engine is None:
+        _engine = create_engine(AppConfig.SQLALCHEMY_DATABASE_URI, pool_pre_ping=True)
+    return _engine
+
+
+def _session_factory():
+    return sessionmaker(bind=_get_engine())()
+
+
+SessionLocal = scoped_session(_session_factory, scopefunc=_scopefunc)
+
+
+@contextmanager
+def db_session_scope():
+    token = _db_scope_id.set(object())
+    try:
+        yield
+    finally:
+        SessionLocal.remove()
+        _db_scope_id.reset(token)
+
+
+class _DbCompat:
+    """Minimal flask_sqlalchemy.SQLAlchemy drop-in exposing only what this
+    codebase's Model.query / db.session call sites actually use, so none
+    of them need to change."""
+
+    Model = Base
+    session = SessionLocal
+
+
+db = _DbCompat()
+
+Base.query = SessionLocal.query_property()
 
 
 class InterlocutorIdentity(Enum):

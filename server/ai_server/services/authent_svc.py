@@ -3,10 +3,10 @@ from threading import Thread
 import datetime
 from typing import Optional
 
-from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity
 from werkzeug.security import check_password_hash
 
 from ai_server.dao.database import Bot, User, db
+from ai_server.dependencies.auth import create_access_token
 from ai_server.exceptions.service_exceptions import AuthenticationError, NotFoundError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.base_service import BaseService
@@ -75,26 +75,31 @@ class AuthenticationService(BaseService):
         )
         return access_token
 
-    def logout(self) -> None:
+    def logout(self, jti: str) -> None:
         """
         Logout user by revoking their JWT token.
+
+        jti is passed in rather than read via flask_jwt_extended's
+        get_jwt() here, so this is callable from native FastAPI routes
+        too (Phase 9 of the Flask -> FastAPI migration), which don't run
+        under Flask-JWT-Extended's jwt_required() and have no token
+        context to read it from.
         """
         user = JWTTools.get_user()
         self.logger.info(f"Logout initiated for user: {user}")
-        jti = get_jwt()["jti"]
         self._start_revoke_jti(jti)
 
-    def refresh_token(self) -> str:
+    def refresh_token(self, jti: str, identity) -> str:
         """
         Refresh user JWT token.
+
+        jti/identity passed in for the same reason as logout() above.
 
         Returns:
             New access token
         """
-        jwt = get_jwt()
-        self.logger.info(f"Refreshing JWT token for {jwt['sub']}")
-        self._start_revoke_jti(jwt["jti"])
-        identity = get_jwt_identity()
+        self.logger.info(f"Refreshing JWT token for {identity}")
+        self._start_revoke_jti(jti)
         access_token = create_access_token(identity=identity)
         self.logger.info(f"JWT token refreshed successfully for user_id={identity}")
         return access_token
@@ -123,15 +128,3 @@ class AuthenticationService(BaseService):
         global REVOKED_JWT_LIST
         REVOKED_JWT_LIST.append(jti)
         self.logger.debug(f"JWT {jti} has been revoked")
-
-    def is_jwt_revoked(self) -> bool:
-        """
-        Check if current JWT token is revoked.
-
-        Returns:
-            True if token is revoked, False otherwise
-        """
-        jti = get_jwt()["jti"]
-        global REVOKED_JWT_LIST
-        self.logger.debug(f"Checking if JWT {jti} is in revoked list")
-        return jti in REVOKED_JWT_LIST

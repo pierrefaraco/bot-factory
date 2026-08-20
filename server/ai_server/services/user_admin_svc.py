@@ -10,7 +10,6 @@ from typing import List, Optional, Dict, Any
 from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
-from flask import jsonify
 from ai_server.decorators.singleton import singleton
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.bot_svc import BotService
@@ -820,27 +819,23 @@ class UserAdminService(BaseService[UserDto]):
             user = User.query.get(user_id)
             if not user:
                 logger.warning(f"get_selected_bot({user_id}) failed: user not found")
-                return jsonify({"error": "User not found"}), 404
+                return {"error": "User not found"}, 404
 
             if not user.selected_bot_id:
-                return jsonify({"selected_bot_id": None, "bot": None}), 200
+                return {"selected_bot_id": None, "bot": None}, 200
 
             bot = Bot.query.get(user.selected_bot_id)
             if not bot:
-                return jsonify(
-                    {"selected_bot_id": user.selected_bot_id, "bot": None}
-                ), 200
+                return {"selected_bot_id": user.selected_bot_id, "bot": None}, 200
 
-            return jsonify(
-                {
-                    "selected_bot_id": user.selected_bot_id,
-                    "bot": {
-                        "id": bot.id,
-                        "bot_name": bot.bot_name,
-                        "prompt": bot.prompt,
-                    },
-                }
-            ), 200
+            return {
+                "selected_bot_id": user.selected_bot_id,
+                "bot": {
+                    "id": bot.id,
+                    "bot_name": bot.bot_name,
+                    "prompt": bot.prompt,
+                },
+            }, 200
         except Exception as exc:
             logger.exception(f"Error retrieving selected bot for user {user_id}: {exc}")
-            return jsonify({"error": "Internal server error"}), 500
+            return {"error": "Internal server error"}, 500

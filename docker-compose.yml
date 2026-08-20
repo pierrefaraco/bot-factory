@@ -41,7 +41,7 @@ services:
       retries: 5
       start_period: 10s
 
-  # Python Flask Backend
+  # Python FastAPI Backend
   api:
     build:
       context: ./server
@@ -53,9 +53,6 @@ services:
       chromadb:
         condition: service_healthy
     environment:
-      FLASK_APP: ai_server.main
-      FLASK_ENV: ${FLASK_ENV:-development}
-      FLASK_DEBUG: ${FLASK_DEBUG:-True}
       DATABASE_URL: mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@${MYSQL_HOST:-db}:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
       CHROMA_CONTAINER: ${CHROMA_CONTAINER:-true}

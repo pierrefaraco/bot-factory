@@ -45,5 +45,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 # Expose port
 EXPOSE 444
 
-# Run Flask application
-CMD ["flask", "run", "--host", "0.0.0.0", "--port", "444"]
+# Run the ASGI application
+CMD ["uvicorn", "ai_server.asgi:app", "--host", "0.0.0.0", "--port", "444"]

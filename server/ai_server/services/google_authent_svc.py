@@ -3,7 +3,7 @@ from multiprocessing import AuthenticationError
 from ai_server.services.base_service import BaseService
 from google.oauth2 import id_token
 from google.auth.transport import requests
-from flask_jwt_extended import create_access_token
+from ai_server.dependencies.auth import create_access_token
 from ai_server.services.user_admin_svc import UserAdminService
 from ai_server.dao.database import User
 from ai_server.dto.user_dto import UserDto
