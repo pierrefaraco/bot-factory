@@ -2,7 +2,7 @@
 
 A full-stack AI bot creation and management platform that empowers users to create, customize, and deploy intelligent chatbots with advanced features like knowledge base management and token tracking.
 
-![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![Flask](https://img.shields.io/badge/Flask-2.3-green) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-MIT-green)
+![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-teal) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
 
@@ -35,7 +35,7 @@ A full-stack AI bot creation and management platform that empowers users to crea
 - JWT handling with interceptors
 
 **Backend**
-- Python Flask 2.3
+- Python FastAPI 0.115
 - SQLAlchemy 2.0 ORM
 - LangChain ecosystem for LLM integration
 - ChromaDB for vector storage (dedicated container)
@@ -60,21 +60,21 @@ A full-stack AI bot creation and management platform that empowers users to crea
                      │
 ┌────────────────────▼────────────────────────────────────┐
 │              Nginx (Reverse Proxy)                      │
-│         - API routing to Flask backend                  │
+│         - API routing to FastAPI backend                │
 │         - Static file serving                           │
 │         - Security headers                              │
 └────────────────────┬────────────────────────────────────┘
                      │
 ┌────────────────────▼────────────────────────────────────┐
-│          Flask Backend (Python 3.12+)                   │
+│         FastAPI Backend (Python 3.12+)                  │
 │  ┌─────────────┬──────────────┬──────────────┐          │
 │  │   REST API  │  Middleware  │  Decorators  │          │
 │  └──────┬──────┴──────┬───────┴────────┬─────┘          │
 │         │             │                │                │
-│  ┌──────▼─────┬──────▼──────┬────────▼────┐            │
-│  │  Services  │  Database   │  External   │            │
-│  │  Layer     │   (ORM)     │  Services   │            │
-│  └────────────┴─────────────┴─────────────┘            │
+│  ┌──────▼─────┬───────▼──────┬────────▼────┐            │
+│  │  Services  │  Database   │  External    │            │
+│  │  Layer     │   (ORM)     │  Services    │            │
+│  └────────────┴─────────────┴──────────────┘            │
 └──────────────────┬──────────────────────────────────────┘
                    │
     ┌──────────────┴──────────────┐
@@ -144,6 +144,7 @@ For detailed setup instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ### Server Documentation
 - `ALEMBIC_SETUP.md` - Database migration commands
+- **[server/doc/LANGCHAIN_ARCHITECTURE.md](server/doc/LANGCHAIN_ARCHITECTURE.md)** - How LangChain is used (RAG chains, ingestion, streaming, token tracking) with diagrams
 - `CALLBACK_IMPLEMENTATION.md` - LLM token counting with LangChain
 - `IMPLEMENTATION_SUMMARY.md` - Token tracking system overview
 
@@ -340,16 +341,16 @@ bot-factory/
 │   ├── nginx.conf
 │   └── CLAUDE.md
 │
-├── server/                       # Python Flask Backend
+├── server/                       # Python FastAPI Backend
 │   ├── ai_server/
-│   │   ├── api_controllers/     # REST endpoints
+│   │   ├── routers/             # REST endpoints
 │   │   ├── services/            # Business logic
 │   │   ├── dao/                 # Database models
 │   │   ├── config/              # Configuration
 │   │   ├── decorators/          # Custom decorators
 │   │   ├── dto/                 # Data transfer objects
 │   │   ├── log/                 # Logging
-│   │   └── main.py              # Flask app factory
+│   │   └── asgi.py              # FastAPI app factory
 │   ├── db/alembic/              # Database migrations
 │   ├── test/                    # Unit tests
 │   ├── pyproject.toml           # Python dependencies (managed with uv)
@@ -481,7 +482,8 @@ For more troubleshooting, see [DEVELOPMENT.md](DEVELOPMENT.md#troubleshooting).
 - `ng-bootstrap` - Bootstrap components
 
 ### Backend
-- `Flask==2.3.3` - Web framework
+- `fastapi>=0.115` - Web framework
+- `uvicorn>=0.32` - ASGI server
 - `SQLAlchemy==2.0.40` - ORM
 - `langchain-*` - LLM integration
 - `chromadb>=1.3.0` - Vector database client
@@ -563,7 +565,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgments
 
 - Built with [Angular](https://angular.io)
-- Powered by [Flask](https://flask.palletsprojects.com/)
+- Powered by [FastAPI](https://fastapi.tiangolo.com/)
 - LLM integration via [LangChain](https://python.langchain.com/)
 - Vector storage with [ChromaDB](https://www.trychromadb.com/)
 
