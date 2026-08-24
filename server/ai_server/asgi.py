@@ -82,11 +82,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=AppConfig.APP_NAME,
     version=AppConfig.APP_VERSION,
-    # Nothing publishes a doc page today: SpecTree's self-hosted Swagger UI
-    # was Flask-only and is gone along with Flask; FastAPI's own hasn't
-    # been wired up as a replacement.
-    docs_url=None,
-    openapi_url=None,
     lifespan=lifespan,
 )
 

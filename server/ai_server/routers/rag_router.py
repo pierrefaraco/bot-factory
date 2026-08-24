@@ -166,7 +166,7 @@ def trigfirstmessage(
             bot_id, user_id, parsed_data, question, hide=True,
             session_id=session.id if session else -1,
         )
-        response_iterator = generate(rag_svc)
+        response_iterator = generate()
 
         logger.info(f"trigfirstmessage streaming started for user_id={user_id} bot_id={bot_id}")
         return StreamingResponse(
@@ -229,7 +229,7 @@ def streamchat(
     generate: Callable = rag_svc.ask_with_stream(
         bot_id, user_id, parsed_data, question, session_id=session.id if session else -1
     )
-    response_iterator = generate(rag_svc)
+    response_iterator = generate()
 
     logger.info(f"streamchat streaming started for user_id={user_id} bot_id={bot_id}")
     return StreamingResponse(

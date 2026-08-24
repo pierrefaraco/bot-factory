@@ -93,8 +93,14 @@ Points clés :
 
 ## 3. Construction de la chaîne RAG (`RagService.build`)
 
-À chaque question, `RagService.build(bot_id, user_id, session_id)` reconstruit la chaîne
-conversationnelle (elle n'est pas mise en cache entre les appels) :
+À chaque question, `RagService.build(bot_id, user_id, session_id)` **reconstruit et retourne**
+une nouvelle chaîne conversationnelle — elle n'est jamais mise en cache ni stockée sur `self` :
+`RagService` est un singleton partagé entre requêtes concurrentes, et chaque appel a besoin de
+son propre `TokenCountingCallback` (lié à ce `user_id`/`bot_id`/`session_id`) attaché au LLM, donc
+réutiliser une chaîne stockée sur l'instance risquerait de mélanger le tracking de tokens de deux
+requêtes simultanées. C'est `build()` elle-même qui orchestre les 5 étapes ; chacune est déléguée
+à une méthode privée dédiée (`_build_history_aware_retriever`, `_build_answer_chain`,
+`_build_retrieval_chain`, `_wrap_with_history`) qui porte le même nom que l'étape du schéma :
 
 Le diagramme ci-dessous suit l'ordre dans lequel **une question traverse réellement le pipeline**
 au moment de `.invoke()` / `.stream()` — c'est cet ordre d'exécution qui rend la construction
@@ -209,7 +215,7 @@ sequenceDiagram
     Note over C,R: Mode synchrone — POST /api/rag/chat
     C->>R: chat(question)
     R->>RAG: ask(bot_id, user_id, query)
-    RAG->>RAG: build() (reconstruit la chaîne)
+    RAG->>RAG: build() → nouvelle conversational_rag_chain
     RAG->>CHAIN: invoke({"input": query})
     CHAIN->>CB: on_llm_end(response)
     CB->>TT: record_token_usage(...)
@@ -220,6 +226,7 @@ sequenceDiagram
     Note over C,R: Mode streaming — GET /api/rag/streamchat (SSE)
     C->>R: streamchat(question)
     R->>RAG: ask_with_stream(bot_id, user_id, query)
+    RAG->>RAG: build() → nouvelle conversational_rag_chain
     RAG->>CHAIN: stream({"input": query})
     loop pour chaque chunk
         CHAIN-->>RAG: chunk["answer"]

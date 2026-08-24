@@ -322,14 +322,23 @@ class User(db.Model):
 class Knowledge(db.Model):
     __tablename__ = "knowledge"
     id: Mapped[int] = mapped_column(primary_key=True)
-    bot_id: Mapped[int] = mapped_column(ForeignKey("bot.id", ondelete="CASCADE"))
+    bot_id: Mapped[int] = mapped_column(ForeignKey("bot.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(54))
     date: Mapped[datetime] = mapped_column(String(64))
     content: Mapped[str] = mapped_column(String(4096))
-    knowledge_dad_id: Mapped[str] = mapped_column(String(64))
+    knowledge_dad_id: Mapped[str] = mapped_column(String(64), index=True)
     children_ref_id: Mapped[str] = mapped_column(String(64))
     indice: Mapped[int] = mapped_column()
     pdf_file: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sqlalchemy.text("CURRENT_TIMESTAMP")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sqlalchemy.text("CURRENT_TIMESTAMP")
+    )
+    vector_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     def __repr__(self) -> str:
         return f"Chapter(id={self.id!r}, bot_id={self.bot_id!r}, name={self.name!r},  date={self.date!r}, content={self.content!r},knowledge_dad_id={self.knowledge_dad_id!r},indice={self.indice!r},children_ref_id={self.children_ref_id!r}, pdf_file={self.pdf_file!r})"

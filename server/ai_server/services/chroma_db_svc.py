@@ -246,13 +246,19 @@ class ChromaDbService(BaseService[DocumentDto]):
         )
         return doc_ids
 
-    def ingest_pdf_file(self, pdf_file_path: str, collection_name: str) -> List[str]:
+    def ingest_pdf_file(
+        self,
+        pdf_file_path: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
         """
         Ingest a PDF file into the vector database.
 
         Args:
             pdf_file_path: Path to the PDF file
             collection_name: Name of the collection
+            metadata: Optional metadata to attach to every chunk (e.g. knowledge_id)
 
         Returns:
             List of document IDs
@@ -263,16 +269,23 @@ class ChromaDbService(BaseService[DocumentDto]):
         result = self._perform_ingest_pdf(
             pdf_file_path,
             collection_name,
+            metadata,
         )
         if result is None:
             raise ServiceError("PDF ingestion failed.")
         return result
 
     def _perform_ingest_pdf(
-        self, pdf_file_path: str, collection_name: str
+        self,
+        pdf_file_path: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         filename = os.path.basename(pdf_file_path)
         docs = PyPDFLoader(file_path=pdf_file_path).load()
+        if metadata:
+            for doc in docs:
+                doc.metadata.update(metadata)
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1024, chunk_overlap=100
         )
@@ -284,7 +297,7 @@ class ChromaDbService(BaseService[DocumentDto]):
             f"ingesting into collection '{collection_name}'"
         )
 
-        return self.save_documents(docs, collection_name)
+        return self.save_documents(chunks, collection_name)
 
     def ingest_directory_files(
         self, directory_path: str, collection_name: str
@@ -324,15 +337,21 @@ class ChromaDbService(BaseService[DocumentDto]):
             f"Directory '{directory_path}' loaded: {len(docs)} files, {len(chunks)} chunks - "
             f"ingesting into collection '{collection_name}'"
         )
-        return self.save_documents(docs, collection_name)
+        return self.save_documents(chunks, collection_name)
 
-    def ingest_text_content(self, content: str, collection_name: str) -> List[str]:
+    def ingest_text_content(
+        self,
+        content: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
         """
         Ingest text content into the vector database.
 
         Args:
             content: Text content to ingest
             collection_name: Name of the collection
+            metadata: Optional metadata to attach to every chunk (e.g. knowledge_id)
 
         Returns:
             List of document IDs
@@ -343,17 +362,23 @@ class ChromaDbService(BaseService[DocumentDto]):
         result = self._perform_ingest_text(
             content,
             collection_name,
+            metadata,
         )
         if result is None:
             raise ServiceError("Text ingestion failed.")
         return result
 
-    def _perform_ingest_text(self, content: str, collection_name: str) -> List[str]:
+    def _perform_ingest_text(
+        self,
+        content: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1024, chunk_overlap=100
         )
         texts = text_splitter.split_text(content)
-        docs = [Document(page_content=t) for t in texts]
+        docs = [Document(page_content=t, metadata=dict(metadata) if metadata else {}) for t in texts]
         logger.debug(
             f"Text content split into {len(docs)} chunks - ingesting into collection '{collection_name}'"
         )
@@ -561,6 +586,35 @@ class ChromaDbService(BaseService[DocumentDto]):
         )
         return True
 
+    def delete_documents_by_metadata(self, collection_name: str, where: Dict[str, Any]) -> bool:
+        """
+        Delete documents matching a metadata filter.
+
+        Args:
+            collection_name: Name of the collection
+            where: Chroma metadata filter (e.g. {"knowledge_id": 42})
+
+        Returns:
+            True if deletion was successful
+
+        Raises:
+            ServiceError: When deletion fails
+        """
+        result = self._perform_delete_by_metadata(collection_name, where)
+        if result is None:
+            return False
+        return result
+
+    def _perform_delete_by_metadata(self, collection_name: str, where: Dict[str, Any]) -> bool:
+        self.build_collection(collection_name)
+        start = time.perf_counter()
+        self.db.delete(where=where)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"Deleted documents matching {where} from collection '{collection_name}' ({elapsed_ms:.1f}ms)"
+        )
+        return True
+
     def get_database(self) -> Chroma:
         """
         Get the Chroma database instance.
@@ -588,17 +642,27 @@ class ChromaDbService(BaseService[DocumentDto]):
         """Save documents (backward compatibility)"""
         return self.save_documents(docs, collection_name)
 
-    def ingest_pdf(self, pdf_file_path: str, collection_name: str) -> List[str]:
+    def ingest_pdf(
+        self,
+        pdf_file_path: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
         """Ingest PDF (backward compatibility)"""
-        return self.ingest_pdf_file(pdf_file_path, collection_name)
+        return self.ingest_pdf_file(pdf_file_path, collection_name, metadata)
 
     def ingest_directory(self, directory_path: str, collection_name: str) -> List[str]:
         """Ingest directory (backward compatibility)"""
         return self.ingest_directory_files(directory_path, collection_name)
 
-    def ingest_text(self, content: str, collection_name: str) -> List[str]:
+    def ingest_text(
+        self,
+        content: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[str]:
         """Ingest text (backward compatibility)"""
-        return self.ingest_text_content(content, collection_name)
+        return self.ingest_text_content(content, collection_name, metadata)
 
     def delete_all(self, collection_name: str) -> bool:
         """Delete all documents (backward compatibility)"""

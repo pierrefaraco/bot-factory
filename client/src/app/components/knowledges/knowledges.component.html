@@ -55,6 +55,15 @@
                     <!-- Icône du type de nœud -->
                     <span class="node-icon material-icons" aria-hidden="true">description</span>
 
+                    <!-- Statut de synchronisation avec la base de connaissances -->
+                    <span
+                        class="sync-status-icon material-icons"
+                        [ngClass]="knowledgeSyncStatus(node)"
+                        [title]="knowledgeSyncTooltip(node)"
+                        aria-hidden="true">
+                        {{ knowledgeSyncStatus(node) === 'synced' ? 'cloud_done' : 'cloud_off' }}
+                    </span>
+
                     <!-- Contenu du nœud -->
                     <div class="node-info">
                         <span class="node-text label" [title]="node.name">
@@ -153,6 +162,15 @@
                     <!-- Icône du type de nœud -->
                     <span class="node-icon material-icons" aria-hidden="true">
                         {{ treeControl.isExpanded(node) ? 'folder_open' : 'folder' }}
+                    </span>
+
+                    <!-- Statut de synchronisation avec la base de connaissances -->
+                    <span
+                        class="sync-status-icon material-icons"
+                        [ngClass]="knowledgeSyncStatus(node)"
+                        [title]="knowledgeSyncTooltip(node)"
+                        aria-hidden="true">
+                        {{ knowledgeSyncStatus(node) === 'synced' ? 'cloud_done' : 'cloud_off' }}
                     </span>
 
                     <!-- Contenu du nœud -->

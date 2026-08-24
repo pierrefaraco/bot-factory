@@ -25,6 +25,7 @@ import { Subscription } from 'rxjs';
 import { Bot } from '@app/models/bot.model';
 import { CommunicationService } from '@app/services/communication.service';
 import { BotService } from '@app/services/bot.service';
+import { SuccessNotificationService } from '@app/services/success-notification.service';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 
 @Component({
@@ -81,13 +82,12 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
   chapters$ = this.knowledgesSubject.asObservable();
 
 
-  message = '';
-
   private expandedNodeIds = new Set<number>();
   constructor(private knowledgeService: KnowledgeService,
     private dialog: MatDialog,
     private communicationService: CommunicationService,
-    private botService: BotService) {
+    private botService: BotService,
+    private successNotificationService: SuccessNotificationService) {
     // Charger l'état sauvegardé
     const savedState = localStorage.getItem(this.STORAGE_KEY);
     if (savedState) {
@@ -180,6 +180,8 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
     indice: node.indice,
     level: level,
     expandable: !!node.children && node.children.length > 0,
+    updated_at: node.updated_at,
+    vector_synced_at: node.vector_synced_at,
   });
 
   treeControl = new FlatTreeControl<FlatChapterNode>(
@@ -246,11 +248,9 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
           this.selectKnowledge(selectedKnowledgeId)
         this.knowledgesSubject.next(data);
         this.updateTreeData(data);
-        this.showMessage('Chapters loaded successfully', 'success');
-        console
-
       },
-      error: () => this.showMessage('Error loading chapters', 'error')
+      // Errors are already surfaced globally by the HTTP error interceptor.
+      error: () => {}
     });
 
   }
@@ -293,9 +293,9 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
 
           this.loadChapters();
           this.showMessage('Chapter deleted successfully', 'success');
-          this.transmitToAlfred()
         },
-        error: (error) => this.showMessage('Error deleting chapter', 'error')
+        // Errors are already surfaced globally by the HTTP error interceptor.
+        error: () => {}
       });
     });
   }
@@ -439,14 +439,18 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   showMessage(msg: string, type: 'success' | 'error') {
-    this.message = msg;
-    setTimeout(() => this.message = '', 3000);
+    // Errors are already surfaced globally by the HTTP error interceptor
+    // (a dialog backed by the real HttpErrorResponse) -- only success needs
+    // an explicit toast here.
+    if (type === 'success') {
+      this.successNotificationService.showSuccess(msg);
+    }
   }
 
   exportChapters() {
     this.knowledgeService.getKnowledges(this.selected_bot.id).subscribe(chapters => {
       const chaptersText = chapters.map(chapter =>
-        `--- Chapter ID: ${chapter.id} --- Name: ${chapter.name} --- Dad ID: ${chapter.chapter_dad_id} --- Indice: ${chapter.indice} --- Children Ref Id: ${chapter.children_ref_id} ---\n${chapter.content}\n\n`
+        `--- Chapter ID: ${chapter.id} --- Name: ${chapter.name} --- Dad ID: ${chapter.knowledge_dad_id} --- Indice: ${chapter.indice} --- Children Ref Id: ${chapter.children_ref_id} ---\n${chapter.content}\n\n`
       ).join('');
 
       const blob = new Blob([chaptersText], { type: 'text/plain' });
@@ -477,12 +481,11 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
         const importedChapters = this.parseImportedContent(content);
         console.log('importedChapters');
         console.log(e.target?.result);
-        this.knowledgeService.deleteAllKnowledges().subscribe(() => {
+        this.knowledgeService.deleteAllKnowledges(this.selected_bot.id).subscribe(() => {
           console.log(importedChapters)
           this.knowledgeService.saveKnowledges(this.selected_bot.id, importedChapters).subscribe(() => {
             this.loadChapters();
             this.showMessage('Chapters imported successfully', 'success');
-            this.transmitToAlfred();
           });
 
         });
@@ -498,12 +501,11 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
 
     while ((match = chapterRegex.exec(content)) !== null) {
       chapters.push({
-        chapter_id: match[1]?.trim(),
-        chapter_name: match[2]?.trim(),
-        chapter_dad_id: match[3]?.trim(),
+        knowledge_name: match[2]?.trim(),
+        knowledge_dad_id: match[3]?.trim(),
         indice: parseInt(match[4]?.trim()),
         children_ref_id: match[5]?.trim(),
-        chapter_content: match[6]?.trim(),
+        knowledge_content: match[6]?.trim(),
       });
     }
     return chapters;
@@ -520,7 +522,8 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
       next: () => {
         this.showMessage('Data transmitted to Alfred successfully', 'success');
       },
-      error: (error) => this.showMessage('Error transmitting to Alfred', 'error')
+      // Errors are already surfaced globally by the HTTP error interceptor.
+      error: () => {}
     });
   }
 
@@ -558,6 +561,23 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
       percent = 100
     let color = "color-mix(in srgb, " + this.nodeColor + ", black " + percent + "%)"
     return color
+  }
+
+  knowledgeSyncStatus(node: FlatChapterNode): 'synced' | 'stale' {
+    if (!node.vector_synced_at) {
+      return 'stale';
+    }
+    if (node.updated_at && new Date(node.vector_synced_at) < new Date(node.updated_at)) {
+      return 'stale';
+    }
+    return 'synced';
+  }
+
+  knowledgeSyncTooltip(node: FlatChapterNode): string {
+    if (this.knowledgeSyncStatus(node) === 'synced') {
+      return 'Synchronisé avec la base de connaissances (' + new Date(node.vector_synced_at).toLocaleString() + ')';
+    }
+    return 'Pas encore synchronisé avec la base de connaissances';
   }
 
   /**

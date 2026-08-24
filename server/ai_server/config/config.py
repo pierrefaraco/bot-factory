@@ -15,7 +15,9 @@ class FlaskConfig:
     """Flask properties."""
 
     # Application session secret key
-    JWT_SECRET_KEY = '^ZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2x")sZQjGKyBVf2xx'
+    JWT_SECRET_KEY = os.environ.get(
+        "JWT_SECRET_KEY", '^ZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2x")sZQjGKyBVf2xx'
+    )
     DATABASE_URL = os.getenv("DATABASE_URL")
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -94,6 +96,7 @@ class AppConfig(FlaskConfig):
     PERSIST = os.environ.get("PERSIST", "false").lower() in ("true")
     PERSIST_DIRECTORY = os.environ.get("PERSIST_DIRECTORY", "./chroma_db")
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/tmp/pdf")
+    MAX_PDF_SIZE_BYTES = int(os.environ.get("MAX_PDF_SIZE_BYTES", 20 * 1024 * 1024))
 
     SECRET_KEY = os.environ.get(
         "SECRET_KEY", "your-secret-key-change-this-in-production"

@@ -8,9 +8,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { FormFieldComponent } from '@app/components/base/form-field/form-field.component';
 import { ComboComponent } from '@app/components/base/combo/combo.component';
 import { CustomDialogComponent } from '@app/components/base/dialog/custom-dialog/custom-dialog.component';
+import { ConfirmDialogComponent } from '@app/components/base/confirm-dialog/confirm-dialog.component';
 import { ButtonComponent } from '@app/components/base/button/button.component';
 import { KnowledgeService } from '@app/services/knowledge.service';
 import { Bot } from '@app/models/bot.model';
@@ -25,6 +27,7 @@ import { Bot } from '@app/models/bot.model';
     MatFormFieldModule,
     MatInputModule,
     MatIconModule,
+    MatDialogModule,
     FormFieldComponent,
     ComboComponent,
     CustomDialogComponent,
@@ -46,7 +49,13 @@ export class KnowledgeEditorComponent implements OnInit, OnDestroy {
   pdfFileCtrl: FormControl
   pdf_file: File | null = null;
   selectedBot: Bot
-  constructor(private fb: FormBuilder, private communicationService: CommunicationService, private knowledgeService: KnowledgeService) { }
+  activeMode: 'text' | 'pdf' = 'text';
+  constructor(
+    private fb: FormBuilder,
+    private communicationService: CommunicationService,
+    private knowledgeService: KnowledgeService,
+    private dialog: MatDialog
+  ) { }
 
 
   ngOnInit(): void {
@@ -103,8 +112,73 @@ export class KnowledgeEditorComponent implements OnInit, OnDestroy {
       this.knowledgeNameCtrl.setValue(this.selectedKnowledge.name)
       this.knowledgeContentCtrl.setValue(this.selectedKnowledge.content)
       this.pdfFileCtrl.setValue(this.selectedKnowledge.pdf_file || null);
+      this.activeMode = this.selectedKnowledge.pdf_file ? 'pdf' : 'text';
     }
 
+  }
+
+  switchMode(target: 'text' | 'pdf') {
+    if (this.activeMode === target) {
+      return;
+    }
+
+    const losingContent = target === 'pdf' && !!this.knowledgeContentCtrl.value?.trim();
+    const losingPdf = target === 'text' && !!this.pdfFileCtrl.value;
+
+    if (!losingContent && !losingPdf) {
+      this.activeMode = target;
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: target === 'pdf' ? 'Switch to PDF mode' : 'Switch to text mode',
+        message: target === 'pdf'
+          ? 'Switching to PDF mode will permanently delete the text content of this chapter. Continue?'
+          : 'Switching to text mode will permanently remove the attached PDF from this chapter. Continue?',
+        confirmLabel: 'Switch',
+        danger: true,
+      },
+      width: '420px',
+      panelClass: 'confirm-dialog-panel',
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) {
+        return;
+      }
+      if (losingContent) {
+        this.knowledgeContentCtrl.setValue('');
+      }
+      if (losingPdf) {
+        this.pdfFileCtrl.setValue(null);
+        this.pdf_file = null;
+      }
+      this.activeMode = target;
+      this.onSubmit();
+    });
+  }
+
+  removePdf() {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Remove PDF',
+        message: 'This will permanently remove the attached PDF from this chapter. Continue?',
+        confirmLabel: 'Remove',
+        danger: true,
+      },
+      width: '420px',
+      panelClass: 'confirm-dialog-panel',
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (!confirmed) {
+        return;
+      }
+      this.pdfFileCtrl.setValue(null);
+      this.pdf_file = null;
+      this.onSubmit();
+    });
   }
 
   private onSubmit() {
@@ -124,7 +198,8 @@ export class KnowledgeEditorComponent implements OnInit, OnDestroy {
         next: () => {
            this.communicationService.onUpdateKnowledge(this.selectedKnowledge)
         },
-        error: () => console.log('Error updating chapter', 'error')
+        // Errors are already surfaced globally by the HTTP error interceptor.
+        error: () => {}
       });
     }
   }

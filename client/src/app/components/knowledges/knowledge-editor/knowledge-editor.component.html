@@ -13,20 +13,40 @@
     <app-form-field [control]="knowledgeNameCtrl" [name]="'knowledge_title'" [label]="'Knowledge Name'"
         errorMessage="'Can't be empty'" (my_change)="onPatchKnowledge('knowledge_title')"> </app-form-field>
 
-    <app-form-field [control]="knowledgeContentCtrl" [name]="'knowledge_content'" [label]="'Knowledge Content'"
-        errorMessage="'Can't be empty'" [type]="'big-field'" (my_change)="onPatchKnowledge('knowledge_content')">
-    </app-form-field>
-
-
-    <div class="add-pdf-button-container">
-        <app-button [icon]="'file_download'" [label]="'Add pdf'" (buttonClickedEvent)="fileInput.click()"
-            [color]="'var(--text-primary)'" [color]="'var(--text-primary)'" [backgroundColor]="'var(--btn-color3)'"
-            [disabled]="false" class="top-buttons" [type]="'custom-button'" [size]="'small'">
-        </app-button>
+    <div class="mode-toggle" role="tablist">
+        <button type="button" role="tab" [attr.aria-selected]="activeMode === 'text'"
+            class="mode-toggle-btn" [class.active]="activeMode === 'text'" (click)="switchMode('text')">
+            <span class="material-icons">description</span> Texte
+        </button>
+        <button type="button" role="tab" [attr.aria-selected]="activeMode === 'pdf'"
+            class="mode-toggle-btn" [class.active]="activeMode === 'pdf'" (click)="switchMode('pdf')">
+            <span class="material-icons">picture_as_pdf</span> PDF
+        </button>
     </div>
-    <app-form-field [control]="pdfFileCtrl" [name]="'pdf_file'" [label]="'PDF Name'" errorMessage="'Invallid PDF'"
-        [type]="'disabled'">
-    </app-form-field>
+
+    <div class="mode-panel" *ngIf="activeMode === 'text'">
+        <app-form-field [control]="knowledgeContentCtrl" [name]="'knowledge_content'" [label]="'Knowledge Content'"
+            errorMessage="'Can't be empty'" [type]="'big-field'" (my_change)="onPatchKnowledge('knowledge_content')">
+        </app-form-field>
+    </div>
+
+    <div class="mode-panel" *ngIf="activeMode === 'pdf'">
+        <div class="pdf-chip" *ngIf="pdfFileCtrl.value; else addPdf">
+            <span class="material-icons">picture_as_pdf</span>
+            <span class="pdf-chip-name" [title]="pdfFileCtrl.value">{{ pdfFileCtrl.value }}</span>
+            <app-button [icon]="'close'" [label]="'Remove PDF'" (buttonClickedEvent)="removePdf()"
+                [color]="'var(--text-warning)'" [type]="'icon-button'" [backgroundColor]="'transparent'"
+                [disabled]="false" title="Remove PDF">
+            </app-button>
+        </div>
+        <ng-template #addPdf>
+            <app-button [icon]="'file_download'" [label]="'Add pdf'" (buttonClickedEvent)="fileInput.click()"
+                [color]="'var(--text-primary)'" [backgroundColor]="'var(--btn-color3)'"
+                [disabled]="false" class="top-buttons" [type]="'custom-button'" [size]="'small'">
+            </app-button>
+        </ng-template>
+    </div>
+
     <input type="file" accept="application/pdf" style="display:none" #fileInput (change)="onFileSelected($event)">
 
 </form>

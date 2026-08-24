@@ -21,3 +21,68 @@
   max-width: 20rem;
   margin: 0;
 }
+
+/* ========== Mode Toggle (Texte / PDF) ========== */
+.mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid var(--border-primary);
+  margin-bottom: 1rem;
+}
+
+.mode-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.25s ease, border-color 0.25s ease;
+}
+
+.mode-toggle-btn .material-icons {
+  font-size: 1.125rem;
+}
+
+.mode-toggle-btn:hover {
+  color: var(--text-primary);
+}
+
+.mode-toggle-btn.active {
+  color: var(--text-accent);
+  border-bottom-color: var(--text-accent);
+}
+
+.mode-panel {
+  margin-bottom: 1rem;
+}
+
+/* ========== PDF Chip ========== */
+.pdf-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pdf-chip .material-icons {
+  color: var(--text-secondary);
+}
+
+.pdf-chip-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

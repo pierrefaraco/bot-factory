@@ -100,7 +100,10 @@ class AuthenticationService(BaseService):
         """
         self.logger.info(f"Refreshing JWT token for {identity}")
         self._start_revoke_jti(jti)
-        access_token = create_access_token(identity=identity)
+        user: User = User.query.get(int(identity))
+        if not user:
+            raise NotFoundError("User", identity)
+        access_token = self.build_token(user)
         self.logger.info(f"JWT token refreshed successfully for user_id={identity}")
         return access_token
 

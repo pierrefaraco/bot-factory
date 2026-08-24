@@ -233,6 +233,20 @@
   }
 }
 
+// ========== Sync Status Icon ==========
+.sync-status-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+
+  &.synced {
+    color: var(--success-color);
+  }
+
+  &.stale {
+    color: var(--warning-color);
+  }
+}
+
 // ========== Expand Button ==========
 // `.expand-spacer` is an invisible placeholder used on leaf-node rows so
 // their icon/text starts at the exact same x-position as parent rows --

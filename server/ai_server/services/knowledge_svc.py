@@ -4,7 +4,7 @@ import uuid
 from ai_server.config.config import flask_config
 from abc import ABCMeta
 from ai_server.services.rag_svc import RagService
-from ai_server.dao.database import Knowledge, User, db, ROOT_CHAPTER_ID
+from ai_server.dao.database import Knowledge, User, db
 from ai_server.dto.knowledge_dto import KnowledgeDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
@@ -12,6 +12,7 @@ from ai_server.services.base_service import BaseService
 from ai_server.decorators.singleton import singleton
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
+from werkzeug.utils import secure_filename
 import os
 
 logger = BotFactoryLogger()
@@ -49,6 +50,8 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             knowledge.indice,
             knowledge.children_ref_id,
             knowledge.pdf_file,
+            knowledge.updated_at.isoformat() if knowledge.updated_at else "",
+            knowledge.vector_synced_at.isoformat() if knowledge.vector_synced_at else None,
         )
 
     def save_pdf(self, pdf_file: str, file) -> str:
@@ -63,15 +66,31 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             Path to saved file
 
         Raises:
-            ValueError: If file is not a PDF
+            ValueError: If file is missing, not named as a PDF, too large,
+                or its content is not actually a PDF.
         """
-        if file and pdf_file.endswith(".pdf"):
-            pdf_file_path = os.path.join(self.upload_folder, pdf_file)
-            file.save(pdf_file_path)
-            logger.debug(f"save_pdf: saved {pdf_file} to {pdf_file_path}")
-            return pdf_file_path
-        else:
+        if not file or not pdf_file or not pdf_file.lower().endswith(".pdf"):
             raise ValueError("Le fichier doit être un PDF.")
+
+        safe_filename = secure_filename(pdf_file)
+        if not safe_filename or not safe_filename.lower().endswith(".pdf"):
+            raise ValueError("Nom de fichier PDF invalide.")
+
+        pdf_file_path = os.path.join(self.upload_folder, safe_filename)
+        file.save(pdf_file_path)
+
+        try:
+            if os.path.getsize(pdf_file_path) > self.config.MAX_PDF_SIZE_BYTES:
+                raise ValueError("Le fichier PDF dépasse la taille maximale autorisée.")
+            with open(pdf_file_path, "rb") as saved_file:
+                if saved_file.read(5) != b"%PDF-":
+                    raise ValueError("Le contenu du fichier n'est pas un PDF valide.")
+        except ValueError:
+            os.remove(pdf_file_path)
+            raise
+
+        logger.debug(f"save_pdf: saved {safe_filename} to {pdf_file_path}")
+        return pdf_file_path
 
     def save_knowledges_dto(
         self, bot_id: int, knowledges_dto: List[KnowledgeDto]
@@ -146,6 +165,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             f"save_imported_knowledges: importing {len(imported_knowledges)} "
             f"knowledges for bot_id={bot_id}"
         )
+        created_entities = []
         for knowledge in imported_knowledges:
             knowledge_entity = Knowledge(
                 bot_id,
@@ -157,8 +177,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
                 knowledge["children_ref_id"],
             )
             db.session.add(knowledge_entity)
+            created_entities.append(knowledge_entity)
         db.session.commit()
-        self.recordChaptersToVectorDB(bot_id)
+        for knowledge_entity in created_entities:
+            self._ingest_knowledge_node(knowledge_entity)
 
         knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
         logger.info(
@@ -298,7 +320,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         file,
     ) -> KnowledgeDto:
         if file:
-            self.save_pdf(pdf_file, file)
+            pdf_file = os.path.basename(self.save_pdf(pdf_file, file))
 
         if indice == -1:
             indice = self._compute_indice(bot_id, knowledge_dad_id)
@@ -323,7 +345,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             f"create_knowledge_entity: created knowledge_id={created_knowledge.id} "
             f"bot_id={bot_id} dad_id={knowledge_dad_id} indice={indice}"
         )
-        self.recordChaptersToVectorDB(bot_id)
+        self.sync_knowledge_to_vector_db(created_knowledge)
         return self._knowledge_to_dto(created_knowledge)
 
     def create_empty_knowledge(self, bot_id, knowledge_dad_id) -> KnowledgeDto:
@@ -345,7 +367,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             f"create_empty_knowledge: created knowledge_id={knowledge.id} "
             f"bot_id={bot_id} dad_id={knowledge_dad_id} indice={indice}"
         )
-        self.recordChaptersToVectorDB(bot_id)
+        self.sync_knowledge_to_vector_db(knowledge)
         return self._knowledge_to_dto(knowledge)
 
     def create(self, data: Dict[str, Any]) -> KnowledgeDto:
@@ -456,9 +478,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         file,
     ) -> KnowledgeDto:
         if file:
-            self.save_pdf(pdf_file, file)
+            pdf_file = os.path.basename(self.save_pdf(pdf_file, file))
 
         knowledge.date = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
+        knowledge.updated_at = datetime.now(timezone.utc)
         knowledge.content = new_content
         knowledge.name = new_name
         if knowledge_dad_id is not None:
@@ -469,7 +492,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         logger.info(
             f"update_knowledge_entity: updated knowledge_id={knowledge.id} bot_id={bot_id}"
         )
-        self.recordChaptersToVectorDB(bot_id)
+        self.sync_knowledge_to_vector_db(knowledge)
         return self._knowledge_to_dto(knowledge)
 
     def get_dto_by_id(self, entity_id: int) -> KnowledgeDto:
@@ -653,7 +676,6 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         bot_id = knowledge.bot_id
         self._delete_knowledge(knowledge)
         logger.info(f"delete: deleted knowledge_id={entity_id} bot_id={bot_id}")
-        self.recordChaptersToVectorDB(bot_id)
         return True
 
     def compare_fn(self, knowledge: Knowledge) -> int:
@@ -683,8 +705,11 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         ):
             self._delete_knowledge(knowledge_child)
         knowledge_dad_id = knowledge_to_delete.knowledge_dad_id
+        bot_id = knowledge_to_delete.bot_id
+        knowledge_id = knowledge_to_delete.id
         db.session.delete(knowledge_to_delete)
         db.session.commit()
+        self._remove_knowledge_from_vector_db(bot_id, knowledge_id)
         self._re_compute_indices(knowledge_dad_id)
 
     def _re_compute_indices(self, knowledge_dad_id: str) -> None:
@@ -747,6 +772,35 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             logger.exception(f"delete_all: failed to delete data for bot_id={bot_id}: {e}")
             return False
 
+    def _ingest_knowledge_node(self, knowledge: Knowledge) -> None:
+        """Ingest a single knowledge node's text and optional PDF, tagged by
+        knowledge_id so it can later be targeted for deletion/update without
+        touching the rest of the bot's collection."""
+        collection_name = f"Collection{knowledge.bot_id}"
+        metadata = {"knowledge_id": knowledge.id, "bot_id": knowledge.bot_id, "name": knowledge.name}
+        text = f"{knowledge.name}\n{knowledge.content}".strip()
+        if text:
+            self.rag_svc.db_service.ingest_text(text, collection_name, metadata=metadata)
+        if knowledge.pdf_file:
+            pdf_path = os.path.join(self.upload_folder, knowledge.pdf_file)
+            self.rag_svc.db_service.ingest_pdf(
+                pdf_path, collection_name=collection_name, metadata=metadata
+            )
+        knowledge.vector_synced_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+    def _remove_knowledge_from_vector_db(self, bot_id: int, knowledge_id: int) -> None:
+        collection_name = f"Collection{bot_id}"
+        self.rag_svc.db_service.delete_documents_by_metadata(
+            collection_name, {"knowledge_id": knowledge_id}
+        )
+
+    def sync_knowledge_to_vector_db(self, knowledge: Knowledge) -> None:
+        """Incrementally re-sync a single knowledge node: remove its old
+        vectors, then re-ingest its current content."""
+        self._remove_knowledge_from_vector_db(knowledge.bot_id, knowledge.id)
+        self._ingest_knowledge_node(knowledge)
+
     def recordChaptersToVectorDB(self, bot_id: int) -> None:
         """
         Record knowledges to vector database.
@@ -762,84 +816,17 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
     def _perform_record_knowledges(self, bot_id: int) -> None:
         start = time.perf_counter()
         knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
-        sorted_knowledges = []
-        self.get_sorted_knowledges(knowledges, sorted_knowledges, ROOT_CHAPTER_ID, 0)
-        to_save_in_vector_db = ""
-        pdf_file_paths = []
         logger.info(
-            f"recordChaptersToVectorDB: recording {len(sorted_knowledges)} knowledges "
+            f"recordChaptersToVectorDB: resyncing {len(knowledges)} knowledges "
             f"for bot_id={bot_id}"
         )
 
-        for sch in sorted_knowledges:
-            indent_str = "#"
-            for a in range(sch["indent"]):
-                indent_str = indent_str + "#"
-            to_save_in_vector_db = (
-                to_save_in_vector_db
-                + f"{indent_str} {sch['knowledge'].indice}. {sch['knowledge'].name}"
-                + "\n"
-            )
-            to_save_in_vector_db = (
-                to_save_in_vector_db + sch["knowledge"].content + "\n"
-            )
-            to_save_in_vector_db = to_save_in_vector_db + "\n" + "\n"
-            if sch["knowledge"].pdf_file:
-                pdf_file_paths.append(
-                    os.path.join(self.upload_folder, sch["knowledge"].pdf_file)
-                )
-
         self.rag_svc.db_service.delete_all(f"Collection{bot_id}")
-        if to_save_in_vector_db:
-            self.rag_svc.db_service.ingest_text(
-                to_save_in_vector_db, f"Collection{bot_id}"
-            )
-        for pdf_file_path in pdf_file_paths:
-            self.rag_svc.db_service.ingest_pdf(
-                pdf_file_path, collection_name=f"Collection{bot_id}"
-            )
+        for knowledge in knowledges:
+            self._ingest_knowledge_node(knowledge)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info(
             f"recordChaptersToVectorDB: bot_id={bot_id} - "
-            f"{len(sorted_knowledges)} knowledges, {len(pdf_file_paths)} PDFs ingested "
-            f"in {elapsed_ms:.1f}ms"
+            f"resynced {len(knowledges)} knowledges in {elapsed_ms:.1f}ms"
         )
-
-    def get_sorted_knowledges(
-        self,
-        knowledges: List[Knowledge],
-        sorted_knowledges: List,
-        dad_id: Any,
-        indent: int,
-    ) -> List:
-        """
-        Get knowledges sorted by hierarchy.
-
-        Args:
-            knowledges: List of knowledges to sort
-            sorted_knowledges: List to store sorted knowledges
-            dad_id: Parent ID
-            indent: Indentation level
-
-        Returns:
-            List of sorted knowledges
-        """
-        knowledges_dad = sorted(
-            [
-                knowledge
-                for knowledge in knowledges
-                if knowledge.knowledge_dad_id == dad_id
-            ],
-            key=self.compare_fn,
-        )
-        if knowledges_dad:
-            for knowledge_dad in knowledges_dad:
-                sorted_knowledges.append({"knowledge": knowledge_dad, "indent": indent})
-                self.get_sorted_knowledges(
-                    knowledges,
-                    sorted_knowledges,
-                    knowledge_dad.children_ref_id,
-                    indent + 1,
-                )
-        return sorted_knowledges

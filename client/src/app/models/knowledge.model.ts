@@ -8,6 +8,8 @@ export interface Knowledge {
   children?: Knowledge[];
   level: number;
   pdf_file: string | null;
+  updated_at?: string;
+  vector_synced_at?: string | null;
 }
 
 export interface FlatChapterNode {
@@ -17,4 +19,6 @@ export interface FlatChapterNode {
   indice: number;
   level: number;
   expandable: boolean;
+  updated_at?: string;
+  vector_synced_at?: string | null;
 }

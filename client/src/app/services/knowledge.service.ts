@@ -40,12 +40,12 @@ export class KnowledgeService {
     return this.http.delete(`${this.apiUrl}/${chapter_id}`);
   }
 
-  deleteAllKnowledges(): Observable<any> {
-    return this.http.delete(`${this.apiUrl}/all`);
+  deleteAllKnowledges(bot_id): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/all/${bot_id}`);
   }
 
   saveKnowledges(bot_id,chapters: any[]): Observable<any> {
-    return this.http.post(`${this.apiUrl}/save_chapters/${bot_id}`, { importedChapters: chapters });
+    return this.http.post(`${this.apiUrl}/save_knowledges/${bot_id}`, { importedChapters: chapters });
   }
 
   transmitToAlfred(bot_id): Observable<any> {

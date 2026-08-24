@@ -165,9 +165,7 @@ def save_imported_knowledges(
         f"save_imported_knowledges(bot_id={bot_id}) params: "
         f"count={len(imported_knowledges)} user_id={user_id}"
     )
-    if imported_knowledges and not bot_svc.is_bot_belong_to_user(
-        imported_knowledges[0].get("bot_id"), user_id
-    ):
+    if imported_knowledges and not bot_svc.is_bot_belong_to_user(bot_id, user_id):
         logger.warning(f"save_imported_knowledges(bot_id={bot_id}) forbidden for user_id={user_id}")
         raise ApiError(
             f"User {user_id} is not allowed to save knowledges for bot {bot_id}",
