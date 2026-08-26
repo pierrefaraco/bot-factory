@@ -492,6 +492,49 @@ def test_change_password_self_same_as_old(http_client, api_base_url, create_user
     assert_error(response, 400, "equal old password")
 
 
+def test_change_password_guest_golden_path(http_client, api_base_url, create_user, login):
+    parent, parent_password = create_user(role=USER_ROLE)
+    guest, guest_password = create_user(role=GUEST_ROLE, parent_id=parent.id)
+    headers = login(parent.mail, parent_password)
+
+    response = http_client.put(
+        f"{api_base_url}/users/password/guest/{guest.id}",
+        json={"old_password": guest_password, "new_password": "NewPassw0rd!45"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["msg"] == "Password updated successfully"
+
+
+def test_change_password_guest_not_owned(http_client, api_base_url, create_user, login):
+    stranger, stranger_password = create_user(role=USER_ROLE)
+    other_parent, _other_password = create_user(role=USER_ROLE)
+    guest, guest_password = create_user(role=GUEST_ROLE, parent_id=other_parent.id)
+    headers = login(stranger.mail, stranger_password)
+
+    response = http_client.put(
+        f"{api_base_url}/users/password/guest/{guest.id}",
+        json={"old_password": guest_password, "new_password": "NewPassw0rd!45"},
+        headers=headers,
+    )
+
+    assert_error(response, 403, "not your guest")
+
+
+def test_change_password_guest_not_found(http_client, api_base_url, create_user, login):
+    user, password = create_user(role=USER_ROLE)
+    headers = login(user.mail, password)
+
+    response = http_client.put(
+        f"{api_base_url}/users/password/guest/999999999",
+        json={"old_password": "whatever", "new_password": "NewPassw0rd!45"},
+        headers=headers,
+    )
+
+    assert_error(response, 404, "not found")
+
+
 def test_deactivate_admin_golden_path(http_client, api_base_url, create_user, login):
     admin, admin_password = create_user(role=ADMIN_ROLE)
     target, _target_password = create_user()
@@ -591,6 +634,43 @@ def test_reassign_children_golden_path(http_client, api_base_url, create_user, l
 
     assert response.status_code == 200, response.text
     assert response.json()["msg"] == "Children reassigned successfully"
+
+
+def test_reassign_children_forbidden_for_non_admin(
+    http_client, api_base_url, create_user, login
+):
+    old_parent, _old_password = create_user(role=USER_ROLE)
+    new_parent, _new_password = create_user(role=USER_ROLE)
+    user, password = create_user(role=USER_ROLE)
+    headers = login(user.mail, password)
+
+    response = http_client.put(
+        f"{api_base_url}/users/reassign-children",
+        json={"old_parent_id": old_parent.id, "new_parent_id": new_parent.id},
+        headers=headers,
+    )
+
+    assert_error(response, 403, "Access denied")
+
+
+def test_reassign_children_zero_old_parent_id_rejected(
+    http_client, api_base_url, create_user, login
+):
+    # old_parent_id: 0 is a legitimate (if obscure) pydantic-valid int that
+    # is nonetheless falsy in Python -- change_role's own `if not
+    # old_parent_id...` guard must still reject it (see the docstring at
+    # the top of users_admin_router.py).
+    admin, admin_password = create_user(role=ADMIN_ROLE)
+    new_parent, _new_password = create_user(role=USER_ROLE)
+    headers = login(admin.mail, admin_password)
+
+    response = http_client.put(
+        f"{api_base_url}/users/reassign-children",
+        json={"old_parent_id": 0, "new_parent_id": new_parent.id},
+        headers=headers,
+    )
+
+    assert_error(response, 400, "required")
 
 
 def test_get_self_golden_path(http_client, api_base_url, create_user, login):

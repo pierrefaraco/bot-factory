@@ -19,7 +19,6 @@ from ai_server.config.prompt_constants import (
     VOICE_OUTPUT_RULE,
     USER_IDENTITY,
     GROUP_IDENTITY,
-    contextualize_q_system_prompt,
 )
 
 
@@ -28,7 +27,6 @@ class PromptService:
     def __init__(self):
         self._bot_service = None
         self.logger = BotFactoryLogger()
-        self.build_prompt()
 
     @property
     def bot_service(self):
@@ -38,16 +36,6 @@ class PromptService:
 
             self._bot_service = BotService()
         return self._bot_service
-
-    def build_prompt(self):
-        self.logger.debug("Building contextualize_q_prompt template")
-        self.contextualize_q_prompt = ChatPromptTemplate.from_messages(
-            [
-                ("system", contextualize_q_system_prompt),
-                MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
-            ]
-        )
 
     def get_qa_prompt(self, bot_id):
         prompt = self.bot_service.get_prompt(bot_id) or ""

@@ -3,7 +3,7 @@ from langchain_community.llms import Ollama
 
 # from langchain.embeddings.ollama import OllamaEmbeddings
 from langchain_mistralai.chat_models import ChatMistralAI
-from ai_server.config.config import flask_config
+from ai_server.config.config import app_config
 from ai_server.decorators.singleton import singleton
 from langchain_core.callbacks.base import BaseCallbackHandler
 from typing import Any, Optional, Dict
@@ -123,7 +123,7 @@ class LlmService:
         self.logger = BotFactoryLogger()
         # assuming you have Ollama installed and have llama3 model pulled with `ollama pull llama3 `
         # embeddings = MistralAIEmbeddings(model="mistral-embed", mistral_api_key=api_key)
-        self.llm = ChatMistralAI(mistral_api_key=flask_config.MISTRAL_API_KEY, model_name=flask_config.MISTRAL_MODEL)
+        self.llm = ChatMistralAI(mistral_api_key=app_config.MISTRAL_API_KEY, model_name=app_config.MISTRAL_MODEL)
 
 
     def get_llm(
@@ -154,7 +154,7 @@ class LlmService:
             )
             # Créer une nouvelle instance avec le callback
             return ChatMistralAI(
-                mistral_api_key=flask_config.MISTRAL_API_KEY,
+                mistral_api_key=app_config.MISTRAL_API_KEY,
                 model_name="mistral-medium",
                 callbacks=[callback],
             )

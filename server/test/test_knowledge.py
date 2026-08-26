@@ -87,6 +87,75 @@ def test_save_without_pdf_golden_path(http_client, api_base_url, create_user, cr
     assert response.json()["name"] == "Chapter 2"
 
 
+def test_save_sets_vector_synced_at(http_client, api_base_url, create_user, create_bot, login):
+    # Every knowledge write re-ingests the chapter into ChromaDB and stamps
+    # vector_synced_at (knowledge_svc._ingest_knowledge_node), regardless of
+    # whether it was a create or an update -- see
+    # KnowledgeDto.vector_synced_at / Knowledge.vector_synced_at.
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    headers = login(user.mail, password)
+
+    response = http_client.post(
+        f"{api_base_url}/knowledge/save/{bot.id}",
+        headers=headers,
+        data={"data": '{"name": "Chapter Sync", "content": "Text"}'},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["vector_synced_at"] is not None
+    assert body["updated_at"]
+
+
+def test_save_update_refreshes_vector_synced_at(
+    http_client, api_base_url, create_user, create_bot, login
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    headers = login(user.mail, password)
+
+    created = http_client.post(
+        f"{api_base_url}/knowledge/save/{bot.id}",
+        headers=headers,
+        data={"data": '{"name": "Chapter Original", "content": "Text"}'},
+    )
+    assert created.status_code == 200, created.text
+    knowledge_id = created.json()["id"]
+    first_sync = created.json()["vector_synced_at"]
+    assert first_sync is not None
+
+    updated = http_client.put(
+        f"{api_base_url}/knowledge/save/{bot.id}",
+        headers=headers,
+        data={
+            "data": f'{{"id": {knowledge_id}, "name": "Chapter Updated", "content": "New text"}}'
+        },
+    )
+
+    assert updated.status_code == 200, updated.text
+    body = updated.json()
+    assert body["name"] == "Chapter Updated"
+    assert body["vector_synced_at"] is not None
+
+
+def test_create_empty_sets_vector_synced_at(
+    http_client, api_base_url, create_user, create_bot, login
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    headers = login(user.mail, password)
+
+    response = http_client.post(
+        f"{api_base_url}/knowledge/save/{bot.id}/this_is_a_root_chapter",
+        json={},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["vector_synced_at"] is not None
+
+
 def test_patch_not_implemented(http_client, api_base_url, create_user, login):
     user, password = create_user(role=USER_ROLE)
     headers = login(user.mail, password)

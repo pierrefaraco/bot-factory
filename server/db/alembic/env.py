@@ -13,17 +13,17 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Importer la configuration et les modèles
-from ai_server.config.config import flask_config
+from ai_server.config.config import app_config
 from ai_server.dao.database import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Remplacer l'URL de la base de données par celle de la configuration Flask
+# Remplacer l'URL de la base de données par celle de la configuration applicative
 # Si DATABASE_URL n'est pas définie, utiliser une valeur par défaut ou lever une erreur
-if flask_config.DATABASE_URL:
-    config.set_main_option('sqlalchemy.url', flask_config.DATABASE_URL)
+if app_config.DATABASE_URL:
+    config.set_main_option('sqlalchemy.url', app_config.DATABASE_URL)
 else:
     # Vérifier si l'URL est déjà définie dans alembic.ini
     if not config.get_main_option('sqlalchemy.url'):

@@ -11,7 +11,7 @@ LangChain n'intervient que dans 4 services, tous dans `server/ai_server/services
 | `chroma_db_svc.py` | Ingestion et recherche vectorielle | `Chroma`, loaders de documents, text splitters, `FastEmbedEmbeddings` |
 | `prompt_svc.py` | Construction des prompts | `ChatPromptTemplate`, `MessagesPlaceholder` |
 | `llm_svc.py` | Accès au LLM + tracking tokens | `ChatMistralAI`, `BaseCallbackHandler` |
-| `rag_svc.py` | Orchestration (chaînes RAG) | `create_history_aware_retriever`, `create_retrieval_chain`, `create_stuff_documents_chain`, `RunnableWithMessageHistory`, `RunnableLambda` |
+| `rag_svc.py` | Orchestration (pipeline RAG) | LCEL (`|`), `RunnableLambda`, `RunnablePassthrough`, `StrOutputParser` |
 
 Le seul fournisseur LLM réellement branché aujourd'hui est **Mistral AI** (`ChatMistralAI`).
 `llm_svc.py` importe encore `langchain_community.llms.Ollama` mais ne l'instancie nulle part —
@@ -88,23 +88,33 @@ Points clés :
   (`sync_knowledge_to_vector_db`) sans devoir vider toute la collection du bot.
 - Une collection ChromaDB par bot : `f"Collection{bot_id}"`.
 - Les PDF passent d'abord par `PyPDFLoader` avant le même découpage/embedding.
+- ⚠️ `chunk_size=1024` produit vite beaucoup de chunks pour un document réel (un simple PDF de
+  26 pages en donne 48). Combiné à un `k` de retriever trop bas (voir §3), le bon chunk peut ne
+  jamais être renvoyé au LLM alors qu'il est bien présent dans la base vectorielle.
+- L'embedding (`BAAI/bge-small-en-v1.5`) est un modèle **anglais uniquement** — sur du contenu et
+  des questions en français, les scores de similarité sont plus plats et discriminent moins bien
+  le bon chunk des chunks non pertinents. Un modèle multilingue (`intfloat/multilingual-e5-large`,
+  `BAAI/bge-m3`, ...) serait plus adapté à un cas d'usage francophone, mais changer de modèle
+  nécessite de ré-ingérer toutes les bases de connaissances existantes (l'espace vectoriel change).
 
 ---
 
 ## 3. Construction de la chaîne RAG (`RagService.build`)
 
 À chaque question, `RagService.build(bot_id, user_id, session_id)` **reconstruit et retourne**
-une nouvelle chaîne conversationnelle — elle n'est jamais mise en cache ni stockée sur `self` :
-`RagService` est un singleton partagé entre requêtes concurrentes, et chaque appel a besoin de
-son propre `TokenCountingCallback` (lié à ce `user_id`/`bot_id`/`session_id`) attaché au LLM, donc
-réutiliser une chaîne stockée sur l'instance risquerait de mélanger le tracking de tokens de deux
-requêtes simultanées. C'est `build()` elle-même qui orchestre les 5 étapes ; chacune est déléguée
-à une méthode privée dédiée (`_build_history_aware_retriever`, `_build_answer_chain`,
-`_build_retrieval_chain`, `_wrap_with_history`) qui porte le même nom que l'étape du schéma :
+un nouveau pipeline — il n'est jamais mis en cache ni stocké sur `self` : `RagService` est un
+singleton partagé entre requêtes concurrentes, et chaque appel a besoin de son propre
+`TokenCountingCallback` (lié à ce `user_id`/`bot_id`/`session_id`) attaché au LLM, donc réutiliser
+un pipeline stocké sur l'instance risquerait de mélanger le tracking de tokens de deux requêtes
+simultanées.
 
-Le diagramme ci-dessous suit l'ordre dans lequel **une question traverse réellement le pipeline**
-au moment de `.invoke()` / `.stream()` — c'est cet ordre d'exécution qui rend la construction
-compréhensible, plus que l'ordre des lignes de code qui assemblent les objets.
+Contrairement à une version antérieure de ce document, le pipeline **n'utilise plus** les
+fabriques `create_history_aware_retriever` / `create_retrieval_chain` /
+`create_stuff_documents_chain` / `RunnableWithMessageHistory` de `langchain_classic` — trop
+d'indirection pour ce que ça fait réellement. C'est une chaîne [LCEL](https://python.langchain.com/docs/concepts/lcel/)
+simple, écrite à la main avec l'opérateur `|`, qui ne fait **qu'un seul appel LLM** par question
+(au lieu de deux) : pas de passe de reformulation, la recherche vectorielle se fait directement
+sur la question brute de l'utilisateur.
 
 ```mermaid
 flowchart TD
@@ -113,57 +123,59 @@ flowchart TD
     classDef final fill:#fde68a,stroke:#b45309,color:#451a03,stroke-width:1px;
 
     LLM["🧠 LLM\nChatMistralAI\n(LlmService.get_llm)"]:::ingredient
-    RETR["🔎 Retriever\nChromaDbService.get_retriever()"]:::ingredient
-    CTXPROMPT["📝 Prompt de reformulation\ncontextualize_q_prompt"]:::ingredient
+    RETR["🔎 Retriever (k=RAG_RETRIEVER_K)\nChromaDbService.get_retriever()"]:::ingredient
     QAPROMPT["📝 Prompt système du bot\nget_qa_prompt(bot_id)"]:::ingredient
 
-    Q(["Question de l'utilisateur\n+ historique de chat"])
+    Q(["input: question brute\n+ chat_history"])
 
-    HAR["① Reformuler la question puis chercher\nles documents pertinents dans Chroma\ncreate_history_aware_retriever(...)"]:::step
-    LABEL["② Étiqueter chaque extrait avec sa source\nRunnableLambda(_label_documents_with_source)"]:::step
-    QACHAIN["③ Rédiger la réponse à partir\ndes documents retenus\ncreate_stuff_documents_chain(...)"]:::step
-    RETCHAIN["④ rag_chain\ncreate_retrieval_chain(...)"]:::step
-    HIST["⑤ conversational_rag_chain\nRunnableWithMessageHistory(...)"]:::final
+    STEP1["① Chercher les documents pertinents\npour la question brute, les étiqueter\nRunnableLambda(_retrieve_and_label_sources)"]:::step
+    STEP2["② Mettre les documents en forme\ndans le slot {context}\nRunnablePassthrough.assign(...)"]:::step
+    STEP3["③ Assembler le prompt final\n(system + chat_history + question)"]:::step
+    STEP4["④ Rédiger la réponse\n(1 seul appel LLM)"]:::step
+    STEP5["⑤ Extraire le texte de la réponse\nStrOutputParser()"]:::final
 
-    ANSWER(["Réponse + documents sources"])
+    ANSWER(["Réponse (string)"])
 
-    Q --> HAR
-    CTXPROMPT -.fournit le prompt.-> HAR
-    RETR -.fournit le retriever.-> HAR
-    LLM -.appel n°1 : reformuler.-> HAR
-    HAR -->|"question reformulée\n+ documents bruts"| LABEL
-    LABEL -->|"documents étiquetés"| QACHAIN
-    QAPROMPT -.fournit le prompt.-> QACHAIN
-    LLM -.appel n°2 : rédiger.-> QACHAIN
-    QACHAIN --> RETCHAIN
-    HAR -.-> RETCHAIN
-    RETCHAIN -->|"{'answer', 'context', ...}"| HIST
-    HIST --> ANSWER
+    Q --> STEP1
+    RETR -.fournit le retriever.-> STEP1
+    STEP1 -->|"input, chat_history,\ncontext = documents bruts"| STEP2
+    STEP2 -->|"context = string formatée"| STEP3
+    QAPROMPT -.fournit le prompt.-> STEP3
+    STEP3 --> STEP4
+    LLM -.appel unique.-> STEP4
+    STEP4 --> STEP5 --> ANSWER
 ```
 
 Ce qu'il faut retenir de ce schéma :
 
-- **① `create_history_aware_retriever`** : reçoit la question brute + l'historique, demande au
-  LLM de la reformuler en question autonome (évite les questions ambiguës du type "et pour lui ?"),
-  puis interroge le retriever Chroma avec cette question reformulée. C'est le **1ᵉʳ des deux appels
-  LLM** de la chaîne.
-- **② `RunnableLambda`** : étape custom (pas un composant LangChain standard) qui préfixe chaque
-  extrait récupéré par `Source: <nom du chapitre>`, à partir des métadonnées Chroma — uniquement
-  pour la traçabilité affichée dans le prompt, jamais pour instruire le modèle (voir la note
-  anti-prompt-injection dans `prompt_svc.py::update_prompt`).
-- **③ `create_stuff_documents_chain`** : "stuff" (empile) tous les documents étiquetés dans le
-  prompt système du bot (`{context}`), puis appelle le LLM une **2ᵉ fois** pour rédiger la réponse
-  finale. Pas de map-reduce/refine — adapté à un petit nombre de chunks.
-- **④ `create_retrieval_chain`** : assemble simplement les étapes ① et ③ en une seule chaîne
-  (`rag_chain`), qui expose la réponse sous `answer` et les documents sous `context`.
-- **⑤ `RunnableWithMessageHistory`** : enveloppe `rag_chain` pour lire/écrire automatiquement
-  `chat_history` avant/après chaque appel, via `get_session_history(session_id)` (§4). C'est
-  cette version finale, `conversational_rag_chain`, qui est réellement invoquée par `ask()` et
-  `ask_with_stream()`.
+- **① `_retrieve_and_label_sources`** : interroge directement le retriever Chroma avec la question
+  brute de l'utilisateur (pas de reformulation LLM), puis étiquette chaque extrait récupéré avec
+  `Source: <nom du chapitre>` via `_label_documents_with_source`, à partir des métadonnées Chroma —
+  uniquement pour la traçabilité affichée dans le prompt, jamais pour instruire le modèle (voir la
+  note anti-prompt-injection dans `prompt_svc.py::update_prompt`). Le retriever renvoie les
+  `RAG_RETRIEVER_K` chunks les plus proches par similarité cosinus (défaut : 12, configurable via
+  `config.py`) — voir §2 pour pourquoi ce chiffre compte plus qu'il n'y paraît.
+- **② `RunnablePassthrough.assign(context=...)`** : remplace la liste de documents par une seule
+  string (`"\n\n".join(...)`) via `_format_docs`, tout en laissant passer `input` et `chat_history`
+  inchangés — c'est l'équivalent LCEL du "stuff" de l'ancien `create_stuff_documents_chain`.
+- **③-④ `qa_prompt | llm`** : le prompt système du bot (avec `{context}` rempli, plus le
+  `MessagesPlaceholder("chat_history")` et la question `{input}`) est envoyé au LLM en un seul
+  appel, qui rédige directement la réponse finale.
+- **⑤ `StrOutputParser()`** : extrait le texte brut de la réponse du LLM (`AIMessage.content`) —
+  le pipeline retourne donc directement une `string`, pas un dict `{"answer": ..., "context": ...}`
+  comme avant (personne ne consommait la clé `context` en dehors de la chaîne elle-même).
 
-Le LLM est donc appelé **deux fois par question** : une fois pour reformuler (étape ①), une fois
-pour rédiger la réponse (étape ③) — chacun des deux appels déclenche indépendamment le
-`TokenCountingCallback` (§6).
+Le compromis assumé : sans reformulation, une relance ambiguë du type "et pour lui ?" est
+cherchée dans Chroma telle quelle plutôt que sous une forme reformulée et autonome — la pertinence
+de la recherche peut en souffrir sur ce type de question, même si la réponse finale, elle, voit
+toujours tout `chat_history` (§4). Le `TokenCountingCallback` (§6) n'est donc plus déclenché
+qu'**une seule fois par question**, au lieu de deux.
+
+L'historique de conversation (`chat_history`) n'est plus injecté/persisté automatiquement par une
+enveloppe LangChain : `ask()`/`invoke_and_save()` et `ask_with_stream()` appellent maintenant
+`get_session_history(session_id)` (§4) explicitement avant d'invoquer le pipeline, puis
+`history.add_user_message(...)` / `history.add_ai_message(...)` juste après avoir obtenu la
+réponse.
 
 ---
 
@@ -208,38 +220,44 @@ sequenceDiagram
     participant C as Client (Angular)
     participant R as rag_router.py
     participant RAG as RagService
-    participant CHAIN as conversational_rag_chain
+    participant CHAIN as rag_chain (LCEL)
     participant CB as TokenCountingCallback
     participant TT as TokenTrackingService
 
     Note over C,R: Mode synchrone — POST /api/rag/chat
     C->>R: chat(question)
     R->>RAG: ask(bot_id, user_id, query)
-    RAG->>RAG: build() → nouvelle conversational_rag_chain
-    RAG->>CHAIN: invoke({"input": query})
+    RAG->>RAG: build() → nouveau rag_chain
+    RAG->>RAG: history = get_session_history(...)
+    RAG->>CHAIN: invoke({"input": query, "chat_history": history.messages})
     CHAIN->>CB: on_llm_end(response)
     CB->>TT: record_token_usage(...)
-    CHAIN-->>RAG: {"answer": ...}
+    CHAIN-->>RAG: réponse (string)
+    RAG->>RAG: history.add_user_message / add_ai_message
     RAG-->>R: réponse texte
     R-->>C: {"response": "..."}
 
     Note over C,R: Mode streaming — GET /api/rag/streamchat (SSE)
     C->>R: streamchat(question)
     R->>RAG: ask_with_stream(bot_id, user_id, query)
-    RAG->>RAG: build() → nouvelle conversational_rag_chain
-    RAG->>CHAIN: stream({"input": query})
+    RAG->>RAG: build() → nouveau rag_chain
+    RAG->>RAG: history = get_session_history(...)
+    RAG->>CHAIN: stream({"input": query, "chat_history": history.messages})
     loop pour chaque chunk
-        CHAIN-->>RAG: chunk["answer"]
+        CHAIN-->>RAG: chunk (string)
         RAG-->>R: "data: {answer}\n\n"
         R-->>C: SSE event
     end
     CHAIN->>CB: on_llm_end(response)
     CB->>TT: record_token_usage(...)
+    RAG->>RAG: history.add_user_message / add_ai_message
     R-->>C: "data: [DONE]\n\n"
 ```
 
 Dans les deux cas, la question de l'utilisateur et la réponse finale du bot sont persistées via
-`MessageService.save_message` (rôles `"user"` / `"assistant"`).
+`MessageService.save_message` (rôles `"user"` / `"assistant"`), **et** ajoutées à l'historique
+en mémoire (`self.store`, §4) via `history.add_user_message`/`add_ai_message` — ce n'est plus
+`RunnableWithMessageHistory` qui s'en charge automatiquement.
 
 ---
 
@@ -247,7 +265,8 @@ Dans les deux cas, la question de l'utilisateur et la réponse finale du bot son
 
 `LlmService.get_llm(user_id, bot_id, session_id)` attache un `BaseCallbackHandler` LangChain
 (`TokenCountingCallback`) à une instance dédiée de `ChatMistralAI` dès que `user_id`/`bot_id`
-sont connus. LangChain invoque `on_llm_end` après chaque appel au modèle :
+sont connus. Le pipeline RAG (§3) ne fait qu'un seul appel LLM par question, donc `on_llm_end`
+n'est déclenché qu'une fois par question :
 
 ```mermaid
 flowchart TD
@@ -268,9 +287,9 @@ manuellement** en passant par `rag_svc` — le callback s'en charge automatiquem
 
 ## 7. Fichiers à connaître
 
-- `server/ai_server/services/rag_svc.py` — assemblage des chaînes, `ask()`, `ask_with_stream()`
+- `server/ai_server/services/rag_svc.py` — pipeline LCEL, `ask()`, `ask_with_stream()`
 - `server/ai_server/services/llm_svc.py` — instanciation `ChatMistralAI`, `TokenCountingCallback`
-- `server/ai_server/services/prompt_svc.py` — `ChatPromptTemplate` (reformulation + prompt système du bot)
+- `server/ai_server/services/prompt_svc.py` — `ChatPromptTemplate` du prompt système du bot
 - `server/ai_server/services/chroma_db_svc.py` — ingestion, embeddings, retriever Chroma
 - `server/ai_server/services/knowledge_svc.py` — déclenche l'ingestion à partir des connaissances
 - `server/ai_server/services/token_tracking_svc.py` — persistance des tokens consommés

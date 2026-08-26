@@ -1,7 +1,7 @@
 import pprint
 import time
 import uuid
-from ai_server.config.config import flask_config
+from ai_server.config.config import app_config
 from abc import ABCMeta
 from ai_server.services.rag_svc import RagService
 from ai_server.dao.database import Knowledge, User, db
@@ -26,8 +26,8 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
 
     def __init__(self, rag_svc: RagService):
         super().__init__()
-        self.upload_folder = flask_config.UPLOAD_FOLDER
-        self.config = flask_config
+        self.upload_folder = app_config.UPLOAD_FOLDER
+        self.config = app_config
         self.rag_svc = rag_svc
         os.makedirs(self.upload_folder, exist_ok=True)
 

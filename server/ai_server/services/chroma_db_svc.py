@@ -15,7 +15,7 @@ from langchain_community.vectorstores.utils import filter_complex_metadata
 from langchain_core.vectorstores import VectorStoreRetriever
 from chromadb.config import Settings
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.config.config import flask_config
+from ai_server.config.config import app_config
 from ai_server.dto.document_dto import DocumentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
@@ -34,7 +34,7 @@ class ChromaDbService(BaseService[DocumentDto]):
 
     def __init__(self):
         super().__init__()
-        self.config = flask_config
+        self.config = app_config
         if self.config.CHROMA_CONTAINER:
             logger.info(f"Chromadb start in a container, and persist data in dir: {self.config.PERSIST_DIRECTORY}")
         else:
@@ -146,7 +146,9 @@ class ChromaDbService(BaseService[DocumentDto]):
                     collection_name=collection_name,
                     embedding_function=self.embedding_function,
                 )
-            self.retriever = self.db.as_retriever()
+            self.retriever = self.db.as_retriever(
+                search_kwargs={"k": self.config.RAG_RETRIEVER_K}
+            )
         except Exception as e:
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.exception(

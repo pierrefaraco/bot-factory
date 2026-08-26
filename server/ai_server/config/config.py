@@ -11,8 +11,8 @@ logger = BotFactoryLogger()
 API_URL_PREFIX = "/api"
 
 
-class FlaskConfig:
-    """Flask properties."""
+class BaseConfig:
+    """Core application properties (auth, database)."""
 
     # Application session secret key
     JWT_SECRET_KEY = os.environ.get(
@@ -23,13 +23,13 @@ class FlaskConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 
-class AppConfig(FlaskConfig):
+class AppConfig(BaseConfig):
     """Application properties."""
 
     # Server properties
     APP_NAME = os.environ.get("APP_NAME", default="AI_SERVER_BACKEND")
     HOSTNAME = os.environ.get("HOSTNAME", default="AI_SERVER_BACKEND")
-    FLASK_ENV = os.environ.get("FLASK_ENV", default="production")
+    APP_ENV = os.environ.get("APP_ENV", default="production")
     APP_VERSION = os.environ.get("APP_VERSION", default="<LOCAL_TEST_VERSION>")
 
     value = os.environ.get("API_URL_PREFIX", default=API_URL_PREFIX)
@@ -97,6 +97,13 @@ class AppConfig(FlaskConfig):
     PERSIST_DIRECTORY = os.environ.get("PERSIST_DIRECTORY", "./chroma_db")
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/tmp/pdf")
     MAX_PDF_SIZE_BYTES = int(os.environ.get("MAX_PDF_SIZE_BYTES", 20 * 1024 * 1024))
+    # Number of chunks the RAG retriever pulls per question. LangChain's
+    # Chroma retriever defaults to 4, which is too small once a knowledge
+    # base grows past a handful of chunks: on a real 26-page hotel PDF
+    # (48 chunks at the default 1024-char chunk size), the chunk actually
+    # answering a specific question ranked #11 by cosine similarity and
+    # was silently dropped every time.
+    RAG_RETRIEVER_K = int(os.environ.get("RAG_RETRIEVER_K", 12))
 
     SECRET_KEY = os.environ.get(
         "SECRET_KEY", "your-secret-key-change-this-in-production"
@@ -110,4 +117,4 @@ class AppConfig(FlaskConfig):
             "VIBE_MODEL", "your-secret-key-change-this-in-production"
         )
 
-flask_config = AppConfig()
+app_config = AppConfig()
