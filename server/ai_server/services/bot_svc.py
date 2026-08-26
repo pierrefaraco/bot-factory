@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
-from ai_server.dao.database import Bot, User, db
+from ai_server.dao.database import Bot, User, db, get_async_session
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.dto.bot_dto import BotDto
@@ -11,6 +11,7 @@ from ai_server.decorators.singleton import singleton
 from ai_server.services.bot_parameters_svc import BotParametersService
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.template_svc import TemplateSvc
+from sqlalchemy import select
 
 # Lazy import to avoid circular dependency
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -148,10 +149,14 @@ class BotService(BaseService[BotDto]):
         )
         return self._bot_to_dto(bot, None)
 
+    # Stays sync: called from PromptService.get_qa_prompt() (prompt_svc.py),
+    # itself called from rag_svc.py's still-sync LCEL chain.
     def get_prompt(self, entity_id: int):
         bot: Bot = Bot.query.filter_by(id=entity_id).first()
         return bot.prompt
 
+    # Stays sync: also called from UserAdminService (user_admin_svc.py, not
+    # migrated yet) in addition to bot_router.py.
     def get_dto_by_id(self, entity_id: int, view="minimal") -> Optional[BotDto]:
         """
         Retrieve a bot by its ID.
@@ -192,23 +197,28 @@ class BotService(BaseService[BotDto]):
         else:
             return self._bot_to_dto(bot, avatar)
 
-    def get_all(self) -> List[BotDto]:
+    async def get_all(self) -> List[BotDto]:
         """
         Retrieve all bots .
 
         Returns:
             List of Bot instances
         """
-        result = self._perform_get_all()
+        result = await self._perform_get_all()
         if result is None:
             raise ServiceError("Bot get_all failed, no list returned.")
         return result
 
-    def _perform_get_all(self) -> List[BotDto]:
-        bots: List[Bot] = Bot.query.filter_by().all()
+    async def _perform_get_all(self) -> List[BotDto]:
+        session = get_async_session()
+        result = await session.execute(select(Bot))
+        bots = result.scalars().all()
         self.logger.debug(f"get_all fetched {len(bots)} bots")
         return [self._bot_to_dto(bot, None) for bot in bots]
 
+    # Stays sync: also called from PromptService.update_prompt()
+    # (prompt_svc.py, not migrated -- entangled with the still-sync RAG
+    # pipeline) in addition to bot_router.py.
     def update(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
         """
         Update a bot's information.
@@ -238,6 +248,10 @@ class BotService(BaseService[BotDto]):
         self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
         return self._bot_to_dto(bot, None)
 
+    # Stays sync: calls self.context_svc.delete_all() (KnowledgeSvc, which
+    # touches ChromaDB and rag_svc.py -- a much bigger, still fully sync
+    # subsystem) before deleting the Bot row itself. Left for a dedicated
+    # RAG-phase pass rather than migrated piecemeal here.
     def delete(self, entity_id: int) -> bool:
         """
         Delete a bot.
@@ -304,7 +318,15 @@ class BotService(BaseService[BotDto]):
             return None
         return User.query.get(bot.user_account_id)
 
-    def get_bots_by_user(self, user_account_id: int) -> List[BotDto]:
+    # get_bots_by_user/get_assigned_bots/get_owned_and_assigned_bots (and
+    # their _perform_* helpers) are migrated as one cluster: none has any
+    # caller besides each other and bot_router.py (get_all_owned_bots,
+    # get_user_bots). self.avatar_svc.get_avatar_by_bot_id() and
+    # self.bot_assignment_svc.get_assignments_by_user() stay plain sync
+    # calls inside them -- both still-sync methods themselves (shared with
+    # other not-yet-migrated callers), same pattern as elsewhere in this
+    # migration.
+    async def get_bots_by_user(self, user_account_id: int) -> List[BotDto]:
         """
         Retrieve all bots belonging to a specific user.
 
@@ -314,13 +336,17 @@ class BotService(BaseService[BotDto]):
         Returns:
             List of Bot instances belonging to the user
         """
-        result = self._perform_get_by_user(user_account_id)
+        result = await self._perform_get_by_user(user_account_id)
         if result is None:
             raise ServiceError("Bot delete failed, no bot deleted.")
         return result
 
-    def _perform_get_by_user(self, user_account_id: int) -> list[BotDto]:
-        bots: list[Bot] = Bot.query.filter_by(user_account_id=user_account_id).all()
+    async def _perform_get_by_user(self, user_account_id: int) -> list[BotDto]:
+        session = get_async_session()
+        result = await session.execute(
+            select(Bot).where(Bot.user_account_id == user_account_id)
+        )
+        bots = result.scalars().all()
         self.logger.debug(
             f"get_bots_by_user user_account_id={user_account_id} count={len(bots)}"
         )
@@ -329,7 +355,7 @@ class BotService(BaseService[BotDto]):
             for bot in bots
         ]
 
-    def get_assigned_bots(self, user_id) -> List[BotDto]:
+    async def get_assigned_bots(self, user_id) -> List[BotDto]:
         """
         Retrieve all assigned bots .
 
@@ -339,17 +365,21 @@ class BotService(BaseService[BotDto]):
         bots_assigments: List[BotAssignmentDto] = (
             self.bot_assignment_svc.get_assignments_by_user(user_id)
         )
-        bots_dto: List[BotDto] = self._perform_get_assigned_bots(bots_assigments)
+        bots_dto: List[BotDto] = await self._perform_get_assigned_bots(bots_assigments)
         if bots_dto is None:
             raise ServiceError("Bot get_all failed, no list returned.")
         return bots_dto
 
-    def _perform_get_assigned_bots(
+    async def _perform_get_assigned_bots(
         self, bots_assigments: List[BotAssignmentDto]
     ) -> list[BotDto]:
+        session = get_async_session()
         bots_dto = []
         for bot_assigment in bots_assigments:
-            bot: Bot = Bot.query.filter_by(id=bot_assigment.bot_id).first()
+            result = await session.execute(
+                select(Bot).where(Bot.id == bot_assigment.bot_id)
+            )
+            bot: Bot = result.scalar_one_or_none()
             bots_dto.append(
                 self._bot_to_dto(bot, self.avatar_svc.get_avatar_by_bot_id(bot.id))
             )
@@ -359,7 +389,7 @@ class BotService(BaseService[BotDto]):
         )
         return bots_dto
 
-    def get_owned_and_assigned_bots(self, user_id: int) -> List[BotDto]:
+    async def get_owned_and_assigned_bots(self, user_id: int) -> List[BotDto]:
         """
         Retrieve every bot a User/Admin should see in "My Bots": the ones
         they created themselves (Bot.user_account_id) plus any a parent
@@ -372,8 +402,8 @@ class BotService(BaseService[BotDto]):
             List of BotDto instances, deduplicated by id (defensive: a bot
             assigned to its own owner would otherwise appear twice).
         """
-        owned = self.get_bots_by_user(user_id)
-        assigned = self.get_assigned_bots(user_id)
+        owned = await self.get_bots_by_user(user_id)
+        assigned = await self.get_assigned_bots(user_id)
         seen_ids = {bot.id for bot in owned}
         merged = owned + [bot for bot in assigned if bot.id not in seen_ids]
         self.logger.debug(

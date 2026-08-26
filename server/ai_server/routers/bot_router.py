@@ -24,6 +24,15 @@ Path params use the `{bot_id:int}` Starlette converter (not a bare
 `{bot_id}`) to match Flask's `<int:bot_id>` exactly: a non-numeric
 segment falls through to the next route (e.g. "/me", "/owned") instead
 of matching here and 422ing.
+
+get_user_bots/get_all_bots/get_all_owned_bots are async (`async def` +
+@with_async_db_session): their BotService methods
+(get_owned_and_assigned_bots/get_all/get_bots_by_user, plus the
+get_assigned_bots they compose) have no caller outside this router. The
+other routes stay sync -- create_bot/update_bot_admin/delete_bot rely on
+BotService methods shared with PromptService, UserAdminService, or
+KnowledgeSvc/rag_svc.py, none migrated yet; see
+/root/.claude/plans/moonlit-leaping-salamander.md.
 """
 
 from typing import List, Optional
@@ -35,7 +44,7 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dao.database import User, db
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_content_type
-from ai_server.dependencies.db_session import with_db_session
+from ai_server.dependencies.db_session import with_async_db_session, with_db_session
 from ai_server.dto.bot_dto import BotDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -94,8 +103,8 @@ def create_bot(claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/me", dependencies=[Depends(any_role)])
-@with_db_session
-def get_user_bots(claims: dict = Depends(any_role)):
+@with_async_db_session
+async def get_user_bots(claims: dict = Depends(any_role)):
     """Récupère tous les bots d'un utilisateur"""
     logger.info("GET /bot/me - get_user_bots called")
     user_id = claims["sub"]
@@ -104,28 +113,28 @@ def get_user_bots(claims: dict = Depends(any_role)):
         logger.warning(f"get_user_bots rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    bots_dto: List[BotDto] = bot_svc.get_owned_and_assigned_bots(user_id)
+    bots_dto: List[BotDto] = await bot_svc.get_owned_and_assigned_bots(user_id)
     logger.info(f"get_user_bots succeeded for user_id={user_id} count={len(bots_dto)}")
     return [bot_dto.to_dict() for bot_dto in bots_dto]
 
 
 @router.get("", dependencies=[Depends(admin_or_user)])
-@with_db_session
-def get_all_bots():
+@with_async_db_session
+async def get_all_bots():
     """Récupère tous les bots"""
     logger.info("GET /bot - get_all_bots called")
-    bots_dto: List[BotDto] = bot_svc.get_all()
+    bots_dto: List[BotDto] = await bot_svc.get_all()
     logger.info(f"get_all_bots succeeded count={len(bots_dto)}")
     return [bot_dto.to_dict() for bot_dto in bots_dto]
 
 
 @router.get("/owned", dependencies=[Depends(any_role)])
-@with_db_session
-def get_all_owned_bots(claims: dict = Depends(any_role)):
+@with_async_db_session
+async def get_all_owned_bots(claims: dict = Depends(any_role)):
     """Récupère tous les bots"""
     user_id = claims["sub"]
     logger.info(f"GET /bot/owned - get_all_owned_bots called for user_id={user_id}")
-    bots_dto: List[BotDto] = bot_svc.get_bots_by_user(user_id)
+    bots_dto: List[BotDto] = await bot_svc.get_bots_by_user(user_id)
     logger.info(f"get_all_owned_bots succeeded for user_id={user_id} count={len(bots_dto)}")
     return [bot_dto.to_dict() for bot_dto in bots_dto]
 

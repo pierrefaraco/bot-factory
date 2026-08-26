@@ -10,6 +10,16 @@ a wrong Content-Type only ever showed up via SpecTree's automatic
 dependencies/content_type.py's require_json_body() docstring for exactly
 how that plays out differently for the required-bot_id models here vs.
 the all-optional AvatarPatchRequest.
+
+Routes here are a deliberate mix of sync (`def` + @with_db_session) and
+async (`async def` + @with_async_db_session): patch_avatar/update_avatar/
+delete_avatar's underlying AvatarService methods have no caller besides
+this router, so they've been migrated to the async engine (see
+/root/.claude/plans/moonlit-leaping-salamander.md); create_random_avatar/
+create_avatar/get_avatar_by_bot_id still stay sync because their
+AvatarService methods are also called directly from BotService
+(bot_svc.py, not migrated yet) -- converting them now would either break
+that sync caller or require duplicating the logic.
 """
 
 from typing import Optional
@@ -19,7 +29,7 @@ from fastapi import APIRouter, Depends, Response
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_db_session
+from ai_server.dependencies.db_session import with_async_db_session, with_db_session
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.avatar_svc import AvatarService
@@ -89,11 +99,11 @@ def create_random_avatar(body: AvatarRandomRequest):
     status_code=204,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarPatchRequest))],
 )
-@with_db_session
-def patch_avatar(body: AvatarPatchRequest):
+@with_async_db_session
+async def patch_avatar(body: AvatarPatchRequest):
     """Partially update an avatar"""
     logger.info("PATCH /avatar - patch_avatar called")
-    avatar_service.patch_avatar(body.model_dump(exclude_unset=True))
+    await avatar_service.patch_avatar(body.model_dump(exclude_unset=True))
     logger.info(f"patch_avatar succeeded for bot_id={body.bot_id}")
     return Response(status_code=204)
 
@@ -116,11 +126,11 @@ def create_avatar(body: AvatarRequest):
     "",
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRequest))],
 )
-@with_db_session
-def update_avatar(body: AvatarRequest):
+@with_async_db_session
+async def update_avatar(body: AvatarRequest):
     """Update an avatar"""
     logger.info("PUT /avatar - update_avatar called")
-    avatar_dto = avatar_service.update_and_return_datat(body.model_dump(exclude_unset=True))
+    avatar_dto = await avatar_service.update_and_return_datat(body.model_dump(exclude_unset=True))
     logger.info(f"update_avatar succeeded for bot_id={body.bot_id} avatar_id={avatar_dto.id}")
     return avatar_dto.to_dict()
 
@@ -139,11 +149,11 @@ def get_avatar_by_bot_id(bot_id: int):
 
 
 @router.delete("/{bot_id}", status_code=204, dependencies=[Depends(admin_or_user)])
-@with_db_session
-def delete_avatar(bot_id: int):
+@with_async_db_session
+async def delete_avatar(bot_id: int):
     """Delete avatar by bot ID"""
     logger.info(f"DELETE /avatar/{bot_id} - delete_avatar called")
-    if not avatar_service.delete_avatar_by_bot_id(bot_id):
+    if not await avatar_service.delete_avatar_by_bot_id(bot_id):
         logger.warning(f"delete_avatar({bot_id}) not found")
         raise ApiError("Avatar not found", status_code=404)
     logger.info(f"delete_avatar({bot_id}) succeeded")

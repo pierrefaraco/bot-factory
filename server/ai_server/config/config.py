@@ -46,15 +46,19 @@ class AppConfig(BaseConfig):
     if value in list(_nameToLevel.keys()):
         LOGGER_LVL = value
 
+    # Prompt-construction tracing (RagService.build / PromptDebugLogger):
+    # independent of LOGGER_LVL so it can be switched on/off without
+    # enabling full app-wide DEBUG logging. Defaults to LOGGER_LVL.
+    PROMPT_DEBUG_LVL = LOGGER_LVL
+    value = os.environ.get("PROMPT_DEBUG_LVL", default="").upper()
+    if value in list(_nameToLevel.keys()):
+        PROMPT_DEBUG_LVL = value
+
     VERBOSE = False
     value = os.environ.get("VERBOSE", default="FALSE").upper()
     if value == "TRUE":
         VERBOSE = True
 
-    DEACTIVATE_SERVER_LOG = True
-    value = os.environ.get("DEACTIVATE_SERVER_LOG", default="TRUE").upper()
-    if value == "FALSE":
-        DEACTIVATE_SERVER_LOG = False
 
     OPERATIONAL_LOG_FILE = os.environ.get(
         "OPERATIONAL_LOG_FILE", default="/opt/ipc/logs/{}-AI_SERVER_hello.log"

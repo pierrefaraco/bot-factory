@@ -1,11 +1,17 @@
 # from typing import Text
 import contextvars
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from typing import Optional
 from sqlalchemy import ForeignKey
 from sqlalchemy import String, Integer
 import sqlalchemy
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_scoped_session,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -87,6 +93,84 @@ class _DbCompat:
 
 
 db = _DbCompat()
+
+
+# ===== Async SQLAlchemy (incremental migration -- see
+# /root/.claude/plans/moonlit-leaping-salamander.md) =====
+#
+# Coexists with the sync engine/session above; nothing sync is removed or
+# changed by this. Migrated async services call get_async_session() instead
+# of `db.session`, inside a request wrapped by
+# dependencies/db_session.py::with_async_db_session (the async counterpart
+# of with_db_session). There is no async equivalent of Model.query
+# (scoped_session.query_property() has no AsyncSession analogue), so async
+# call sites use SQLAlchemy 2.0's own idiomatic style instead:
+# `await session.execute(select(Model).filter_by(...))`.
+#
+# async_scoped_session mirrors the sync scoped_session above as closely as
+# SQLAlchemy allows: same contextvar-scoping idea (a fresh scope per
+# request, torn down via .remove() when the request ends), just async.
+_async_db_scope_id = contextvars.ContextVar("async_db_scope_id", default=None)
+
+
+def _async_scopefunc():
+    return _async_db_scope_id.get()
+
+
+_async_engine = None
+
+
+def _get_async_engine():
+    # Lazy for the same reason as _get_engine() above: importing this module
+    # (e.g. for the model classes) must not require DATABASE_URL to be set.
+    global _async_engine
+    if _async_engine is None:
+        if "+pymysql" not in AppConfig.SQLALCHEMY_DATABASE_URI:
+            raise RuntimeError(
+                "DATABASE_URL is not a mysql+pymysql:// URL -- can't derive "
+                "the mysql+asyncmy:// async URL from it. "
+                f"Got: {AppConfig.SQLALCHEMY_DATABASE_URI!r}"
+            )
+        async_url = AppConfig.SQLALCHEMY_DATABASE_URI.replace(
+            "+pymysql", "+asyncmy", 1
+        )
+        _async_engine = create_async_engine(async_url, pool_pre_ping=True)
+    return _async_engine
+
+
+def _async_session_factory():
+    return async_sessionmaker(bind=_get_async_engine(), expire_on_commit=False)()
+
+
+AsyncSessionLocal = async_scoped_session(
+    _async_session_factory, scopefunc=_async_scopefunc
+)
+
+
+@asynccontextmanager
+async def async_db_session_scope():
+    token = _async_db_scope_id.set(object())
+    try:
+        yield
+    finally:
+        await AsyncSessionLocal.remove()
+        _async_db_scope_id.reset(token)
+
+
+def get_async_session() -> AsyncSession:
+    """Current request's AsyncSession -- the async counterpart of `db.session`.
+
+    Must be called from inside async_db_session_scope() (i.e. an endpoint
+    wrapped with dependencies.db_session.with_async_db_session): raises
+    instead of silently opening an unscoped session that would never get
+    torn down."""
+    if _async_db_scope_id.get() is None:
+        raise RuntimeError(
+            "get_async_session() called outside async_db_session_scope() -- "
+            "wrap the caller with dependencies.db_session.with_async_db_session"
+        )
+    return AsyncSessionLocal()
+
 
 Base.query = SessionLocal.query_property()
 

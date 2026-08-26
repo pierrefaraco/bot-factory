@@ -34,6 +34,18 @@ NOT dropped even though ReassignChildrenRequest requires both fields:
 a legitimate `old_parent_id: 0` is falsy in Python, so this check can
 still reject a validly-present-but-zero id that pydantic already
 accepted -- a real (if obscure) behavior of the original, not dead code.
+
+Most routes here are async (`async def` + @with_async_db_session): their
+UserAdminService methods have no caller outside this router. register/
+register_guest and change_password_self/change_password_guest stay sync
+-- their UserAdminService methods (create/_perform_create,
+change_password/_perform_change_password) do
+werkzeug.security.generate_password_hash()/check_password_hash(),
+deliberately CPU-heavy work that would block the event loop for every
+concurrent request if run directly inside an `async def` route (no
+FastAPI threadpool to absorb it); register is also shared with
+GoogleAuthentSvc (google_authent_svc.py, not migrated). See
+/root/.claude/plans/moonlit-leaping-salamander.md.
 """
 
 from typing import List, Literal, Optional
@@ -42,11 +54,11 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import Bot, User
+from ai_server.dao.database import Bot, User, get_async_session
 from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_db_session
+from ai_server.dependencies.db_session import with_async_db_session, with_db_session
 from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -133,27 +145,27 @@ def register(body: UserRegistrationRequest):
 
 
 @router.put("/me", dependencies=[Depends(require_json_body(UserUpdateRequest))])
-@with_db_session
-def update_users_self(body: UserUpdateRequest, claims: dict = Depends(any_role)):
+@with_async_db_session
+async def update_users_self(body: UserUpdateRequest, claims: dict = Depends(any_role)):
     """Update current user's information"""
     user_id = claims["sub"]
     logger.info(f"PUT /users/me - update_users_self called for user_id={user_id}")
-    return _update_users_impl(user_id, body)
+    return await _update_users_impl(user_id, body)
 
 
 @router.put("/{user_id:int}", dependencies=[Depends(require_json_body(UserUpdateRequest))])
-@with_db_session
-def update_users_by_id(user_id: int, body: UserUpdateRequest, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def update_users_by_id(user_id: int, body: UserUpdateRequest, claims: dict = Depends(admin_or_user)):
     """Update a user's information (own guest, or any user if admin)"""
     logger.info(f"PUT /users/{user_id} - update_users_by_id called")
     _enforce_user_scope(claims["sub"], user_id)
-    return _update_users_impl(user_id, body)
+    return await _update_users_impl(user_id, body)
 
 
-def _update_users_impl(user_id, body: UserUpdateRequest):
+async def _update_users_impl(user_id, body: UserUpdateRequest):
     validated_data = body.model_dump(exclude_unset=True)
     logger.debug(f"update_users({user_id}) fields: {list(validated_data.keys())}")
-    user_dto = user_admin_svc.update(user_id, validated_data)
+    user_dto = await user_admin_svc.update(user_id, validated_data)
     logger.info(f"update_users({user_id}) succeeded")
     return {"message": "User updated successfully", "user": user_dto.to_dict()}
 
@@ -179,33 +191,33 @@ def register_guest(body: UserRegistrationRequest, claims: dict = Depends(admin_o
 
 
 @router.get("")
-@with_db_session
-def get_all_users(claims: dict = Depends(admin_only)):
+@with_async_db_session
+async def get_all_users(claims: dict = Depends(admin_only)):
     """Get all users (admin only) -- excludes every other Admin account,
     matching authorize_user_scope's "no acting on peer admins" rule: those
     rows would 403 on every action anyway, so they're left out entirely
     rather than shown disabled."""
     logger.info("GET /users - get_all_users called")
     caller_id = claims["sub"]
-    users = user_admin_svc.get_all_users(caller_id)
+    users = await user_admin_svc.get_all_users(caller_id)
     logger.info(f"get_all_users succeeded count={len(users)}")
     return {"users": users}
 
 
 @router.get("/guests")
-@with_db_session
-def get_all_guests(claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def get_all_guests(claims: dict = Depends(admin_or_user)):
     """Get all guest users for current user"""
     logger.info("GET /users/guests - get_all_guests called")
     user_id = claims["sub"]
-    users: List[UserDto] = user_admin_svc.get_children_users(user_id)
+    users: List[UserDto] = await user_admin_svc.get_children_users(user_id)
     logger.info(f"get_all_guests succeeded for user_id={user_id} count={len(users)}")
     return [user_dto.to_dict() for user_dto in users]
 
 
 @router.get("/role/{role}")
-@with_db_session
-def get_users_by_role(role: str, claims: dict = Depends(admin_only)):
+@with_async_db_session
+async def get_users_by_role(role: str, claims: dict = Depends(admin_only)):
     """Get users by role"""
     logger.info(f"GET /users/role/{role} - get_users_by_role called")
     if role not in [ADMIN_ROLE, USER_ROLE, GUEST_ROLE]:
@@ -213,68 +225,68 @@ def get_users_by_role(role: str, claims: dict = Depends(admin_only)):
         raise ApiError("Invalid role", status_code=400)
 
     caller_id = claims["sub"]
-    users = user_admin_svc.get_users_by_role(role, caller_id)
+    users = await user_admin_svc.get_users_by_role(role, caller_id)
     logger.info(f"get_users_by_role({role}) succeeded count={len(users)}")
     return {"users": users}
 
 
-def _get_children(parent_id):
-    users: List[UserDto] = user_admin_svc.get_children_users(parent_id)
+async def _get_children(parent_id):
+    users: List[UserDto] = await user_admin_svc.get_children_users(parent_id)
     logger.info(f"get_children({parent_id}) succeeded count={len(users)}")
     return {"children": [user.to_dict() for user in users]}
 
 
 @router.get("/children/me")
-@with_db_session
-def get_children_self(claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def get_children_self(claims: dict = Depends(admin_or_user)):
     """Get children users for current user"""
     user_id = claims["sub"]
     logger.info(f"GET /users/children/me - get_children_self called for user_id={user_id}")
-    return _get_children(user_id)
+    return await _get_children(user_id)
 
 
 @router.get("/children/{parent_id:int}", dependencies=[Depends(admin_only)])
-@with_db_session
-def get_children_admin(parent_id: int):
+@with_async_db_session
+async def get_children_admin(parent_id: int):
     """Get children users for a parent (admin only)"""
     logger.info(f"GET /users/children/{parent_id} - get_children_admin called")
-    return _get_children(parent_id)
+    return await _get_children(parent_id)
 
 
-def delete_user(user_id):
+async def delete_user(user_id):
     """Supprime un utilisateur"""
-    user_admin_svc.delete_user(user_id)
+    await user_admin_svc.delete_user(user_id)
     logger.info(f"delete_user({user_id}) succeeded")
     return {"msg": "User deleted successfully"}
 
 
 @router.delete("/me")
-@with_db_session
-def delete_user_self(claims: dict = Depends(any_role)):
+@with_async_db_session
+async def delete_user_self(claims: dict = Depends(any_role)):
     user_id = claims["sub"]
     logger.info(f"DELETE /users/me - delete_user_self called for user_id={user_id}")
-    return delete_user(user_id)
+    return await delete_user(user_id)
 
 
 @router.delete("/{user_id:int}")
-@with_db_session
-def delete_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def delete_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Delete a user (own guest, or any user if admin)"""
     logger.info(f"DELETE /users/{user_id} - delete_user_by_id called")
     _enforce_user_scope(claims["sub"], user_id)
-    return delete_user(user_id)
+    return await delete_user(user_id)
 
 
 @router.put(
     "/{user_id:int}/role", dependencies=[Depends(require_json_body(RoleChangeRequest))]
 )
-@with_db_session
-def change_role(user_id: int, body: RoleChangeRequest, claims: dict = Depends(admin_only)):
+@with_async_db_session
+async def change_role(user_id: int, body: RoleChangeRequest, claims: dict = Depends(admin_only)):
     """Change le rôle d'un utilisateur"""
     logger.info(f"PUT /users/{user_id}/role - change_role called")
     _enforce_user_scope(claims["sub"], user_id)
 
-    user = user_admin_svc.change_user_role(user_id, body.role)
+    user = await user_admin_svc.change_user_role(user_id, body.role)
     app_logger.info(f"Role changed for user {user_id} by admin {claims['sub']} to {body.role}")
     return {
         "msg": "Role updated successfully",
@@ -322,63 +334,63 @@ def change_password_guest(guest_id: int, body: PasswordChangeRequest, claims: di
     return change_password(guest_id, body)
 
 
-def deactivate_user(user_id):
+async def deactivate_user(user_id):
     """Désactive un compte utilisateur"""
-    user_dto: UserDto = user_admin_svc.deactivate_user(user_id)
+    user_dto: UserDto = await user_admin_svc.deactivate_user(user_id)
     logger.info(f"deactivate_user({user_id}) succeeded")
     return {"msg": "User deactivated successfully", "user": user_dto.to_dict()}
 
 
 @router.put("/{user_id:int}/deactivate")
-@with_db_session
-def deactivate_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def deactivate_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Deactivate a user (own guest, or any user if admin). No self-service
     deactivation, same as before the guest/admin merge -- there was never a
     /me route for this."""
     logger.info(f"PUT /users/{user_id}/deactivate - deactivate_user_by_id called")
     _enforce_user_scope(claims["sub"], user_id, allow_self=False)
-    return deactivate_user(user_id)
+    return await deactivate_user(user_id)
 
 
-def activate_user(user_id):
+async def activate_user(user_id):
     """Active un compte utilisateur"""
-    user_dto: UserDto = user_admin_svc.activate_user(user_id)
+    user_dto: UserDto = await user_admin_svc.activate_user(user_id)
     logger.info(f"activate_user({user_id}) succeeded")
     return {"msg": "User activated successfully", "user": user_dto.to_dict()}
 
 
 @router.put("/{user_id:int}/activate")
-@with_db_session
-def activate_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def activate_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Activate a user (own guest, or any user if admin). No self-service
     activation, same as before the guest/admin merge -- there was never a
     /me route for this."""
     logger.info(f"PUT /users/{user_id}/activate - activate_user_by_id called")
     _enforce_user_scope(claims["sub"], user_id, allow_self=False)
-    return activate_user(user_id)
+    return await activate_user(user_id)
 
 
 @router.put(
     "/reassign-children", dependencies=[Depends(require_json_body(ReassignChildrenRequest))]
 )
-@with_db_session
-def reassign_children(body: ReassignChildrenRequest, claims: dict = Depends(admin_only)):
+@with_async_db_session
+async def reassign_children(body: ReassignChildrenRequest, claims: dict = Depends(admin_only)):
     """Réassigne les utilisateurs enfants à un nouveau parent"""
     logger.info("PUT /users/reassign-children - reassign_children called")
     if not body.old_parent_id or not body.new_parent_id:
         logger.warning("reassign_children rejected: old/new parent id missing")
         raise ApiError("Old and new parent IDs are required", status_code=400)
 
-    user_admin_svc.reassign_children(body.old_parent_id, body.new_parent_id)
+    await user_admin_svc.reassign_children(body.old_parent_id, body.new_parent_id)
     app_logger.info(
         f"Children reassigned from {body.old_parent_id} to {body.new_parent_id} by admin {claims['sub']}"
     )
     return {"msg": "Children reassigned successfully"}
 
 
-def get_user(user_id):
+async def get_user(user_id):
     """Récupère les détails d'un utilisateur"""
-    user_dto = user_admin_svc.get_user_dto_by_id(user_id)
+    user_dto = await user_admin_svc.get_user_dto_by_id(user_id)
     if not user_dto:
         logger.warning(f"get_user({user_id}) not found")
         raise ApiError("User not found", status_code=404)
@@ -387,62 +399,64 @@ def get_user(user_id):
 
 
 @router.get("/me")
-@with_db_session
-def get_user_self(claims: dict = Depends(any_role)):
+@with_async_db_session
+async def get_user_self(claims: dict = Depends(any_role)):
     user_id = claims["sub"]
     logger.info(f"GET /users/me - get_user_self called for user_id={user_id}")
-    return get_user(user_id)
+    return await get_user(user_id)
 
 
 @router.get("/{user_id:int}")
-@with_db_session
-def get_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def get_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get a user's details (own guest, or any user if admin)"""
     logger.info(f"GET /users/{user_id} - get_user_by_id called")
     _enforce_user_scope(claims["sub"], user_id)
-    return get_user(user_id)
+    return await get_user(user_id)
 
 
-def _patch_user(parent_id, body: PatchBotRequest, guest_id=-1):
+async def _patch_user(parent_id, body: PatchBotRequest, guest_id=-1):
     """Internal function to update user's selected bot"""
     validated_data = body.model_dump(exclude_unset=True)
     logger.debug(f"patch_user({guest_id}) fields: {list(validated_data.keys())}")
-    user_dto = user_admin_svc.patch_user(parent_id, guest_id, validated_data)
+    user_dto = await user_admin_svc.patch_user(parent_id, guest_id, validated_data)
     logger.info(f"User {guest_id} patched successfully by parent {parent_id}")
     return user_dto.to_dict()
 
 
 @router.patch("/me", dependencies=[Depends(require_json_body(PatchBotRequest))])
-@with_db_session
-def patch_user_self(body: PatchBotRequest, claims: dict = Depends(any_role)):
+@with_async_db_session
+async def patch_user_self(body: PatchBotRequest, claims: dict = Depends(any_role)):
     """Update current user's selected bot"""
     user_id = claims["sub"]
     logger.info(f"PATCH /users/me - patch_user_self called for user_id={user_id}")
-    return _patch_user(user_id, body)
+    return await _patch_user(user_id, body)
 
 
 @router.patch(
     "/{target_user_id:int}", dependencies=[Depends(require_json_body(PatchBotRequest))]
 )
-@with_db_session
-def patch_user_by_id(target_user_id: int, body: PatchBotRequest, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def patch_user_by_id(target_user_id: int, body: PatchBotRequest, claims: dict = Depends(admin_or_user)):
     """Update a user's selected bot (own guest, or any user if admin)"""
     logger.info(f"PATCH /users/{target_user_id} - patch_user_by_id called")
     caller_id = claims["sub"]
     _enforce_user_scope(caller_id, target_user_id)
-    return _patch_user(caller_id, body, target_user_id)
+    return await _patch_user(caller_id, body, target_user_id)
 
 
-def _get_selected_bot(user_id):
+async def _get_selected_bot(user_id):
     """Internal function to get user's selected bot. The asymmetric
     response shapes (some branches include a "bot" key, the final one
-    doesn't) are the original's own behavior, kept verbatim."""
-    user: User = User.query.get(user_id)
+    doesn't) are the original's own behavior, kept verbatim. Self-contained
+    (no UserAdminService call), migrated to the async engine directly."""
+    session = get_async_session()
+    user: User = await session.get(User, user_id)
     if not user.selected_bot_id:
         logger.info(f"get_selected_bot({user_id}) succeeded: no bot selected")
         return {"selected_bot_id": None, "bot": None}
 
-    bot: Bot = Bot.query.get(user.selected_bot_id)
+    bot: Bot = await session.get(Bot, user.selected_bot_id)
     if not bot:
         logger.warning(f"get_selected_bot({user_id}) selected_bot_id={user.selected_bot_id} not found")
         return {"selected_bot_id": user.selected_bot_id, "bot": None}
@@ -452,18 +466,18 @@ def _get_selected_bot(user_id):
 
 
 @router.get("/selected_bot/me")
-@with_db_session
-def get_selected_bot_self(claims: dict = Depends(any_role)):
+@with_async_db_session
+async def get_selected_bot_self(claims: dict = Depends(any_role)):
     """Get current user's selected bot"""
     user_id = claims["sub"]
     logger.info(f"GET /users/selected_bot/me - get_selected_bot_self called for user_id={user_id}")
-    return _get_selected_bot(user_id)
+    return await _get_selected_bot(user_id)
 
 
 @router.get("/selected_bot/{user_id:int}")
-@with_db_session
-def get_selected_bot_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def get_selected_bot_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get a user's selected bot (own guest, or any user if admin)"""
     logger.info(f"GET /users/selected_bot/{user_id} - get_selected_bot_by_id called")
     _enforce_user_scope(claims["sub"], user_id)
-    return _get_selected_bot(user_id)
+    return await _get_selected_bot(user_id)

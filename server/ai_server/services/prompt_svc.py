@@ -120,7 +120,6 @@ class PromptService:
         self.logger.info(f"Updating prompt for bot_id={bot_id} length={len(prompt)}")
         self.logger.debug(f"New prompt for bot_id {bot_id}: {prompt}")
         self.bot_service.update(bot_id, {"prompt": prompt})
-        print(prompt)
 
     def make_interlocutor_sentence(self, user_name, params):
         interlocutor_sentence = f'Your interlocutor is "{params.interlocutor_type}".'

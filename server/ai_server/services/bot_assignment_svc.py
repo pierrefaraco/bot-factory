@@ -1,11 +1,12 @@
 from typing import Optional, List, Dict, Any
-from ai_server.dao.database import BotAssignment, Bot, User, db
+from ai_server.dao.database import BotAssignment, Bot, User, db, get_async_session
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.config.constant import GUEST_ROLE, USER_ROLE
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.decorators.singleton import singleton
+from sqlalchemy import select
 
 logger = BotFactoryLogger()
 
@@ -36,6 +37,11 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             is_active=assignment.is_active,
         )
 
+    # create/_perform_create stay sync (db.session, not get_async_session()):
+    # _perform_create is called directly by UserAdminService
+    # (user_admin_svc.py, not migrated yet) in addition to
+    # bot_assignment_router.py -- see
+    # /root/.claude/plans/moonlit-leaping-salamander.md.
     def create(self, data: Dict[str, Any]) -> BotAssignmentDto:
         """
         Create a new bot user assignment.
@@ -137,6 +143,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         )
         return self._assignment_to_dto(assignment)
 
+    # Stays sync: shared by update_assignment (migrated below) *and*
+    # delete_assignment (stays sync, see delete()/_perform_delete below) in
+    # bot_assignment_router.py.
     def get_dto_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
         """
         Retrieve an assignment by its ID.
@@ -176,7 +185,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         ).all()
         return [self._assignment_to_dto(assignment) for assignment in assignments]
 
-    def get_assignments_by_parent(self, parent_user_id: int) -> List[BotAssignmentDto]:
+    async def get_assignments_by_parent(self, parent_user_id: int) -> List[BotAssignmentDto]:
         """
         Get all assignments created by a parent user.
 
@@ -189,17 +198,24 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment retrieval fails
         """
-        result = self._perform_get_by_parent(parent_user_id)
+        result = await self._perform_get_by_parent(parent_user_id)
         if result is None:
             raise ServiceError("Get assignments by parent failed.")
         return result
 
-    def _perform_get_by_parent(self, parent_user_id: int) -> List[BotAssignmentDto]:
-        assignments: List[BotAssignment] = BotAssignment.query.filter_by(
-            assigned_by=parent_user_id, is_active=True
-        ).all()
+    async def _perform_get_by_parent(self, parent_user_id: int) -> List[BotAssignmentDto]:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotAssignment).where(
+                BotAssignment.assigned_by == parent_user_id,
+                BotAssignment.is_active.is_(True),
+            )
+        )
+        assignments = result.scalars().all()
         return [self._assignment_to_dto(assignment) for assignment in assignments]
 
+    # Stays sync: also called from BotService (bot_svc.py) and
+    # UserAdminService (user_admin_svc.py), neither migrated yet.
     def get_assignments_by_user(
         self, user_id: int, all: bool = False
     ) -> List[BotAssignmentDto]:
@@ -235,7 +251,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         ).all()
         return [self._assignment_to_dto(assignment) for assignment in assignments]
 
-    def get_assigned_bot_ids_for_user(self, user_id: int) -> List[int]:
+    async def get_assigned_bot_ids_for_user(self, user_id: int) -> List[int]:
         """
         Get list of bot IDs assigned to a user.
 
@@ -245,17 +261,23 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             List of bot IDs
         """
-        result = self._perform_get_bot_ids(user_id)
+        result = await self._perform_get_bot_ids(user_id)
         if result is None:
             return []
         return result
 
-    def _perform_get_bot_ids(self, user_id: int) -> List[int]:
-        assignments: List[BotAssignment] = BotAssignment.query.filter_by(
-            user_id=user_id, is_active=True
-        ).all()
+    async def _perform_get_bot_ids(self, user_id: int) -> List[int]:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotAssignment).where(
+                BotAssignment.user_id == user_id, BotAssignment.is_active.is_(True)
+            )
+        )
+        assignments = result.scalars().all()
         return [assignment.bot_id for assignment in assignments]
 
+    # Stays sync: also called from BotService (bot_svc.py) and
+    # rag_router.py (not migrated yet).
     def is_bot_assigned_to_user(self, bot_id: int, user_id: int) -> bool:
         """
         Check if a bot is assigned to a user.
@@ -279,7 +301,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         ).first()
         return assignment is not None
 
-    def update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
+    async def update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
         """
         Update assignment information.
 
@@ -293,7 +315,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Raises:
             ServiceError: When assignment update fails
         """
-        result = self._perform_update(
+        result = await self._perform_update(
             entity_id,
             data,
         )
@@ -303,8 +325,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             )
         return result
 
-    def _perform_update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
-        assignment = BotAssignment.query.get(entity_id)
+    async def _perform_update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
+        session = get_async_session()
+        assignment = await session.get(BotAssignment, entity_id)
         if not assignment:
             logger.warning(f"_perform_update rejected: assignment_id={entity_id} not found")
             raise NotFoundError("Assignment", str(entity_id))
@@ -313,7 +336,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         if "is_active" in data:
             assignment.is_active = data["is_active"]
 
-        db.session.commit()
+        await session.commit()
         logger.info(
             f"Bot assignment updated: assignment_id={entity_id} is_active={assignment.is_active}"
         )
@@ -331,6 +354,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         )
         return True
 
+    # Stays sync: called by delete_all_bot_assignments above (itself called
+    # from BotService.delete_all_bot_assignments, bot_svc.py, not migrated
+    # yet), in addition to bot_assignment_router.py's delete_assignment.
     def delete(self, entity_id: int) -> bool:
         """
         Delete an assignment (soft delete by setting is_active to False).
@@ -363,6 +389,8 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         )
         return True
 
+    # Stays sync: also called from UserAdminService (user_admin_svc.py, not
+    # migrated yet) in addition to bot_assignment_router.py.
     def remove_assignment(self, bot_id: int, user_id: int) -> bool:
         """
         Remove assignment between a bot and user.

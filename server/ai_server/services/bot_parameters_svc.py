@@ -2,11 +2,12 @@ from typing import List, Dict, Any, Optional
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.services.prompt_svc import PromptService
 from ai_server.services.yaml_svc import YamlSvc
-from ai_server.dao.database import BotParameters, InterlocutorIdentity, db
+from ai_server.dao.database import BotParameters, InterlocutorIdentity, db, get_async_session
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.decorators.singleton import singleton
 from ai_server.services.llm_svc import LlmService
+from sqlalchemy import select
 
 yaml_svc = YamlSvc()
 prompt_svc = PromptService()
@@ -62,6 +63,18 @@ class BotParametersService(BaseService[BotParametersDto]):
             | yaml_svc.qualities_flaws_dict
         )
 
+    # create_bot_parameters/create/_perform_create/update_prompt all stay
+    # sync (db.session, not get_async_session()): create_bot_parameters
+    # calls self.create() and self.update_prompt() below, both entirely
+    # sync work -- create()/_perform_create() is also called directly by
+    # create_random_parameters (called from BotService.create_random_bot,
+    # bot_svc.py, not migrated), and update_prompt() calls
+    # prompt_svc.update_prompt() (prompt_svc.py) which itself calls
+    # BotService.update() (bot_svc.py) to persist the regenerated prompt --
+    # another still-sync call chain through bot_svc.py. Converting either
+    # method now would add an `async def` with zero actual async work
+    # inside, or require migrating bot_svc.py first -- see
+    # /root/.claude/plans/moonlit-leaping-salamander.md.
     def create_bot_parameters(
         self, user_name: str, bot_id: int, params: Dict[str, Any]
     ) -> BotParametersDto:
@@ -531,6 +544,8 @@ class BotParametersService(BaseService[BotParametersDto]):
         question = prompt_svc.welcome_message_trigger(user_name, params, behaviour_dict)
         return question
 
+    # Stays sync: also called from BotService (bot_svc.py, not migrated
+    # yet) in addition to bot_parameters_router.py.
     def get_by_bot_id(self, bot_id: int) -> Optional[BotParametersDto]:
         """
         Get bot parameters by bot ID.
@@ -595,6 +610,8 @@ class BotParametersService(BaseService[BotParametersDto]):
         self.update_prompt(user_name, bot_id)
         return self._bot_parameters_to_dto(bot_params)
 
+    # Stays sync too, for the same update_prompt() reason as
+    # create_bot_parameters above.
     def patch_bot_parameters(
         self, bot_id: int, data: dict, user_name: str
     ) -> Optional[BotParametersDto]:
@@ -647,7 +664,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         self.update_prompt(user_name, bot_id)
         return self._bot_parameters_to_dto(bot_params)
 
-    def delete_by_bot_id(self, bot_id: int) -> bool:
+    async def delete_by_bot_id(self, bot_id: int) -> bool:
         """
         Delete bot parameters by bot ID.
 
@@ -660,19 +677,23 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When bot parameters deletion fails
         """
-        result = self._perform_delete_by_bot_id(bot_id)
+        result = await self._perform_delete_by_bot_id(bot_id)
         if result is None:
             return False
         return result
 
-    def _perform_delete_by_bot_id(self, bot_id: int) -> bool:
-        bot_params = BotParameters.query.filter_by(bot_id=bot_id).first()
+    async def _perform_delete_by_bot_id(self, bot_id: int) -> bool:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotParameters).where(BotParameters.bot_id == bot_id)
+        )
+        bot_params = result.scalar_one_or_none()
         if not bot_params:
             self.logger.warning(f"delete_by_bot_id bot_id={bot_id} not found")
             return False
 
-        db.session.delete(bot_params)
-        db.session.commit()
+        await session.delete(bot_params)
+        await session.commit()
         self.logger.info(f"BotParameters deleted bot_id={bot_id}")
         return True
 

@@ -14,6 +14,13 @@ presence checks (SpecTree's own required-field gate already rejects a
 body missing either field before the handler runs). This port skips
 reproducing that unreachable code and reads straight off the validated
 body model instead.
+
+get_assignments_by_parent/get_assigned_bot_ids/update_assignment are
+async (`async def` + @with_async_db_session): their BotAssignmentService
+methods have no caller outside this router. The other five routes stay
+sync -- their methods are also called from BotService/UserAdminService/
+rag_router.py (none migrated yet); see
+/root/.claude/plans/moonlit-leaping-salamander.md.
 """
 
 from fastapi import APIRouter, Depends, Response
@@ -23,7 +30,7 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dao.database import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_db_session
+from ai_server.dependencies.db_session import with_async_db_session, with_db_session
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_assignment_svc import BotAssignmentService
@@ -95,8 +102,8 @@ def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depends(ad
 
 
 @router.get("/parent/{parent_user_id:int}", dependencies=[Depends(admin_or_user)])
-@with_db_session
-def get_assignments_by_parent(parent_user_id: int, claims: dict = Depends(admin_or_user)):
+@with_async_db_session
+async def get_assignments_by_parent(parent_user_id: int, claims: dict = Depends(admin_or_user)):
     """Get all assignments created by a parent user"""
     logger.info(f"GET /bot-guest-assignment/parent/{parent_user_id} - get_assignments_by_parent called")
     user_id = claims["sub"]
@@ -106,7 +113,7 @@ def get_assignments_by_parent(parent_user_id: int, claims: dict = Depends(admin_
         logger.warning(f"get_assignments_by_parent({parent_user_id}) forbidden for user_id={user_id}")
         raise ApiError("Forbidden", status_code=403)
 
-    assignments = bot_assignment_svc.get_assignments_by_parent(parent_user_id)
+    assignments = await bot_assignment_svc.get_assignments_by_parent(parent_user_id)
     logger.info(f"get_assignments_by_parent({parent_user_id}) succeeded count={len(assignments)}")
     return [assignment.to_dict() for assignment in assignments]
 
@@ -144,8 +151,8 @@ def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(any_role
 
 
 @router.get("/guest/{guest_user_id:int}/bot-ids", dependencies=[Depends(any_role)])
-@with_db_session
-def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_role)):
+@with_async_db_session
+async def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_role)):
     """Get list of bot IDs assigned to a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id}/bot-ids - get_assigned_bot_ids called")
     user_id = claims["sub"]
@@ -156,7 +163,7 @@ def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_role)):
         logger.warning(f"get_assigned_bot_ids({guest_user_id}) forbidden for user_id={user_id}")
         raise
 
-    bot_ids = bot_assignment_svc.get_assigned_bot_ids_for_user(guest_user_id)
+    bot_ids = await bot_assignment_svc.get_assigned_bot_ids_for_user(guest_user_id)
     logger.info(f"get_assigned_bot_ids({guest_user_id}) succeeded count={len(bot_ids)}")
     return {"bot_ids": bot_ids}
 
@@ -165,8 +172,8 @@ def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_role)):
     "/{assignment_id:int}",
     dependencies=[Depends(require_json_body(BotGuestAssignmentUpdateRequest))],
 )
-@with_db_session
-def update_assignment(
+@with_async_db_session
+async def update_assignment(
     assignment_id: int, body: BotGuestAssignmentUpdateRequest, claims: dict = Depends(admin_or_user)
 ):
     """Update a bot guest assignment"""
@@ -174,6 +181,8 @@ def update_assignment(
     user_id = claims["sub"]
     user = _current_user(user_id)
 
+    # get_dto_by_id() stays sync (shared with delete_assignment below) --
+    # called here as a plain sync call, same as _current_user() above.
     assignment = bot_assignment_svc.get_dto_by_id(assignment_id)
     if not assignment:
         logger.warning(f"update_assignment({assignment_id}) not found")
@@ -182,7 +191,7 @@ def update_assignment(
         logger.warning(f"update_assignment({assignment_id}) forbidden for user_id={user_id}")
         raise ApiError("Forbidden", status_code=403)
 
-    updated_assignment = bot_assignment_svc.update(assignment_id, body.model_dump())
+    updated_assignment = await bot_assignment_svc.update(assignment_id, body.model_dump())
     logger.info(f"update_assignment({assignment_id}) succeeded")
     return updated_assignment.to_dict()
 

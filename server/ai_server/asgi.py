@@ -48,7 +48,7 @@ from ai_server.routers import (
 from ai_server.services.chroma_db_svc import ChromaDbService
 from ai_server.services.user_admin_svc import UserAdminService
 
-LogManager().setup_logger(AppConfig.LOGGER_LVL)
+LogManager().setup_logger(AppConfig.LOGGER_LVL, AppConfig.PROMPT_DEBUG_LVL)
 logger = BotFactoryLogger()
 
 

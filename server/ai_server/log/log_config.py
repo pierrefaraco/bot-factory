@@ -2,6 +2,7 @@ import logging
 from logging.config import dictConfig
 
 BOT_FACTORY_LOGGER = "bot_factory_logger"
+PROMPT_DEBUG_LOGGER = "prompt_debug_logger"
 LOG_FORMAT = "%(asctime)s - %(name)s | %(levelname)s | %(filename)s:%(lineno)d - %(class_name)s | %(message)s"
 LOG_DATE_FMT = "%Y-%m-%d %H:%M:%S.%z"
 
@@ -18,11 +19,19 @@ class ClassNameFilter(logging.Filter):
 
 
 class LogManager:
-    def setup_logger(self, logging_level: str):
-        """Build a config object to setup the Python logging framework and inject it with the dictConfig method"""
+    def setup_logger(self, logging_level: str, prompt_debug_level: str = None):
+        """Build a config object to setup the Python logging framework and inject it with the dictConfig method.
+
+        prompt_debug_level controls PROMPT_DEBUG_LOGGER independently of the
+        general app level, so prompt-construction tracing (see
+        PromptDebugLogger / server/doc/LANGCHAIN_ARCHITECTURE.md#3) can be
+        switched on without turning on full app-wide DEBUG logging. Defaults
+        to `logging_level` when not given."""
         my_formats = self.__setup_formats()
         my_handlers = self.__setup_handlers()
-        my_loggers = self.__setup_loggers(logging_level)
+        my_loggers = self.__setup_loggers(
+            logging_level, prompt_debug_level or logging_level
+        )
         # *** Final object building.
         log_config = {
             "version": 1,
@@ -75,10 +84,16 @@ class LogManager:
                     "filters": ["class_name_filter"],
                     "stream": "ext://sys.stdout",
                 },
+                "prompt_debug_handler": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "standard_format",
+                    "filters": ["class_name_filter"],
+                    "stream": "ext://sys.stdout",
+                },
             }
         }
 
-    def __setup_loggers(self, logging_level: str):
+    def __setup_loggers(self, logging_level: str, prompt_debug_level: str):
         """Define a defaut logger, one for the application logs and configure uvicorn's own loggers."""
         return {
             "loggers": {  # root logger
@@ -90,6 +105,11 @@ class LogManager:
                 BOT_FACTORY_LOGGER: {
                     "level": logging_level,
                     "handlers": ["application_logs_handler"],
+                    "propagate": False,
+                },
+                PROMPT_DEBUG_LOGGER: {
+                    "level": prompt_debug_level,
+                    "handlers": ["prompt_debug_handler"],
                     "propagate": False,
                 },
                 "uvicorn": {

@@ -27,6 +27,7 @@ dependencies = [
     # Database
     "sqlalchemy==2.0.40",
     "pymysql==1.1.0",
+    "asyncmy==0.2.14",
     "alembic==1.13.1",
 
     # Core Dependencies

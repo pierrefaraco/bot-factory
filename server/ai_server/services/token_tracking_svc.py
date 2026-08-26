@@ -1,9 +1,9 @@
 from typing import Optional, Dict, List
 from datetime import datetime, timezone, timedelta
-from ai_server.dao.database import TokenUsage, db
+from ai_server.dao.database import TokenUsage, db, get_async_session
 from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from sqlalchemy import case, func
+from sqlalchemy import case, func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = BotFactoryLogger()
@@ -16,6 +16,12 @@ class TokenTrackingService:
     def __init__(self):
         self.logger = logger
 
+    # Stays sync (db.session, not get_async_session()): called synchronously
+    # from LlmService's TokenCountingCallback.on_llm_end (llm_svc.py),
+    # itself invoked from rag_svc.py's still-sync LCEL chain -- see
+    # /root/.claude/plans/moonlit-leaping-salamander.md. Only the read
+    # methods below (used by token_stats_router.py) are migrated to the
+    # async engine in this pass.
     def record_token_usage(
         self,
         user_id: int,
@@ -72,7 +78,7 @@ class TokenTrackingService:
         finally:
             db.session.close()
 
-    def get_user_total_tokens(self, user_id: int) -> int:
+    async def get_user_total_tokens(self, user_id: int) -> int:
         """
         Récupère le nombre total de tokens consommés par un utilisateur
 
@@ -82,12 +88,14 @@ class TokenTrackingService:
         Returns:
             int: Nombre total de tokens consommés
         """
+        session = get_async_session()
         try:
-            total = (
-                db.session.query(func.sum(TokenUsage.total_tokens))
-                .filter(TokenUsage.user_id == user_id)
-                .scalar()
+            result = await session.execute(
+                select(func.sum(TokenUsage.total_tokens)).where(
+                    TokenUsage.user_id == user_id
+                )
             )
+            total = result.scalar()
 
             self.logger.debug(f"get_user_total_tokens user_id={user_id} total={total or 0}")
             return total if total else 0
@@ -96,9 +104,9 @@ class TokenTrackingService:
             self.logger.exception(f"Error getting user total tokens for user_id={user_id}: {e}")
             return 0
         finally:
-            db.session.close()
+            await session.close()
 
-    def get_user_tokens_last_24h(self, user_id: int) -> int:
+    async def get_user_tokens_last_24h(self, user_id: int) -> int:
         """
         Récupère le nombre total de tokens consommés par un utilisateur depuis 24h
 
@@ -108,17 +116,17 @@ class TokenTrackingService:
         Returns:
             int: Nombre total de tokens consommés depuis 24h
         """
+        session = get_async_session()
         try:
             # Calculer le timestamp d'il y a 24h
 
-            total = (
-                db.session.query(func.sum(TokenUsage.total_tokens))
-                .filter(
+            result = await session.execute(
+                select(func.sum(TokenUsage.total_tokens)).where(
                     TokenUsage.user_id == user_id,
                     TokenUsage.timestamp >= self.get_date_24h_ago(),
                 )
-                .scalar()
             )
+            total = result.scalar()
 
             self.logger.debug(f"get_user_tokens_last_24h user_id={user_id} total={total or 0}")
             return total if total else 0
@@ -127,9 +135,9 @@ class TokenTrackingService:
             self.logger.exception(f"Error getting user tokens last 24h for user_id={user_id}: {e}")
             return 0
         finally:
-            db.session.close()
+            await session.close()
 
-    def get_user_stats_last_24h(
+    async def get_user_stats_last_24h(
         self, user_id: int, include_records: bool = False, records_limit: int = 100
     ) -> Dict:
         """
@@ -147,22 +155,22 @@ class TokenTrackingService:
         # Calculer le timestamp d'il y a 24h
         time_24h_ago = self.get_date_24h_ago()
         time_now = datetime.now(timezone.utc)
+        session = get_async_session()
 
         try:
-            stats = (
-                db.session.query(
+            stats_result = await session.execute(
+                select(
                     func.sum(TokenUsage.prompt_tokens).label("total_prompt_tokens"),
                     func.sum(TokenUsage.completion_tokens).label(
                         "total_completion_tokens"
                     ),
                     func.sum(TokenUsage.total_tokens).label("total_tokens"),
                     func.count(TokenUsage.id).label("total_requests"),
-                )
-                .filter(
+                ).where(
                     TokenUsage.user_id == user_id, TokenUsage.timestamp >= time_24h_ago
                 )
-                .first()
             )
+            stats = stats_result.first()
 
             result = {
                 "user_id": user_id,
@@ -177,16 +185,16 @@ class TokenTrackingService:
 
             # Ajouter les enregistrements individuels si demandé
             if include_records:
-                records = (
-                    db.session.query(TokenUsage)
-                    .filter(
+                records_result = await session.execute(
+                    select(TokenUsage)
+                    .where(
                         TokenUsage.user_id == user_id,
                         TokenUsage.timestamp >= time_24h_ago,
                     )
                     .order_by(TokenUsage.id.desc())
                     .limit(records_limit)
-                    .all()
                 )
+                records = records_result.scalars().all()
 
                 result["records"] = [
                     {
@@ -227,9 +235,9 @@ class TokenTrackingService:
                 error_result["records"] = []
             return error_result
         finally:
-            db.session.close()
+            await session.close()
 
-    def get_user_token_stats(self, user_id: int) -> Dict:
+    async def get_user_token_stats(self, user_id: int) -> Dict:
         """
         Récupère les statistiques détaillées de consommation de tokens d'un utilisateur
 
@@ -239,19 +247,19 @@ class TokenTrackingService:
         Returns:
             Dict contenant les statistiques de tokens
         """
+        session = get_async_session()
         try:
-            stats = (
-                db.session.query(
+            stats_result = await session.execute(
+                select(
                     func.sum(TokenUsage.prompt_tokens).label("total_prompt_tokens"),
                     func.sum(TokenUsage.completion_tokens).label(
                         "total_completion_tokens"
                     ),
                     func.sum(TokenUsage.total_tokens).label("total_tokens"),
                     func.count(TokenUsage.id).label("total_requests"),
-                )
-                .filter(TokenUsage.user_id == user_id)
-                .first()
+                ).where(TokenUsage.user_id == user_id)
             )
+            stats = stats_result.first()
 
             return {
                 "user_id": user_id,
@@ -271,9 +279,9 @@ class TokenTrackingService:
                 "total_requests": 0,
             }
         finally:
-            db.session.close()
+            await session.close()
 
-    def get_user_token_history(
+    async def get_user_token_history(
         self, user_id: int, limit: int = 100, last_24h: bool = False
     ) -> List[Dict]:
         """
@@ -290,11 +298,13 @@ class TokenTrackingService:
         self.logger.debug(
             f"get_user_token_history user_id={user_id} limit={limit} last_24h={last_24h}"
         )
+        session = get_async_session()
         try:
-            query = db.session.query(TokenUsage)
+            stmt = select(TokenUsage)
             if last_24h:
-                query = query.filter(TokenUsage.timestamp >= self.get_date_24h_ago())
-            history = query.order_by(TokenUsage.id.desc()).limit(limit).all()
+                stmt = stmt.where(TokenUsage.timestamp >= self.get_date_24h_ago())
+            stmt = stmt.order_by(TokenUsage.id.desc()).limit(limit)
+            history = (await session.execute(stmt)).scalars().all()
             return [
                 {
                     "id": record.id,
@@ -315,9 +325,9 @@ class TokenTrackingService:
             self.logger.exception(f"Error getting user token history for user_id={user_id}: {e}")
             return []
         finally:
-            db.session.close()
+            await session.close()
 
-    def get_bot_token_stats(self, bot_id: int) -> Dict:
+    async def get_bot_token_stats(self, bot_id: int) -> Dict:
         """
         Récupère les statistiques de consommation de tokens pour un bot
 
@@ -327,9 +337,10 @@ class TokenTrackingService:
         Returns:
             Dict contenant les statistiques de tokens du bot
         """
+        session = get_async_session()
         try:
-            stats = (
-                db.session.query(
+            stats_result = await session.execute(
+                select(
                     func.sum(TokenUsage.prompt_tokens).label("total_prompt_tokens"),
                     func.sum(TokenUsage.completion_tokens).label(
                         "total_completion_tokens"
@@ -337,10 +348,9 @@ class TokenTrackingService:
                     func.sum(TokenUsage.total_tokens).label("total_tokens"),
                     func.count(TokenUsage.id).label("total_requests"),
                     func.count(func.distinct(TokenUsage.user_id)).label("unique_users"),
-                )
-                .filter(TokenUsage.bot_id == bot_id)
-                .first()
+                ).where(TokenUsage.bot_id == bot_id)
             )
+            stats = stats_result.first()
 
             return {
                 "bot_id": bot_id,
@@ -362,18 +372,19 @@ class TokenTrackingService:
                 "unique_users": 0,
             }
         finally:
-            db.session.close()
+            await session.close()
 
-    def get_all_users_token_stats(self) -> List[Dict]:
+    async def get_all_users_token_stats(self) -> List[Dict]:
         """
         Récupère les statistiques de consommation de tokens pour tous les utilisateurs
 
         Returns:
             Liste de dictionnaires contenant les statistiques par utilisateur
         """
+        session = get_async_session()
         try:
-            stats = (
-                db.session.query(
+            stats_result = await session.execute(
+                select(
                     TokenUsage.user_id,
                     func.sum(TokenUsage.prompt_tokens).label("total_prompt_tokens"),
                     func.sum(TokenUsage.completion_tokens).label(
@@ -384,8 +395,8 @@ class TokenTrackingService:
                 )
                 .group_by(TokenUsage.user_id)
                 .order_by(func.sum(TokenUsage.total_tokens).desc())
-                .all()
             )
+            stats = stats_result.all()
 
             result = [
                 {
@@ -404,7 +415,7 @@ class TokenTrackingService:
             self.logger.exception(f"Error getting all users token stats: {e}")
             return []
         finally:
-            db.session.close()
+            await session.close()
 
     def get_date_24h_ago(self) -> datetime:
         time_24h_ago = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -413,7 +424,7 @@ class TokenTrackingService:
     def get_date_30d_ago(self) -> datetime:
         return datetime.now(timezone.utc) - timedelta(days=30)
 
-    def get_admin_token_usage_summary(self, scope_user_id: Optional[int] = None) -> Dict:
+    async def get_admin_token_usage_summary(self, scope_user_id: Optional[int] = None) -> Dict:
         """
         Récupère, en 2 requêtes agrégées (pas de N+1), les tokens consommés
         sur 24h et 30j pour chaque compte (user_id) et chaque guest
@@ -440,29 +451,32 @@ class TokenTrackingService:
         tokens_24h_expr = func.sum(
             case((TokenUsage.timestamp >= since_24h, TokenUsage.total_tokens), else_=0)
         )
+        session = get_async_session()
 
         try:
-            account_query = db.session.query(
+            account_stmt = select(
                 TokenUsage.user_id,
                 tokens_24h_expr.label("tokens_24h"),
                 func.sum(TokenUsage.total_tokens).label("tokens_30d"),
-            ).filter(TokenUsage.timestamp >= since_30d)
+            ).where(TokenUsage.timestamp >= since_30d)
             if scope_user_id is not None:
-                account_query = account_query.filter(TokenUsage.user_id == scope_user_id)
-            account_rows = account_query.group_by(TokenUsage.user_id).all()
+                account_stmt = account_stmt.where(TokenUsage.user_id == scope_user_id)
+            account_stmt = account_stmt.group_by(TokenUsage.user_id)
+            account_rows = (await session.execute(account_stmt)).all()
 
-            guest_query = db.session.query(
+            guest_stmt = select(
                 TokenUsage.user_guest_id,
                 tokens_24h_expr.label("tokens_24h"),
                 func.sum(TokenUsage.total_tokens).label("tokens_30d"),
-            ).filter(
+            ).where(
                 TokenUsage.timestamp >= since_30d,
                 TokenUsage.user_guest_id.isnot(None),
                 TokenUsage.user_guest_id != -1,
             )
             if scope_user_id is not None:
-                guest_query = guest_query.filter(TokenUsage.user_id == scope_user_id)
-            guest_rows = guest_query.group_by(TokenUsage.user_guest_id).all()
+                guest_stmt = guest_stmt.where(TokenUsage.user_id == scope_user_id)
+            guest_stmt = guest_stmt.group_by(TokenUsage.user_guest_id)
+            guest_rows = (await session.execute(guest_stmt)).all()
 
             # The CASE-based tokens_24h sum comes back from PyMySQL as
             # Decimal (unlike a plain func.sum(int_column), which stays
@@ -498,4 +512,4 @@ class TokenTrackingService:
             )
             return {"accounts": {}, "guests": {}}
         finally:
-            db.session.close()
+            await session.close()

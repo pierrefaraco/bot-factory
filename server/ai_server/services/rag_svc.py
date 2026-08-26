@@ -1,8 +1,8 @@
 from ai_server.services.llm_svc import LlmService
 from ai_server.services.chroma_db_svc import ChromaDbService
 from ai_server.log.bot_factory_logger import BotFactoryLogger
+from ai_server.log.prompt_debug_logger import PromptDebugLogger
 from ai_server.config.config import app_config
-from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.prompt_svc import PromptService
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable, RunnableLambda, RunnablePassthrough
@@ -22,6 +22,7 @@ langchain.debug = False
 
 # ===== LOGGERS INIT =====
 logger = BotFactoryLogger()
+prompt_debug_logger = PromptDebugLogger()
 message_service = MessageService()
 
 
@@ -81,6 +82,22 @@ class RagService:
         Chroma verbatim rather than as a reformulated, self-contained
         question, so retrieval quality on such follow-ups can suffer even
         though the final answer still sees the full chat_history.
+
+        A `prompt_debug_logger.debug` call (PromptDebugLogger, its own
+        PROMPT_DEBUG_LVL env var — independent of LOGGER_LVL) is inserted
+        between every step up to and including the prompt sent to the LLM,
+        so the prompt's construction can be followed end to end without
+        turning on full app-wide DEBUG logging — the ①-③ markers below match
+        the walkthrough in server/doc/LANGCHAIN_ARCHITECTURE.md#3. There is
+        no such step between `llm` and `StrOutputParser()`: a plain
+        RunnableLambda there forces LangChain to buffer the LLM's entire
+        streamed output into one value before passing it on (it has no
+        transform() of its own to chain into `.stream()`'s per-chunk
+        pipeline), which silently turned real token-by-token SSE streaming
+        back into one single chunk delivered at the end. The ④ raw-answer
+        log now happens in ask_with_stream()/invoke_and_save() instead,
+        once the full answer is already accumulated — same debug value,
+        no chain step in the way.
         """
         llm = self.llm_service.get_llm(
             user_id=user_id, bot_id=bot_id, session_id=session_id
@@ -89,7 +106,8 @@ class RagService:
         qa_prompt = self.prompt_service.get_qa_prompt(bot_id)
 
         return (
-            RunnableLambda(
+            RunnableLambda(self._log_initial_input)
+            | RunnableLambda(
                 lambda inputs: {
                     **inputs,
                     "context": self._retrieve_and_label_sources(
@@ -97,8 +115,11 @@ class RagService:
                     ),
                 }
             )
+            | RunnableLambda(self._log_retrieved_context)
             | RunnablePassthrough.assign(context=lambda x: self._format_docs(x["context"]))
+            | RunnableLambda(self._log_formatted_context)
             | qa_prompt
+            | RunnableLambda(self._log_final_prompt)
             | llm
             | StrOutputParser()
         )
@@ -113,10 +134,66 @@ class RagService:
         {context} slot of the bot's system prompt."""
         return "\n\n".join(doc.page_content for doc in docs)
 
-    def get_session_history(self, session_id: str) -> BaseChatMessageHistory:
-        if session_id not in self.store:
-            self.store[session_id] = self.load_session_history(session_id)
-        return self.store[session_id]
+    def _truncate(self, text, limit: int = 800) -> str:
+        """Cap a debug-logged string so a large context/prompt doesn't flood
+        the logs; the full value is still what's actually sent/received."""
+        text = str(text)
+        if len(text) <= limit:
+            return text
+        return f"{text[:limit]}… [{len(text) - limit} caractères tronqués]"
+
+    def _log_initial_input(self, inputs: dict) -> dict:
+        """Q: raw pipeline input, before any processing."""
+        history = inputs.get("chat_history", [])
+        history_preview = "\n".join(
+            f"  [{message.type}] {self._truncate(message.content, 200)}"
+            for message in history
+        ) or "  (vide)"
+        prompt_debug_logger.debug(
+            f"Q — input={inputs['input']!r}\n"
+            f"chat_history ({len(history)} message(s)):\n{history_preview}"
+        )
+        return inputs
+
+    def _log_retrieved_context(self, inputs: dict) -> dict:
+        """① chunks retrieved from Chroma and labeled with their source,
+        before they get stuffed into a single {context} string."""
+        docs = inputs["context"]
+        previews = "\n---\n".join(
+            self._truncate(doc.page_content, 300) for doc in docs
+        )
+        prompt_debug_logger.debug(f"① {len(docs)} chunk(s) retrieved:\n{previews}")
+        return inputs
+
+    def _log_formatted_context(self, inputs: dict) -> dict:
+        """② the {context} slot after RunnablePassthrough.assign has
+        collapsed the document list into one string."""
+        prompt_debug_logger.debug(
+            f"② context formatted for {{context}}:\n{self._truncate(inputs['context'])}"
+        )
+        return inputs
+
+    def _log_final_prompt(self, prompt_value):
+        """③ the exact list of messages (system/chat_history/human) about
+        to be sent to the LLM, i.e. the fully assembled prompt."""
+        messages = "\n".join(
+            f"[{message.type}] {self._truncate(message.content)}"
+            for message in prompt_value.to_messages()
+        )
+        prompt_debug_logger.debug(f"③ final prompt sent to LLM:\n{messages}")
+        return prompt_value
+
+    def _log_llm_answer(self, answer: str) -> None:
+        """④ the LLM's full answer, already reassembled from
+        StrOutputParser's chunks (streaming) or returned whole (invoke) —
+        called from outside the chain so it can't block `.stream()`."""
+        prompt_debug_logger.debug(f"④ raw LLM answer: {self._truncate(answer)}")
+
+    def get_session_history(self, bot_id: int, user_id: int) -> BaseChatMessageHistory:
+        key = f"{bot_id}_{user_id}"
+        if key not in self.store:
+            self.store[key] = self.load_session_history(bot_id, user_id)
+        return self.store[key]
 
     def ingest_pdf(self, pdf_file_path: str, collection_name="MY_COLLECTION"):
         logger.info(f"Ingesting PDF '{pdf_file_path}' into collection={collection_name}")
@@ -194,7 +271,7 @@ class RagService:
         # Ensure the collection is built before invoking the chain
         # Passer user_id pour activer le tracking de tokens
         rag_chain = self.build(bot_id, user_id=user_id, session_id=session_id)
-        history = self.get_session_history(collection_name)
+        history = self.get_session_history(bot_id, user_id)
 
         def generate() -> Iterator[str]:
             start = time.perf_counter()
@@ -207,6 +284,7 @@ class RagService:
                     if chunk:
                         answer_str += chunk
                         yield f"data: {json.dumps({'answer': chunk})}\n\n"
+                self._log_llm_answer(answer_str)
                 history.add_user_message(query)
                 history.add_ai_message(answer_str)
                 message_service.save_message(bot_id, user_id, "assistant", answer_str)
@@ -238,7 +316,7 @@ class RagService:
         # Get the AI response
         logger.debug(f"Invoking RAG chain for bot_id={bot_id} user_id={user_id}")
         start = time.perf_counter()
-        history = self.get_session_history(f"{bot_id}_{user_id}")
+        history = self.get_session_history(bot_id, user_id)
         result = rag_chain.invoke(
             {"input": input_text, "chat_history": history.messages}
         )
@@ -247,6 +325,7 @@ class RagService:
             f"RAG chain invocation succeeded for bot_id={bot_id} user_id={user_id} "
             f"answer_length={len(result)} in {elapsed_ms}ms"
         )
+        self._log_llm_answer(result)
         history.add_user_message(input_text)
         history.add_ai_message(result)
 
@@ -255,20 +334,41 @@ class RagService:
         return result
 
     # Function to load chat history
-    def load_session_history(self, session_id: str) -> BaseChatMessageHistory:
+    def load_session_history(self, bot_id: int, user_id: int) -> BaseChatMessageHistory:
+        """Reload prior turns from MySQL via the DB `Session` row for this
+        bot/user pair. Messages are keyed in the DB by the integer
+        `Session.id` (see message_svc.py::save_message), not by any
+        in-process string key, so that real id has to be looked up first —
+        passing a synthetic key straight to `message_service.load_session_history`
+        would silently never match and always come back empty."""
         chat_history = ChatMessageHistory()
         try:
-            messages: list[Message] = message_service.load_session_history(session_id)
+            session = message_service.get_session(bot_id, user_id)
+            if session is None:
+                logger.debug(f"No DB session yet for bot_id={bot_id} user_id={user_id}")
+                return chat_history
+            messages: list[Message] = message_service.load_session_history(session.id)
             if messages:
                 logger.debug(
-                    f"Loaded {len(messages)} messages for session {session_id}"
+                    f"Loaded {len(messages)} messages for bot_id={bot_id} "
+                    f"user_id={user_id} (session_id={session.id})"
                 )
                 for message in messages:
-                    chat_history.add_message(
-                        {"role": message.role, "content": message.content}
-                    )
+                    # add_message({"role": ..., "content": ...}) looked
+                    # equivalent but isn't: ChatMessageHistory.add_message()
+                    # does no coercion, so it stored raw dicts instead of
+                    # HumanMessage/AIMessage — anything reading
+                    # chat_history.messages downstream (e.g. message.type)
+                    # blew up with AttributeError as soon as history was
+                    # actually non-empty.
+                    if message.role == "assistant":
+                        chat_history.add_ai_message(message.content)
+                    else:
+                        chat_history.add_user_message(message.content)
         except SQLAlchemyError as e:
-            logger.exception(f"Failed to load session history for {session_id}: {e}")
+            logger.exception(
+                f"Failed to load session history for bot_id={bot_id} user_id={user_id}: {e}"
+            )
         finally:
             db.session.close()
         return chat_history

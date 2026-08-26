@@ -22,7 +22,7 @@ there's no Flask app left anywhere in the process to push a context for.)
 
 from functools import wraps
 
-from ai_server.dao.database import db_session_scope
+from ai_server.dao.database import async_db_session_scope, db_session_scope
 
 
 def with_db_session(fn):
@@ -30,6 +30,34 @@ def with_db_session(fn):
     def wrapper(*args, **kwargs):
         with db_session_scope():
             return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def with_async_db_session(fn):
+    """Async counterpart of with_db_session, for `async def` endpoints whose
+    services have been migrated to the async engine (see
+    ai_server/dao/database.py's async_db_session_scope /
+    get_async_session()). Same one-call-frame reasoning as with_db_session
+    above applies here too.
+
+    Also opens the *sync* db_session_scope() alongside the async one: while
+    this migration is incremental, an async endpoint can still call
+    not-yet-migrated sync helpers (e.g. decorators/user_scope.py's
+    authorize_user_scope, shared with still-sync routers) that rely on
+    Model.query/db.session. Without the sync scope open too, such a call
+    would silently run against SessionLocal's un-scoped default (its
+    scopefunc returning None), a single Session shared by every such call
+    for the life of the process and never torn down -- a stale-snapshot /
+    cross-request bleed bug, exactly what db_session_scope() exists to
+    prevent. Drop this once every sync call site an async router might
+    reach has itself been migrated."""
+
+    @wraps(fn)
+    async def wrapper(*args, **kwargs):
+        with db_session_scope():
+            async with async_db_session_scope():
+                return await fn(*args, **kwargs)
 
     return wrapper
 

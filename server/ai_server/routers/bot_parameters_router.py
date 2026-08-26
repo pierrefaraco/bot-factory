@@ -19,6 +19,13 @@ require_roles(), already rejects any other role before this handler
 runs), and bot-ownership scoping was never implemented in the original
 either -- not something to add silently as part of a framework-only
 migration.
+
+Only delete_bot_parameters is async (`async def` + @with_async_db_session):
+BotParametersService.delete_by_bot_id has no caller outside this router.
+The other three routes stay sync -- their BotParametersService methods
+all funnel through update_prompt(), which calls BotService.update()
+(bot_svc.py, not migrated yet) to persist the regenerated prompt; see
+/root/.claude/plans/moonlit-leaping-salamander.md.
 """
 
 from typing import Optional
@@ -30,7 +37,7 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dao.database import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_db_session
+from ai_server.dependencies.db_session import with_async_db_session, with_db_session
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_parameters_svc import BotParametersService
@@ -149,11 +156,11 @@ def get_bot_parameters_by_bot_id(bot_id: int):
 
 
 @router.delete("/{bot_id}", status_code=204, dependencies=[Depends(admin_or_user)])
-@with_db_session
-def delete_bot_parameters(bot_id: int):
+@with_async_db_session
+async def delete_bot_parameters(bot_id: int):
     """Delete bot parameters by bot ID"""
     logger.info(f"DELETE /bot-parameters/{bot_id} - delete_bot_parameters called")
-    if not bot_parameters_svc.delete_by_bot_id(bot_id):
+    if not await bot_parameters_svc.delete_by_bot_id(bot_id):
         logger.warning(f"delete_bot_parameters({bot_id}) not found")
         raise ApiError("Bot parameters not found", status_code=404)
     logger.info(f"delete_bot_parameters({bot_id}) succeeded")
