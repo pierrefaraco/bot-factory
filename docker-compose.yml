@@ -95,11 +95,11 @@ services:
       # to reach a backend run locally via server/z-run.sh instead.
       API_HOST: ${API_HOST:-api}
     ports:
-      - "4200:80"
+      - "4200:8080"
     networks:
       - botfactory-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       timeout: 10s
       retries: 5
 

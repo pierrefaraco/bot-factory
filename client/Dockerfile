@@ -28,8 +28,18 @@ COPY nginx.conf.template /etc/nginx/templates/nginx.conf.template
 # Copy built application from builder stage
 COPY --from=builder /app/dist/alfred_react/browser /usr/share/nginx/html
 
+# Run as the existing non-root "nginx" user (already created in the base
+# image for worker processes). Binding to a port <1024 requires root, so
+# the server listens on 8080 instead (see nginx.conf.template) -- the
+# host-side mapping in docker-compose.yml stays on port 4200.
+RUN chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/log/nginx /etc/nginx && \
+    touch /var/run/nginx.pid && \
+    chown nginx:nginx /var/run/nginx.pid
+
+USER nginx
+
 # Expose port
-EXPOSE 80
+EXPOSE 8080
 
 # Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
