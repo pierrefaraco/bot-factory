@@ -75,27 +75,8 @@ class BotParametersService(BaseService[BotParametersDto]):
     # method now would add an `async def` with zero actual async work
     # inside, or require migrating bot_svc.py first -- see
     # /root/.claude/plans/moonlit-leaping-salamander.md.
-    def create_bot_parameters(
-        self, user_name: str, bot_id: int, params: Dict[str, Any]
-    ) -> BotParametersDto:
-        """
-        Create new bot parameters with additional logic.
-
-        Args:
-            user_name: Name of the user creating the parameters
-            bot_id: The ID of the bot to which parameters belong
-            params: Dictionary containing parameter values
-
-        Returns:
-            Created BotParametersDto instance
-
-        Raises:
-            ServiceError: When bot parameters creation fails
-        """
-        self.logger.info(
-            f"create_bot_parameters bot_id={bot_id} requested by user_name={user_name}"
-        )
-        data = {
+    def _bot_parameters_creation_data(self, bot_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {
             "bot_id": bot_id,
             "bot_name": str(params.get("bot_name") or ""),
             "bot_type": str(params.get("bot_type") or ""),
@@ -124,8 +105,46 @@ class BotParametersService(BaseService[BotParametersDto]):
             "voice_output": bool(params.get("voice_output")),
             "persona_description": str(params.get("persona_description") or ""),
         }
+
+    def create_bot_parameters(
+        self, user_name: str, bot_id: int, params: Dict[str, Any]
+    ) -> BotParametersDto:
+        """
+        Create new bot parameters with additional logic.
+
+        Args:
+            user_name: Name of the user creating the parameters
+            bot_id: The ID of the bot to which parameters belong
+            params: Dictionary containing parameter values
+
+        Returns:
+            Created BotParametersDto instance
+
+        Raises:
+            ServiceError: When bot parameters creation fails
+        """
+        self.logger.info(
+            f"create_bot_parameters bot_id={bot_id} requested by user_name={user_name}"
+        )
+        data = self._bot_parameters_creation_data(bot_id, params)
         result = self.create(data)
         self.update_prompt(user_name, data["bot_id"])
+        return result
+
+    # Async counterpart of create_bot_parameters, for
+    # bot_parameters_router.py's now-async create_or_update_bot_parameters
+    # route. create_bot_parameters itself stays sync: create_random_parameters
+    # below (called from BotService.create_random_bot, bot_svc.py, not
+    # migrated) shares its _perform_create/update_prompt call chain.
+    async def create_bot_parameters_async(
+        self, user_name: str, bot_id: int, params: Dict[str, Any]
+    ) -> BotParametersDto:
+        self.logger.info(
+            f"create_bot_parameters bot_id={bot_id} requested by user_name={user_name}"
+        )
+        data = self._bot_parameters_creation_data(bot_id, params)
+        result = await self.create_async(data)
+        await self.update_prompt_async(user_name, data["bot_id"])
         return result
 
     def create(self, data: Dict[str, Any]) -> BotParametersDto:
@@ -178,6 +197,49 @@ class BotParametersService(BaseService[BotParametersDto]):
         )
         db.session.add(bot_params)
         db.session.commit()
+        self.logger.info(
+            f"BotParameters created id={bot_params.id} bot_id={bot_params.bot_id}"
+        )
+        return self._bot_parameters_to_dto(bot_params)
+
+    # Async counterpart of create/_perform_create, for
+    # create_bot_parameters_async above. create/_perform_create themselves
+    # stay sync: still called from create_random_parameters below (not
+    # migrated).
+    async def create_async(self, data: Dict[str, Any]) -> BotParametersDto:
+        result = await self._perform_create_async(data)
+        if result is None:
+            raise ServiceError(
+                "Bot parameters creation failed, no BotParametersDto returned."
+            )
+        return result
+
+    async def _perform_create_async(self, data: Dict[str, Any]) -> BotParametersDto:
+        session = get_async_session()
+        bot_params = BotParameters(
+            bot_id=data["bot_id"],
+            bot_name=data.get("bot_name", ""),
+            bot_type=data.get("bot_type", ""),
+            main_personality_trait_1=data.get("main_personality_trait_1", ""),
+            main_personality_trait_2=data.get("main_personality_trait_2", ""),
+            main_personality_trait_3=data.get("main_personality_trait_3", ""),
+            used_sources=data.get("used_sources", ""),
+            context_type=data.get("context_type", ""),
+            answer_style=data.get("answer_style", ""),
+            answer_length=data.get("answer_length", ""),
+            interlocutor_type=data.get("interlocutor_type", ""),
+            goal=data.get("goal", ""),
+            behaviour_when_ignore=data.get("behaviour_when_ignore", ""),
+            behaviour_with_language=data.get("behaviour_with_language", ""),
+            localisation=data.get("localisation", ""),
+            interlocutor_identity=data.get("interlocutor_identity")
+            or InterlocutorIdentity.USER.value,
+            answer_format=data.get("answer_format", ""),
+            voice_output=bool(data.get("voice_output", False)),
+            persona_description=data.get("persona_description", ""),
+        )
+        session.add(bot_params)
+        await session.commit()
         self.logger.info(
             f"BotParameters created id={bot_params.id} bot_id={bot_params.bot_id}"
         )
@@ -567,6 +629,20 @@ class BotParametersService(BaseService[BotParametersDto]):
             return None
         return self._bot_parameters_to_dto(bot_params)
 
+    # Async counterpart of get_by_bot_id, for bot_parameters_router.py's
+    # now-async get_bot_parameters_by_bot_id route. get_by_bot_id itself
+    # stays sync: still called from BotService (bot_svc.py, not migrated
+    # yet).
+    async def get_by_bot_id_async(self, bot_id: int) -> Optional[BotParametersDto]:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotParameters).where(BotParameters.bot_id == bot_id)
+        )
+        bot_params = result.scalar_one_or_none()
+        if not bot_params:
+            return None
+        return self._bot_parameters_to_dto(bot_params)
+
     def update_by_bot_id(
         self, user_name: str, bot_id: int, update_data: Dict[str, Any]
     ) -> BotParametersDto:
@@ -613,9 +689,9 @@ class BotParametersService(BaseService[BotParametersDto]):
         self.update_prompt(user_name, bot_id)
         return self._bot_parameters_to_dto(bot_params)
 
-    # Stays sync too, for the same update_prompt() reason as
-    # create_bot_parameters above.
-    def patch_bot_parameters(
+    # Migrated to async: bot_parameters_router.py's patch_bot_parameters_admin
+    # is the only caller.
+    async def patch_bot_parameters(
         self, bot_id: int, data: dict, user_name: str
     ) -> Optional[BotParametersDto]:
         """
@@ -629,16 +705,20 @@ class BotParametersService(BaseService[BotParametersDto]):
         Returns:
             Updated BotParametersDto instance, or None if not found
         """
-        return self._perform_patch_bot_parameters(
+        return await self._perform_patch_bot_parameters(
             bot_id,
             data,
             user_name,
         )
 
-    def _perform_patch_bot_parameters(
+    async def _perform_patch_bot_parameters(
         self, bot_id: int, data: dict, user_name: str
     ) -> Optional[BotParametersDto]:
-        bot_params = BotParameters.query.filter_by(bot_id=bot_id).first()
+        session = get_async_session()
+        result = await session.execute(
+            select(BotParameters).where(BotParameters.bot_id == bot_id)
+        )
+        bot_params = result.scalar_one_or_none()
 
         if not bot_params:
             return None
@@ -662,9 +742,9 @@ class BotParametersService(BaseService[BotParametersDto]):
             f"patch_bot_parameters bot_id={bot_id} applied_fields={applied_fields} "
             f"skipped_fields={[k for k in data if k not in applied_fields and k != 'user_name']}"
         )
-        db.session.commit()
+        await session.commit()
         self.logger.info(f"BotParameters patched bot_id={bot_id}")
-        self.update_prompt(user_name, bot_id)
+        await self.update_prompt_async(user_name, bot_id)
         return self._bot_parameters_to_dto(bot_params)
 
     async def delete_by_bot_id(self, bot_id: int) -> bool:
@@ -722,6 +802,32 @@ class BotParametersService(BaseService[BotParametersDto]):
         params = BotParameters.query.filter_by(bot_id=bot_id).first()
         if params:
             prompt_svc.update_prompt(
+                user_name, bot_id, params, behaviour_dict, answer_dict
+            )
+            self.logger.debug(f"Prompt updated for bot_id={bot_id} by user_name={user_name}")
+        else:
+            self.logger.warning(
+                f"No BotParameters found for bot_id {bot_id}, prompt not updated"
+            )
+
+    # Async counterpart of update_prompt/_perform_update_prompt, for
+    # create_bot_parameters_async/patch_bot_parameters above.
+    # update_prompt/_perform_update_prompt themselves stay sync: still
+    # called from create_bot_parameters/create_random_parameters (not
+    # migrated).
+    async def update_prompt_async(self, user_name: str, bot_id: int):
+        await self._perform_update_prompt_async(user_name, bot_id)
+
+    async def _perform_update_prompt_async(self, user_name: str, bot_id: int):
+        behaviour_dict = yaml_svc.behaviour_dict
+        answer_dict = yaml_svc.answer_dict
+        session = get_async_session()
+        result = await session.execute(
+            select(BotParameters).where(BotParameters.bot_id == bot_id)
+        )
+        params = result.scalar_one_or_none()
+        if params:
+            await prompt_svc.update_prompt_async(
                 user_name, bot_id, params, behaviour_dict, answer_dict
             )
             self.logger.debug(f"Prompt updated for bot_id={bot_id} by user_name={user_name}")

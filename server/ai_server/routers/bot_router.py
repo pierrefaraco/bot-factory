@@ -25,17 +25,28 @@ Path params use the `{bot_id:int}` Starlette converter (not a bare
 segment falls through to the next route (e.g. "/me", "/owned") instead
 of matching here and 422ing.
 
-get_user_bots/get_all_bots/get_all_owned_bots are async (`async def`):
-their BotService methods (get_owned_and_assigned_bots/get_all/
-get_bots_by_user, plus the get_assigned_bots they compose) have no
-caller outside this router. The other routes stay sync --
-create_bot/update_bot_admin/delete_bot rely on BotService methods shared
-with PromptService, UserAdminService, or KnowledgeSvc/rag_svc.py, none
-migrated yet; see /root/.claude/plans/moonlit-leaping-salamander.md. DB
-session scoping doesn't care either way: it's wired once, at the router
-level, via Depends(async_db_session_dependency) -- see that dependency's
-own docstring for why an async-generator Depends works for both a sync
-and an async route (no per-route decorator needed for either).
+Every route here is `async def`, except create_bot and delete_bot (see
+their own comments below for why): get_user_bots/get_all_bots/
+get_all_owned_bots call their BotService method directly (no caller
+outside this router); get_bot_parameters_description does no DB/blocking
+work at all (pure in-memory YAML lookup, bot_parameters_svc.py); select_bot
+does its own small async User update directly (no service method existed
+for it, sync or async, so there was nothing to duplicate); get_bot/
+update_bot_admin call a dedicated `_async` twin
+(get_dto_by_id_async/is_bot_assigned_to_user_async, update_async) added
+alongside the original sync BotService method -- that one is still
+shared with UserAdminService/bot_router.py's own still-sync routes, so it
+couldn't be converted in place without either breaking those callers or
+duplicating their logic. create_bot/delete_bot stay sync: both fall
+through to KnowledgeSvc (via TemplateSvc.importTemplateInDB or
+context_svc.delete_all), which drives ChromaDB writes with no async
+client at all -- same class of blocker as rag_router.py's
+transmit_to_alfred, which stays sync for exactly this reason. DB session
+scoping doesn't care about any of this either way: it's wired once, at
+the router level, via Depends(async_db_session_dependency) -- see that
+dependency's own docstring for why an async-generator Depends works for
+both a sync and an async route (no per-route decorator needed for
+either).
 """
 
 from typing import List, Optional
@@ -44,7 +55,7 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, field_validator
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import User, db
+from ai_server.dao.database import User, get_async_session
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_content_type
 from ai_server.dependencies.db_session import async_db_session_dependency
@@ -52,6 +63,7 @@ from ai_server.dto.bot_dto import BotDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_svc import BotService
+from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
     prefix="/api/bot",
@@ -61,6 +73,7 @@ router = APIRouter(
 
 logger = BotFactoryLogger()
 bot_svc = BotService()
+user_svc = UserAdminService()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
@@ -90,9 +103,20 @@ def _can_modify_bot(user: User, bot_id: int) -> bool:
     return bot_dto and bot_dto.user_account_id == user.id
 
 
+async def _can_modify_bot_async(user, bot_id: int) -> bool:
+    if user.roles == ADMIN_ROLE:
+        return True
+    bot_dto: BotDto = await bot_svc.get_dto_by_id_async(bot_id)
+    return bot_dto and bot_dto.user_account_id == user.id
+
+
 @router.post("", status_code=201, dependencies=[Depends(require_json_content_type)])
 def create_bot(claims: dict = Depends(admin_or_user)):
-    """Create a new bot with random parameters for the authenticated user."""
+    """Create a new bot with random parameters for the authenticated user.
+
+    Stays sync: bot_svc.create_random_bot() funnels into TemplateSvc/
+    KnowledgeSvc, still fully sync (ChromaDB, no async client) -- see
+    bot_svc.py's own comment on create_random_bot."""
     logger.info("POST /bot - create_bot called")
     user_account_id = claims["sub"]
     if not user_account_id:
@@ -143,7 +167,7 @@ async def get_all_owned_bots(claims: dict = Depends(any_role)):
 
 
 @router.get("/parameters-description", dependencies=[Depends(admin_or_user)])
-def get_bot_parameters_description():
+async def get_bot_parameters_description():
     logger.info("GET /bot/parameters-description - get_bot_parameters_description called")
     result = bot_svc.get_bot_parameters_description()
     logger.info("get_bot_parameters_description succeeded")
@@ -151,33 +175,34 @@ def get_bot_parameters_description():
 
 
 @router.patch("/selectbot/{bot_id:int}", status_code=204, dependencies=[Depends(any_role)])
-def select_bot(bot_id: int, claims: dict = Depends(any_role)):
+async def select_bot(bot_id: int, claims: dict = Depends(any_role)):
     """Select a bot by its ID and user ID."""
     logger.info(f"PATCH /bot/selectbot/{bot_id} - select_bot called")
     user_id = claims["sub"]
-    user: User = User.query.filter_by(id=user_id).first()
+    session = get_async_session()
+    user = await session.get(User, user_id)
     if not user:
         logger.warning(f"select_bot({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
     user.selected_bot_id = bot_id
-    db.session.commit()
+    await session.commit()
     logger.info(f"select_bot({bot_id}) succeeded for user_id={user_id}")
     return Response(status_code=204)
 
 
 @router.get("/{bot_id:int}", dependencies=[Depends(any_role)])
-def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Query(default="minimal")):
+async def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Query(default="minimal")):
     """Get a bot by its ID."""
     logger.info(f"GET /bot/{bot_id} - get_bot called")
     user_id = claims["sub"]
-    user: User = User.query.filter_by(id=user_id).first()
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"get_bot({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
     logger.debug(f"get_bot({bot_id}) params: view={view}")
-    bot_dto: Optional[BotDto] = bot_svc.get_dto_by_id(bot_id, view)
+    bot_dto: Optional[BotDto] = await bot_svc.get_dto_by_id_async(bot_id, view)
     if not bot_dto:
         logger.warning(f"get_bot({bot_id}) not found")
         raise ApiError("Bot not found", status_code=404)
@@ -186,7 +211,7 @@ def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Query(def
         logger.info(f"get_bot({bot_id}) succeeded")
         return bot_dto.to_dict()
     elif user.roles in (USER_ROLE, GUEST_ROLE):
-        if int(bot_dto.user_account_id) == int(user_id) or bot_svc.is_bot_assigned_to_user(bot_id, user_id):
+        if int(bot_dto.user_account_id) == int(user_id) or await bot_svc.is_bot_assigned_to_user_async(bot_id, user_id):
             logger.info(f"get_bot({bot_id}) succeeded")
             return bot_dto.to_dict()
 
@@ -199,21 +224,21 @@ def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Query(def
 
 
 @router.put("/{bot_id:int}", dependencies=[Depends(require_json_content_type)])
-def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = Depends(admin_or_user)):
+async def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = Depends(admin_or_user)):
     """Met à jour un bot existant"""
     logger.info(f"PUT /bot/{bot_id} - update_bot_admin called")
     user_id = claims["sub"]
-    user: User = User.query.filter_by(id=user_id).first()
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"update_bot_admin({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    if not _can_modify_bot(user, bot_id):
+    if not await _can_modify_bot_async(user, bot_id):
         logger.warning(f"update_bot_admin({bot_id}) forbidden for user_id={user_id}")
         raise ApiError(f"You don't have rights to update bot {bot_id}.", status_code=403)
 
     validated_data = body.model_dump(exclude_unset=True)
-    bot_dto: BotDto = bot_svc.update(bot_id, validated_data)
+    bot_dto: BotDto = await bot_svc.update_async(bot_id, validated_data)
     if not bot_dto:
         logger.warning(f"update_bot_admin({bot_id}) not found")
         raise ApiError("Bot not found", status_code=404)
@@ -224,7 +249,12 @@ def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = Depends
 
 @router.delete("/{bot_id:int}", status_code=204, dependencies=[Depends(admin_or_user)])
 def delete_bot(bot_id: int, claims: dict = Depends(admin_or_user)):
-    """Supprime un bot"""
+    """Supprime un bot.
+
+    Stays sync: bot_svc.delete() calls context_svc.delete_all()
+    (KnowledgeSvc, still fully sync -- ChromaDB has no async client) before
+    deleting the Bot row itself -- see bot_svc.py's own comment on
+    delete()."""
     logger.info(f"DELETE /bot/{bot_id} - delete_bot called")
     user_id = claims["sub"]
     user: User = User.query.filter_by(id=user_id).first()

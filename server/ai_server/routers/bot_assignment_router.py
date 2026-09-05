@@ -15,15 +15,24 @@ body missing either field before the handler runs). This port skips
 reproducing that unreachable code and reads straight off the validated
 body model instead.
 
-get_assignments_by_parent/get_assigned_bot_ids/update_assignment are
-async (`async def`): their BotAssignmentService methods have no caller
-outside this router. The other five routes stay sync -- their methods
-are also called from BotService/UserAdminService/rag_router.py (none
-migrated yet); see /root/.claude/plans/moonlit-leaping-salamander.md. DB
-session scoping doesn't care either way: it's wired once, at the router
-level, via Depends(async_db_session_dependency) -- see that dependency's
-own docstring for why an async-generator Depends works for both a sync
-and an async route (no per-route decorator needed for either).
+Every route here is `async def`. get_assignments_by_parent/
+get_assigned_bot_ids/update_assignment call their BotAssignmentService
+method directly (no caller outside this router). The other five routes
+instead call a dedicated `_async` twin (create_async/
+get_assignments_by_user_async/delete_async/remove_assignment_async) --
+or, for check_assignment, the is_bot_assigned_to_user_async twin already
+added for rag_router.py -- added alongside the original sync method:
+that one is still shared with BotService/UserAdminService (neither
+migrated), so it couldn't be converted in place without either breaking
+those callers or duplicating their logic. get_dto_by_id was the one
+exception migrated in place: its only two callers were both inside this
+router (update_assignment, already async; delete_assignment, now async
+too), so there was no sync caller left to preserve. DB session scoping
+doesn't care about any of this either way: it's wired once, at the
+router level, via Depends(async_db_session_dependency) -- see that
+dependency's own docstring for why an async-generator Depends works for
+both a sync and an async route (no per-route decorator needed for
+either).
 """
 
 from fastapi import APIRouter, Depends, Response
@@ -82,7 +91,7 @@ def _current_user(user_id) -> User:
 @router.post(
     "", status_code=201, dependencies=[Depends(require_json_body(BotGuestAssignmentRequest))]
 )
-def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depends(admin_or_user)):
+async def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depends(admin_or_user)):
     """Create a new bot guest assignment"""
     logger.info("POST /bot-guest-assignment - create_assignment called")
     user_id = claims["sub"]
@@ -98,7 +107,7 @@ def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depends(ad
     validated_data["assigned_by"] = user_id
     validated_data["user_id"] = validated_data["guest_user_id"]
 
-    assignment_dto = bot_assignment_svc.create(validated_data)
+    assignment_dto = await bot_assignment_svc.create_async(validated_data)
     if not assignment_dto:
         logger.warning(f"create_assignment failed for assigned_by={user_id}")
         raise ApiError("Failed to create assignment", status_code=500)
@@ -138,7 +147,7 @@ def _authorize_guest_scope(user: User, user_id, guest_user_id: int) -> None:
 
 
 @router.get("/guest/{guest_user_id:int}", dependencies=[Depends(any_role)])
-def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(any_role)):
+async def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(any_role)):
     """Get all assignments for a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id} - get_assignments_by_guest called")
     user_id = claims["sub"]
@@ -149,7 +158,7 @@ def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(any_role
         logger.warning(f"get_assignments_by_guest({guest_user_id}) forbidden for user_id={user_id}")
         raise
 
-    assignments = bot_assignment_svc.get_assignments_by_user(guest_user_id)
+    assignments = await bot_assignment_svc.get_assignments_by_user_async(guest_user_id)
     logger.info(f"get_assignments_by_guest({guest_user_id}) succeeded count={len(assignments)}")
     return [assignment.to_dict() for assignment in assignments]
 
@@ -183,9 +192,7 @@ async def update_assignment(
     user_id = claims["sub"]
     user = _current_user(user_id)
 
-    # get_dto_by_id() stays sync (shared with delete_assignment below) --
-    # called here as a plain sync call, same as _current_user() above.
-    assignment = bot_assignment_svc.get_dto_by_id(assignment_id)
+    assignment = await bot_assignment_svc.get_dto_by_id(assignment_id)
     if not assignment:
         logger.warning(f"update_assignment({assignment_id}) not found")
         raise ApiError("Assignment not found", status_code=404)
@@ -199,13 +206,13 @@ async def update_assignment(
 
 
 @router.delete("/{assignment_id:int}", status_code=204, dependencies=[Depends(admin_or_user)])
-def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_user)):
+async def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_user)):
     """Delete a bot guest assignment"""
     logger.info(f"DELETE /bot-guest-assignment/{assignment_id} - delete_assignment called")
     user_id = claims["sub"]
     user = _current_user(user_id)
 
-    assignment = bot_assignment_svc.get_dto_by_id(assignment_id)
+    assignment = await bot_assignment_svc.get_dto_by_id(assignment_id)
     if not assignment:
         logger.warning(f"delete_assignment({assignment_id}) not found")
         raise ApiError("Assignment not found", status_code=404)
@@ -213,7 +220,7 @@ def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_user))
         logger.warning(f"delete_assignment({assignment_id}) forbidden for user_id={user_id}")
         raise ApiError("Forbidden", status_code=403)
 
-    if not bot_assignment_svc.delete(assignment_id):
+    if not await bot_assignment_svc.delete_async(assignment_id):
         logger.warning(f"delete_assignment({assignment_id}) not found on delete")
         raise ApiError("Assignment not found", status_code=404)
 
@@ -224,13 +231,13 @@ def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_user))
 @router.delete(
     "/remove", dependencies=[Depends(require_json_body(BotGuestAssignmentRefRequest))]
 )
-def remove_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(admin_or_user)):
+async def remove_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(admin_or_user)):
     """Remove assignment between a bot and guest user"""
     logger.info("DELETE /bot-guest-assignment/remove - remove_assignment called")
     _current_user(claims["sub"])
 
     logger.debug(f"remove_assignment payload: bot_id={body.bot_id} guest_user_id={body.guest_user_id}")
-    if not bot_assignment_svc.remove_assignment(body.bot_id, body.guest_user_id):
+    if not await bot_assignment_svc.remove_assignment_async(body.bot_id, body.guest_user_id):
         logger.warning(f"remove_assignment not found for bot_id={body.bot_id} guest_user_id={body.guest_user_id}")
         raise ApiError("Assignment not found", status_code=404)
 
@@ -241,10 +248,10 @@ def remove_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends
 @router.post(
     "/check", dependencies=[Depends(require_json_body(BotGuestAssignmentRefRequest))]
 )
-def check_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(any_role)):
+async def check_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(any_role)):
     """Check if a bot is assigned to a guest user"""
     logger.info("POST /bot-guest-assignment/check - check_assignment called")
     logger.debug(f"check_assignment payload: bot_id={body.bot_id} guest_user_id={body.guest_user_id}")
-    is_assigned = bot_assignment_svc.is_bot_assigned_to_user(body.bot_id, body.guest_user_id)
+    is_assigned = await bot_assignment_svc.is_bot_assigned_to_user_async(body.bot_id, body.guest_user_id)
     logger.info(f"check_assignment succeeded is_assigned={is_assigned}")
     return {"is_assigned": is_assigned}

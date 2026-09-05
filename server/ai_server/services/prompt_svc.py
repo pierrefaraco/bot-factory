@@ -64,9 +64,7 @@ class PromptService:
         )
         return question
 
-    def update_prompt(
-        self, user_name: str, bot_id, params, behaviour_dict, answer_dict
-    ):
+    def _build_prompt(self, user_name: str, bot_id, params, behaviour_dict, answer_dict) -> str:
         interlocutor_sentence = self.make_interlocutor_sentence(user_name, params)
         traits = ", ".join(
             trait
@@ -116,10 +114,28 @@ class PromptService:
             )
         )
         prompt = "\n".join(lines) + "\n"
-
         self.logger.info(f"Updating prompt for bot_id={bot_id} length={len(prompt)}")
         self.logger.debug(f"New prompt for bot_id {bot_id}: {prompt}")
+        return prompt
+
+    def update_prompt(
+        self, user_name: str, bot_id, params, behaviour_dict, answer_dict
+    ):
+        prompt = self._build_prompt(user_name, bot_id, params, behaviour_dict, answer_dict)
         self.bot_service.update(bot_id, {"prompt": prompt})
+
+    # Async counterpart of update_prompt, for bot_parameters_svc.py's
+    # now-async create_bot_parameters_async/patch_bot_parameters_async.
+    # update_prompt itself stays sync: still called from
+    # BotParametersService's still-sync create_bot_parameters/
+    # create_random_parameters/patch_bot_parameters (bot_svc.py's
+    # BotService.update() they funnel through is also shared with
+    # bot_router.py's still-sync update_bot_admin).
+    async def update_prompt_async(
+        self, user_name: str, bot_id, params, behaviour_dict, answer_dict
+    ):
+        prompt = self._build_prompt(user_name, bot_id, params, behaviour_dict, answer_dict)
+        await self.bot_service.update_async(bot_id, {"prompt": prompt})
 
     def make_interlocutor_sentence(self, user_name, params):
         interlocutor_sentence = f'Your interlocutor is "{params.interlocutor_type}".'

@@ -20,6 +20,20 @@ Flask-JWT-Extended's own token context via get_jwt()/get_jwt_identity()
 Anti-enumeration: login()'s AuthenticationError/NotFoundError (wrong
 password, inactive account, unknown email) all collapse to the same
 "Invalid email or password" 401, same as the original.
+
+refresh/logout are async (`async def`): refresh_token()'s only DB read is
+migrated (UserAdminService.get_user_dto_by_id, get_async_session()), and
+logout() does no DB work at all (just JWTTools.get_user(), a constant,
+and a fire-and-forget Thread to revoke the jti later -- see
+authent_svc.py). login/login_with_google stay sync -- both do
+genuinely blocking work with no async equivalent available: login()'s
+check_password_hash() is deliberately CPU-heavy (same reasoning as
+users_admin_router.py's register()/change_password_self()), and
+login_with_google()'s google-auth verify_oauth2_token() call does a
+blocking HTTP round-trip to Google's cert endpoint (google_authent_svc.py
+uses google.auth.transport.requests, a sync transport) and can itself
+call register_new_user() -> the same CPU-heavy password hashing on
+auto-provisioning a new user.
 """
 
 from fastapi import APIRouter, Depends
@@ -98,17 +112,17 @@ def login_with_google(body: GoogleOAuthRequest):
 
 
 @router.post("/refresh", dependencies=[Depends(require_json_content_type)])
-def refresh(claims: dict = Depends(get_current_claims)):
+async def refresh(claims: dict = Depends(get_current_claims)):
     """Refresh JWT access token"""
     user_id = claims["sub"]
     app_logger.info(f"POST /auth/refresh - refresh called for user_id={user_id}")
-    access_token = auth_svc.refresh_token(claims["jti"], user_id)
+    access_token = await auth_svc.refresh_token(claims["jti"], user_id)
     app_logger.info(f"Token refresh succeeded for user_id={user_id}")
     return {"access_token": access_token}
 
 
 @router.post("/logout", dependencies=[Depends(require_json_content_type)])
-def logout(claims: dict = Depends(get_current_claims)):
+async def logout(claims: dict = Depends(get_current_claims)):
     """User logout"""
     app_logger.info("POST /auth/logout - logout called")
     user_id = claims["sub"]

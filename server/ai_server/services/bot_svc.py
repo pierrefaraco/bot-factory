@@ -107,6 +107,12 @@ class BotService(BaseService[BotDto]):
         bot = result.scalar_one_or_none()
         return bot is not None and int(bot.user_account_id) == int(user_account_id)
 
+    # Stays sync: self.template_svc.importTemplateInDB() below funnels
+    # into KnowledgeSvc.save_knowledges_dto() (knowledge_svc.py), which
+    # drives ChromaDB writes with no async client at all (chroma_db_svc.py)
+    # -- same class of blocker as rag_router.py's transmit_to_alfred,
+    # which stays sync for exactly this reason. bot_router.py's create_bot
+    # route stays sync accordingly.
     def create_random_bot(self, user_account_id) -> BotDto:
         self.logger.info(f"create_random_bot starting for user_account_id={user_account_id}")
         bot = Bot(user_account_id=user_account_id, prompt="")
@@ -206,6 +212,43 @@ class BotService(BaseService[BotDto]):
         else:
             return self._bot_to_dto(bot, avatar)
 
+    # Async counterpart of get_dto_by_id/_perform_get_by_id, for
+    # bot_router.py's now-async get_bot/update_bot_admin (via
+    # _can_modify_bot_async). get_dto_by_id/_perform_get_by_id themselves
+    # stay sync: still called as a plain sync call from
+    # UserAdminService._perform_patch_user (user_admin_svc.py, itself
+    # already async) and from bot_router.py's delete_bot (via the sync
+    # _can_modify_bot, kept for that one still-sync route -- see
+    # bot_svc.py's own delete() comment for why it stays sync).
+    async def get_dto_by_id_async(self, entity_id: int, view="minimal") -> Optional[BotDto]:
+        result = await self._perform_get_by_id_async(entity_id, view)
+        self.logger.debug(
+            f"get_dto_by_id_async bot_id={entity_id} view={view} found={result is not None}"
+        )
+        return result
+
+    async def _perform_get_by_id_async(self, entity_id: int, view: str) -> Optional[BotDto]:
+        session = get_async_session()
+        bot = await session.get(Bot, entity_id)
+        if bot is None:
+            return None
+        avatar = await self.avatar_svc.get_avatar_by_bot_id_async(entity_id)
+        avatar = avatar if avatar is not None else AvatarDto()
+        if view == "full":
+            try:
+                bot_parameters = await self.bot_parameters_svc.get_by_bot_id_async(entity_id)
+                return self._big_bot_to_dto(bot, avatar, bot_parameters)
+            except Exception as e:
+                # Handled fallback: full view degrades to minimal rather than
+                # failing the request, so this is a warning, not an error.
+                self.logger.warning(
+                    f"get_dto_by_id_async({entity_id}) full view failed, falling back "
+                    f"to minimal: {str(e)}"
+                )
+                return self._bot_to_dto(bot, avatar)
+        else:
+            return self._bot_to_dto(bot, avatar)
+
     async def get_all(self) -> List[BotDto]:
         """
         Retrieve all bots .
@@ -225,9 +268,11 @@ class BotService(BaseService[BotDto]):
         self.logger.debug(f"get_all fetched {len(bots)} bots")
         return [self._bot_to_dto(bot, None) for bot in bots]
 
-    # Stays sync: also called from PromptService.update_prompt()
-    # (prompt_svc.py, not migrated -- entangled with the still-sync RAG
-    # pipeline) in addition to bot_router.py.
+    # Stays sync: still called from bot_router.py's update_bot_admin (not
+    # migrated -- also shared with create_bot/delete_bot there).
+    # PromptService.update_prompt() used to be the other sync caller;
+    # it now has an async twin (update_prompt_async, see prompt_svc.py)
+    # that calls update_async below instead.
     def update(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
         """
         Update a bot's information.
@@ -254,6 +299,26 @@ class BotService(BaseService[BotDto]):
                 setattr(bot, key, value)
 
         db.session.commit()
+        self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
+        return self._bot_to_dto(bot, None)
+
+    # Async counterpart of update, for PromptService.update_prompt_async()
+    # (prompt_svc.py), itself used by bot_parameters_svc.py's now-async
+    # create_bot_parameters_async/patch_bot_parameters_async.
+    async def update_async(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
+        result = await self._perform_update_async(entity_id, data)
+        if result is None:
+            raise ServiceError("Update Bot failed, no list returned.")
+        return result
+
+    async def _perform_update_async(self, entity_id, data) -> BotDto:
+        session = get_async_session()
+        bot = await session.get(Bot, entity_id)
+        for key, value in data.items():
+            if hasattr(bot, key):
+                setattr(bot, key, value)
+
+        await session.commit()
         self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
         return self._bot_to_dto(bot, None)
 
@@ -441,6 +506,10 @@ class BotService(BaseService[BotDto]):
 
     def is_bot_assigned_to_user(self, bot_id, user_id):
         return self.bot_assignment_svc.is_bot_assigned_to_user(bot_id, user_id)
+
+    # Async counterpart, for bot_router.py's now-async get_bot.
+    async def is_bot_assigned_to_user_async(self, bot_id, user_id):
+        return await self.bot_assignment_svc.is_bot_assigned_to_user_async(bot_id, user_id)
 
     def delete_all_bot_assignments(self, bot_id):
         return self.bot_assignment_svc.delete_all_bot_assignments(bot_id)

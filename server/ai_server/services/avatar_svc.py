@@ -54,6 +54,10 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar creation fails
         """
+        data = self._random_avatar_data(bot_id)
+        return self.create(data)
+
+    def _random_avatar_data(self, bot_id: int) -> Dict[str, Any]:
         data = {}
         data["bot_id"] = bot_id
         data["body"] = random.randrange(15)
@@ -65,7 +69,15 @@ class AvatarService(BaseService[AvatarDto]):
         data["mouth"] = random.randrange(7)
         data["mouth_color"] = random.randrange(5)
         self.logger.debug(f"Generated random avatar attributes for bot_id={bot_id}: {data}")
-        return self.create(data)
+        return data
+
+    # Async counterpart of create_random_avatar, for avatar_router.py's
+    # now-async create_random_avatar route. create_random_avatar itself
+    # stays sync: still called from BotService.create_random_bot
+    # (bot_svc.py, not migrated yet).
+    async def create_random_avatar_async(self, bot_id: int) -> AvatarDto:
+        data = self._random_avatar_data(bot_id)
+        return await self.create_async(data)
 
     def create(self, data: Dict[str, Any]) -> AvatarDto:
         """
@@ -101,6 +113,29 @@ class AvatarService(BaseService[AvatarDto]):
         )
         db.session.add(avatar)
         db.session.commit()
+        self.logger.info(f"Avatar created id={avatar.id} bot_id={avatar.bot_id}")
+        return self._avatar_to_dto(avatar)
+
+    # Async counterpart of create, for avatar_router.py's now-async
+    # create_avatar route. create/_perform_create themselves stay sync:
+    # still shared with create_random_avatar above (itself needed sync for
+    # BotService.create_random_bot).
+    async def create_async(self, data: Dict[str, Any]) -> AvatarDto:
+        self.logger.info(f"Creating avatar for bot_id={data.get('bot_id')}")
+        session = get_async_session()
+        avatar = BotAvatar(
+            bot_id=data["bot_id"],
+            body=data.get("body", 0),
+            body_color=data.get("body_color", 0),
+            hat=data.get("hat", 0),
+            hat_color=data.get("hat_color", 0),
+            eyes=data.get("eyes", 0),
+            eyes_color=data.get("eyes_color", 0),
+            mouth=data.get("mouth", 0),
+            mouth_color=data.get("mouth_color", 0),
+        )
+        session.add(avatar)
+        await session.commit()
         self.logger.info(f"Avatar created id={avatar.id} bot_id={avatar.bot_id}")
         return self._avatar_to_dto(avatar)
 
@@ -287,6 +322,21 @@ class AvatarService(BaseService[AvatarDto]):
         if avatar:
             return self._avatar_to_dto(avatar)
         # A bot legitimately may not have an avatar yet - not an error case.
+        self.logger.debug(f"No avatar found for bot_id={bot_id}")
+        return None
+
+    # Async counterpart of get_avatar_by_bot_id, for avatar_router.py's
+    # now-async get_avatar_by_bot_id route. get_avatar_by_bot_id itself
+    # stays sync: still called from BotService (bot_svc.py, not migrated
+    # yet).
+    async def get_avatar_by_bot_id_async(self, bot_id: int) -> Optional[AvatarDto]:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotAvatar).where(BotAvatar.bot_id == bot_id)
+        )
+        avatar = result.scalar_one_or_none()
+        if avatar:
+            return self._avatar_to_dto(avatar)
         self.logger.debug(f"No avatar found for bot_id={bot_id}")
         return None
 

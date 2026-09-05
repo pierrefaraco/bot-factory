@@ -35,26 +35,33 @@ a legitimate `old_parent_id: 0` is falsy in Python, so this check can
 still reject a validly-present-but-zero id that pydantic already
 accepted -- a real (if obscure) behavior of the original, not dead code.
 
-Most routes here are async (`async def`): their UserAdminService methods
-have no caller outside this router. register/register_guest and
-change_password_self/change_password_guest stay sync -- their
+Every route here is `async def`. register/register_guest/
+change_password_self/change_password_guest still funnel into
 UserAdminService methods (create/_perform_create, change_password/
-_perform_change_password) do werkzeug.security.generate_password_hash()/
-check_password_hash(), deliberately CPU-heavy work that would block the
-event loop for every concurrent request if run directly inside an
-`async def` route (no FastAPI threadpool to absorb it); register is also
-shared with GoogleAuthentSvc (google_authent_svc.py, not migrated). See
+_perform_change_password) that do werkzeug.security.
+generate_password_hash()/check_password_hash() -- deliberately CPU-heavy
+work, with no async equivalent, that would block the event loop for
+every concurrent request if run directly on it (register_new_user is
+also shared with GoogleAuthentSvc, google_authent_svc.py, not migrated,
+so it stays a plain sync method regardless). Each of those four routes
+instead wraps its own sync body (the existing-user/guest-ownership check
+included) in a `run_in_threadpool` call, via a small `_..._sync()`
+helper -- the same protection a plain `def` route gets automatically
+from FastAPI, made explicit since these routes need to stay `async def`
+for consistency with the rest of this router. See
 /root/.claude/plans/moonlit-leaping-salamander.md. DB session scoping
-doesn't care either way, sync or async: it's wired once, at the router
-level, via Depends(async_db_session_dependency) -- see that dependency's
-own docstring for why an async-generator Depends works for both a sync
-and an async route (no per-route decorator needed for either).
+doesn't care about any of this either way: it's wired once, at the
+router level, via Depends(async_db_session_dependency) -- see that
+dependency's own docstring for why an async-generator Depends works for
+both a sync and an async route (no per-route decorator needed for
+either).
 """
 
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
+from starlette.concurrency import run_in_threadpool
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dao.database import Bot, User, get_async_session
@@ -136,16 +143,19 @@ def _enforce_user_scope(caller_id, target_id: int, allow_self: bool = True) -> N
         raise ApiError(response["error"], status_code=status_code)
 
 
-@router.post("", status_code=201, dependencies=[Depends(require_json_body(UserRegistrationRequest))])
-def register(body: UserRegistrationRequest):
-    """Register a new user"""
-    logger.info("POST /users - register called")
+def _register_sync(body: UserRegistrationRequest):
     existing_user = User.query.filter_by(mail=body.email).first()
     if existing_user:
         logger.warning(f"register rejected: email already registered ({body.email})")
         raise ApiError("Email already registered", status_code=409)
+    return user_admin_svc.register_new_user(body.email, body.name, body.password)
 
-    user = user_admin_svc.register_new_user(body.email, body.name, body.password)
+
+@router.post("", status_code=201, dependencies=[Depends(require_json_body(UserRegistrationRequest))])
+async def register(body: UserRegistrationRequest):
+    """Register a new user"""
+    logger.info("POST /users - register called")
+    user = await run_in_threadpool(_register_sync, body)
     app_logger.info(f"New user registered: {body.email}")
     return {"message": "User registered successfully", "user": user}
 
@@ -174,21 +184,24 @@ async def _update_users_impl(user_id, body: UserUpdateRequest):
     return {"message": "User updated successfully", "user": user_dto.to_dict()}
 
 
+def _register_guest_sync(parent_id, validated_data: dict):
+    existing_user = User.query.filter_by(mail=validated_data["email"]).first()
+    if existing_user:
+        logger.warning(f"register_guest rejected: email already registered ({validated_data['email']})")
+        raise ApiError("Email already registered", status_code=409)
+    user_admin_svc.register_new_guest(parent_id, validated_data)
+
+
 @router.post(
     "/guest", status_code=201, dependencies=[Depends(require_json_body(UserRegistrationRequest))]
 )
-def register_guest(body: UserRegistrationRequest, claims: dict = Depends(admin_or_user)):
+async def register_guest(body: UserRegistrationRequest, claims: dict = Depends(admin_or_user)):
     """Register a new guest user"""
     logger.info("POST /users/guest - register_guest called")
     parent_id = claims["sub"]
     validated_data = body.model_dump()
 
-    existing_user = User.query.filter_by(mail=validated_data["email"]).first()
-    if existing_user:
-        logger.warning(f"register_guest rejected: email already registered ({validated_data['email']})")
-        raise ApiError("Email already registered", status_code=409)
-
-    user_admin_svc.register_new_guest(parent_id, validated_data)
+    await run_in_threadpool(_register_guest_sync, parent_id, validated_data)
     app_logger.info(f"New guest user registered by parent {parent_id}: {validated_data['email']}")
     return {"message": "Guest user registered successfully"}
 
@@ -289,34 +302,38 @@ async def change_role(user_id: int, body: RoleChangeRequest, claims: dict = Depe
     }
 
 
-def change_password(user_id, body: PasswordChangeRequest):
-    """Change le mot de passe de l'utilisateur connecté"""
+def _change_password_sync(user_id, body: PasswordChangeRequest):
     if body.new_password == body.old_password:
         logger.warning(f"change_password({user_id}) rejected: new password equals old password")
         raise ApiError("Password update failed. New password equal old password", status_code=400)
 
     user_admin_svc.change_password(user_id, body.old_password, body.new_password)
     logger.info(f"change_password({user_id}) succeeded")
+
+
+async def change_password(user_id, body: PasswordChangeRequest):
+    """Change le mot de passe de l'utilisateur connecté"""
+    await run_in_threadpool(_change_password_sync, user_id, body)
     return {"msg": "Password updated successfully"}
 
 
 @router.put(
     "/password/me", dependencies=[Depends(require_json_body(PasswordChangeRequest))]
 )
-def change_password_self(body: PasswordChangeRequest, claims: dict = Depends(any_role)):
+async def change_password_self(body: PasswordChangeRequest, claims: dict = Depends(any_role)):
     """Change le mot de passe de l'utilisateur connecté"""
     logger.info("PUT /users/password/me - change_password_self called")
-    return change_password(claims["sub"], body)
+    return await change_password(claims["sub"], body)
 
 
 @router.put(
     "/password/guest/{guest_id:int}",
     dependencies=[Depends(require_json_body(PasswordChangeRequest))],
 )
-def change_password_guest(guest_id: int, body: PasswordChangeRequest, claims: dict = Depends(admin_or_user)):
+async def change_password_guest(guest_id: int, body: PasswordChangeRequest, claims: dict = Depends(admin_or_user)):
     """Change le mot de passe de l'utilisateur connecté"""
     logger.info(f"PUT /users/password/guest/{guest_id} - change_password_guest called")
-    guest = User.query.filter_by(id=guest_id).first()
+    guest = await user_admin_svc.get_user_dto_by_id(guest_id)
     user_id = claims["sub"]
     if not guest:
         logger.warning(f"change_password_guest({guest_id}) rejected: guest not found")
@@ -324,7 +341,7 @@ def change_password_guest(guest_id: int, body: PasswordChangeRequest, claims: di
     if guest.parent_id != int(user_id):
         logger.warning(f"change_password_guest({guest_id}) forbidden: not a guest of user_id={user_id}")
         raise ApiError(f"Unable to change password for user {guest_id} - not your guest", status_code=403)
-    return change_password(guest_id, body)
+    return await change_password(guest_id, body)
 
 
 async def deactivate_user(user_id):

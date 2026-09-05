@@ -11,18 +11,19 @@ dependencies/content_type.py's require_json_body() docstring for exactly
 how that plays out differently for the required-bot_id models here vs.
 the all-optional AvatarPatchRequest.
 
-Routes here are a deliberate mix of sync (`def`) and async (`async def`):
-patch_avatar/update_avatar/delete_avatar's underlying AvatarService
-methods have no caller besides this router, so they've been migrated to
-the async engine (see /root/.claude/plans/moonlit-leaping-salamander.md);
-create_random_avatar/create_avatar/get_avatar_by_bot_id still stay sync
-because their AvatarService methods are also called directly from
-BotService (bot_svc.py, not migrated yet) -- converting them now would
-either break that sync caller or require duplicating the logic. DB
-session scoping doesn't care either way: it's wired once, at the router
-level, via Depends(async_db_session_dependency) -- see that dependency's
-own docstring for why an async-generator Depends works for both a sync
-and an async route (no per-route decorator needed for either).
+Every route here is `async def`. patch_avatar/update_avatar/delete_avatar
+call their AvatarService method directly (no caller besides this
+router). create_random_avatar/create_avatar/get_avatar_by_bot_id instead
+call a dedicated `_async` twin (create_random_avatar_async/create_async/
+get_avatar_by_bot_id_async) added alongside the original sync method:
+the sync one is still called directly from BotService (bot_svc.py, not
+migrated yet), so it couldn't be converted in place without either
+breaking that caller or duplicating its logic -- adding a separate async
+entry point avoids both. DB session scoping doesn't care about any of
+this either way: it's wired once, at the router level, via
+Depends(async_db_session_dependency) -- see that dependency's own
+docstring for why an async-generator Depends works for both a sync and
+an async route (no per-route decorator needed for either).
 """
 
 from typing import Optional
@@ -92,10 +93,10 @@ class AvatarRequest(BaseModel):
     status_code=201,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRandomRequest))],
 )
-def create_random_avatar(body: AvatarRandomRequest):
+async def create_random_avatar(body: AvatarRandomRequest):
     """Create a random avatar for a bot"""
     logger.info("POST /avatar/random - create_random_avatar called")
-    avatar_dto = avatar_service.create_random_avatar(body.bot_id)
+    avatar_dto = await avatar_service.create_random_avatar_async(body.bot_id)
     logger.info(f"create_random_avatar succeeded for bot_id={body.bot_id} avatar_id={avatar_dto.id}")
     return avatar_dto.to_dict()
 
@@ -118,10 +119,10 @@ async def patch_avatar(body: AvatarPatchRequest):
     status_code=201,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRequest))],
 )
-def create_avatar(body: AvatarRequest):
+async def create_avatar(body: AvatarRequest):
     """Create an avatar"""
     logger.info("POST /avatar - create_avatar called")
-    avatar_dto = avatar_service.create(body.model_dump(exclude_unset=True))
+    avatar_dto = await avatar_service.create_async(body.model_dump(exclude_unset=True))
     logger.info(f"create_avatar succeeded for bot_id={body.bot_id} avatar_id={avatar_dto.id}")
     return avatar_dto.to_dict()
 
@@ -139,10 +140,10 @@ async def update_avatar(body: AvatarRequest):
 
 
 @router.get("/{bot_id}", dependencies=[Depends(any_role)])
-def get_avatar_by_bot_id(bot_id: int):
+async def get_avatar_by_bot_id(bot_id: int):
     """Get avatar by bot ID"""
     logger.info(f"GET /avatar/{bot_id} - get_avatar_by_bot_id called")
-    avatar_dto = avatar_service.get_avatar_by_bot_id(bot_id)
+    avatar_dto = await avatar_service.get_avatar_by_bot_id_async(bot_id)
     if not avatar_dto:
         logger.warning(f"get_avatar_by_bot_id({bot_id}) not found")
         raise ApiError("Avatar not found", status_code=404)

@@ -143,10 +143,94 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         )
         return self._assignment_to_dto(assignment)
 
-    # Stays sync: shared by update_assignment (migrated below) *and*
-    # delete_assignment (stays sync, see delete()/_perform_delete below) in
-    # bot_assignment_router.py.
-    def get_dto_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
+    # Async counterpart of create/_perform_create, for
+    # bot_assignment_router.py's now-async create_assignment route.
+    # create/_perform_create themselves stay sync: _perform_create is also
+    # called directly by UserAdminService (user_admin_svc.py, not
+    # migrated yet).
+    async def create_async(self, data: Dict[str, Any]) -> BotAssignmentDto:
+        result = await self._perform_create_async(data)
+        if result is None:
+            raise ServiceError(
+                "Assignment creation failed, no BotAssignmentDto returned."
+            )
+        return result
+
+    async def _perform_create_async(self, data: Dict[str, Any]) -> BotAssignmentDto:
+        logger.debug(
+            f"Creating bot assignment - bot_id: {data.get('bot_id')}, user_id: {data.get('user_id')}, assigned_by: {data.get('assigned_by')}"
+        )
+        session = get_async_session()
+        bot = await session.get(Bot, data["bot_id"])
+        if not bot:
+            logger.warning(f"_perform_create_async rejected: bot_id={data['bot_id']} not found")
+            raise NotFoundError("Bot", str(data["bot_id"]))
+
+        if int(bot.user_account_id) != int(data["assigned_by"]):
+            logger.warning(
+                f"_perform_create_async rejected: bot_id={data['bot_id']} owner={bot.user_account_id} "
+                f"does not match assigned_by={data['assigned_by']}"
+            )
+            raise ServiceError(
+                f"Bot {data['bot_id']} does not belong to user {data['assigned_by']}"
+            )
+
+        user = await session.get(User, data["user_id"])
+        if not user:
+            logger.warning(f"_perform_create_async rejected: user_id={data['user_id']} not found")
+            raise NotFoundError("User", str(data["user_id"]))
+
+        if user.roles not in (GUEST_ROLE, USER_ROLE):
+            logger.warning(
+                f"_perform_create_async rejected: user_id={data['user_id']} role={user.roles} "
+                "is not GUEST or USER"
+            )
+            raise ServiceError(f"User {data['user_id']} is not a GUEST or USER account")
+        if user.roles == GUEST_ROLE and int(user.parent_id) != int(data["assigned_by"]):
+            logger.warning(
+                f"_perform_create_async rejected: guest user_id={data['user_id']} is not a child "
+                f"of assigned_by={data['assigned_by']}"
+            )
+            raise ServiceError(
+                f"Guest user {data['user_id']} is not a child of user {data['assigned_by']}"
+            )
+
+        existing_result = await session.execute(
+            select(BotAssignment).where(
+                BotAssignment.bot_id == data["bot_id"],
+                BotAssignment.user_id == data["user_id"],
+            )
+        )
+        existing_assignment = existing_result.scalar_one_or_none()
+
+        if existing_assignment:
+            existing_assignment.is_active = data.get("is_active", True)
+            existing_assignment.assigned_by = data["assigned_by"]
+            await session.commit()
+            logger.info(
+                f"Bot assignment reactivated/updated: assignment_id={existing_assignment.id} "
+                f"bot_id={data['bot_id']} user_id={data['user_id']} is_active={existing_assignment.is_active}"
+            )
+            return self._assignment_to_dto(existing_assignment)
+
+        assignment = BotAssignment(
+            bot_id=data["bot_id"],
+            user_id=data["user_id"],
+            assigned_by=data["assigned_by"],
+            is_active=data.get("is_active", True),
+        )
+        session.add(assignment)
+        await session.commit()
+        logger.info(
+            f"Bot assignment created: assignment_id={assignment.id} "
+            f"bot_id={data['bot_id']} user_id={data['user_id']}"
+        )
+        return self._assignment_to_dto(assignment)
+
+    # Migrated to async: no caller left besides bot_assignment_router.py's
+    # update_assignment (already async) and delete_assignment (now async
+    # too).
+    async def get_dto_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
         """
         Retrieve an assignment by its ID.
 
@@ -156,10 +240,11 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             BotAssignmentDto instance if found, None otherwise
         """
-        return self._perform_get_by_id(entity_id)
+        return await self._perform_get_by_id(entity_id)
 
-    def _perform_get_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
-        assignment = BotAssignment.query.get(entity_id)
+    async def _perform_get_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
+        session = get_async_session()
+        assignment = await session.get(BotAssignment, entity_id)
         if not assignment:
             return None
         return self._assignment_to_dto(assignment)
@@ -249,6 +334,22 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         assignments: List[BotAssignment] = BotAssignment.query.filter_by(
             user_id=user_id, is_active=True
         ).all()
+        return [self._assignment_to_dto(assignment) for assignment in assignments]
+
+    # Async counterpart of get_assignments_by_user(user_id) (the
+    # all=False/default path only -- the only one bot_assignment_router.py's
+    # get_assignments_by_guest needs), for that now-async route.
+    # get_assignments_by_user itself stays sync: still called from
+    # BotService (bot_svc.py) and UserAdminService (user_admin_svc.py,
+    # including its all=True path), neither migrated.
+    async def get_assignments_by_user_async(self, user_id: int) -> List[BotAssignmentDto]:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotAssignment).where(
+                BotAssignment.user_id == user_id, BotAssignment.is_active.is_(True)
+            )
+        )
+        assignments = result.scalars().all()
         return [self._assignment_to_dto(assignment) for assignment in assignments]
 
     async def get_assigned_bot_ids_for_user(self, user_id: int) -> List[int]:
@@ -403,6 +504,32 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         )
         return True
 
+    # Async counterpart of delete/_perform_delete, for
+    # bot_assignment_router.py's now-async delete_assignment route.
+    # delete/_perform_delete themselves stay sync: still called from
+    # delete_all_bot_assignments above (itself called from
+    # BotService.delete_all_bot_assignments, bot_svc.py, not migrated yet).
+    async def delete_async(self, entity_id: int) -> bool:
+        result = await self._perform_delete_async(entity_id)
+        if result is None:
+            raise ServiceError("Assignment delete failed, no assignment deleted.")
+        return result
+
+    async def _perform_delete_async(self, entity_id: int) -> bool:
+        session = get_async_session()
+        assignment = await session.get(BotAssignment, entity_id)
+        if not assignment:
+            logger.warning(f"_perform_delete_async rejected: assignment_id={entity_id} not found")
+            raise NotFoundError("Assignment", str(entity_id))
+
+        bot_id, user_id = assignment.bot_id, assignment.user_id
+        await session.delete(assignment)
+        await session.commit()
+        logger.info(
+            f"Bot assignment deleted: assignment_id={entity_id} bot_id={bot_id} user_id={user_id}"
+        )
+        return True
+
     # Stays sync: also called from UserAdminService (user_admin_svc.py, not
     # migrated yet) in addition to bot_assignment_router.py.
     def remove_assignment(self, bot_id: int, user_id: int) -> bool:
@@ -433,6 +560,34 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         assignment_id = assignment.id
         db.session.delete(assignment)
         db.session.commit()
+        logger.info(
+            f"Bot assignment removed: assignment_id={assignment_id} bot_id={bot_id} user_id={user_id}"
+        )
+        return True
+
+    # Async counterpart of remove_assignment, for bot_assignment_router.py's
+    # now-async remove_assignment route. remove_assignment itself stays
+    # sync: still called from UserAdminService (user_admin_svc.py, not
+    # migrated yet).
+    async def remove_assignment_async(self, bot_id: int, user_id: int) -> bool:
+        result = await self._perform_remove_assignment_async(bot_id, user_id)
+        return bool(result)
+
+    async def _perform_remove_assignment_async(self, bot_id: int, user_id: int) -> bool:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotAssignment).where(
+                BotAssignment.bot_id == bot_id, BotAssignment.user_id == user_id
+            )
+        )
+        assignment = result.scalar_one_or_none()
+
+        if not assignment:
+            return False
+
+        assignment_id = assignment.id
+        await session.delete(assignment)
+        await session.commit()
         logger.info(
             f"Bot assignment removed: assignment_id={assignment_id} bot_id={bot_id} user_id={user_id}"
         )

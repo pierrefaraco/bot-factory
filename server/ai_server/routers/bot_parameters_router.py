@@ -20,13 +20,19 @@ runs), and bot-ownership scoping was never implemented in the original
 either -- not something to add silently as part of a framework-only
 migration.
 
-Only delete_bot_parameters is async (`async def`): BotParametersService.
-delete_by_bot_id has no caller outside this router. The other three
-routes stay sync -- their BotParametersService methods all funnel
-through update_prompt(), which calls BotService.update() (bot_svc.py,
-not migrated yet) to persist the regenerated prompt; see
-/root/.claude/plans/moonlit-leaping-salamander.md. DB session scoping
-doesn't care either way: it's wired once, at the router level, via
+Every route here is `async def`. delete_bot_parameters calls
+BotParametersService.delete_by_bot_id directly (no caller outside this
+router). The other three instead call a dedicated `_async` twin
+(create_bot_parameters_async/get_by_bot_id_async) or were migrated in
+place (patch_bot_parameters: its only caller was this router already) --
+create_bot_parameters/create_random_parameters/get_by_bot_id themselves
+stay sync where a twin was added: their call chain funnels through
+update_prompt(), which calls BotService.update() (bot_svc.py, also
+shared with bot_router.py's still-sync update_bot_admin) or, for
+get_by_bot_id, is shared with BotService directly -- see
+bot_parameters_svc.py's own comments for exactly which caller blocks
+each one. DB session scoping doesn't care about any of this either way:
+it's wired once, at the router level, via
 Depends(async_db_session_dependency) -- see that dependency's own
 docstring for why an async-generator Depends works for both a sync and
 an async route (no per-route decorator needed for either).
@@ -38,13 +44,13 @@ from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel, ConfigDict
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_parameters_svc import BotParametersService
+from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
     prefix="/api/bot-parameters",
@@ -54,6 +60,7 @@ router = APIRouter(
 
 logger = BotFactoryLogger()
 bot_parameters_svc = BotParametersService()
+user_svc = UserAdminService()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
@@ -96,7 +103,7 @@ class BotParametersPatchRequest(BaseModel):
     status_code=201,
     dependencies=[Depends(require_json_body(BotParametersRequest))],
 )
-def create_or_update_bot_parameters(
+async def create_or_update_bot_parameters(
     body: BotParametersRequest, claims: dict = Depends(admin_or_user)
 ):
     """Create bot parameters and regenerate the bot's system prompt."""
@@ -104,12 +111,12 @@ def create_or_update_bot_parameters(
     validated_data = body.model_dump(exclude_unset=True)
 
     user_id = claims["sub"]
-    user: User = User.query.filter_by(id=user_id).first()
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"create_or_update_bot_parameters rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    bot_parameters_dto = bot_parameters_svc.create_bot_parameters(
+    bot_parameters_dto = await bot_parameters_svc.create_bot_parameters_async(
         user.name, validated_data["bot_id"], validated_data
     )
     logger.info(
@@ -123,7 +130,7 @@ def create_or_update_bot_parameters(
     "/{bot_id}",
     dependencies=[Depends(require_json_body(BotParametersPatchRequest))],
 )
-def patch_bot_parameters_admin(
+async def patch_bot_parameters_admin(
     bot_id: int, body: BotParametersPatchRequest, claims: dict = Depends(admin_or_user)
 ):
     """Partially update bot parameters and regenerate the bot's system prompt.
@@ -134,12 +141,12 @@ def patch_bot_parameters_admin(
     validated_data = body.model_dump()
 
     user_id = claims["sub"]
-    user: User = User.query.filter_by(id=user_id).first()
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"patch_bot_parameters_admin({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    bot_parameters_dto = bot_parameters_svc.patch_bot_parameters(bot_id, validated_data, user.name)
+    bot_parameters_dto = await bot_parameters_svc.patch_bot_parameters(bot_id, validated_data, user.name)
     if not bot_parameters_dto:
         logger.warning(f"patch_bot_parameters_admin({bot_id}) not found")
         raise ApiError("Bot parameters not found", status_code=404)
@@ -149,10 +156,10 @@ def patch_bot_parameters_admin(
 
 
 @router.get("/{bot_id}", dependencies=[Depends(any_role)])
-def get_bot_parameters_by_bot_id(bot_id: int):
+async def get_bot_parameters_by_bot_id(bot_id: int):
     """Get bot parameters by bot ID"""
     logger.info(f"GET /bot-parameters/{bot_id} - get_bot_parameters_by_bot_id called")
-    bot_parameters_dto = bot_parameters_svc.get_by_bot_id(bot_id)
+    bot_parameters_dto = await bot_parameters_svc.get_by_bot_id_async(bot_id)
     if not bot_parameters_dto:
         logger.warning(f"get_bot_parameters_by_bot_id({bot_id}) not found")
         raise ApiError("Bot parameters not found", status_code=404)

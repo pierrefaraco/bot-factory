@@ -11,6 +11,7 @@ from ai_server.exceptions.service_exceptions import AuthenticationError, NotFoun
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.base_service import BaseService
 from ai_server.services.jwt_svc import JWTTools
+from ai_server.services.user_admin_svc import UserAdminService
 from ai_server.decorators.singleton import singleton
 
 
@@ -24,6 +25,7 @@ class AuthenticationService(BaseService):
     def __init__(self):
         super().__init__()
         self.logger = BotFactoryLogger()
+        self.user_admin_svc = UserAdminService()
 
     def login(self, mail: str, password: str) -> Optional[str]:
         """
@@ -89,21 +91,34 @@ class AuthenticationService(BaseService):
         self.logger.info(f"Logout initiated for user: {user}")
         self._start_revoke_jti(jti)
 
-    def refresh_token(self, jti: str, identity) -> str:
+    async def refresh_token(self, jti: str, identity) -> str:
         """
         Refresh user JWT token.
 
         jti/identity passed in for the same reason as logout() above.
+
+        Async (unlike login()/_perform_login(), which stays sync: see its
+        own reasoning): its only DB read goes through
+        UserAdminService.get_user_dto_by_id(), already migrated to
+        get_async_session(). build_token() isn't reused here since it
+        expects a User ORM row's `.mail`, while get_user_dto_by_id()
+        returns a UserDto with `.email` instead -- same JWT shape either
+        way, just a different source attribute name.
 
         Returns:
             New access token
         """
         self.logger.info(f"Refreshing JWT token for {identity}")
         self._start_revoke_jti(jti)
-        user: User = User.query.get(int(identity))
-        if not user:
+        user_dto = await self.user_admin_svc.get_user_dto_by_id(int(identity))
+        if not user_dto:
             raise NotFoundError("User", identity)
-        access_token = self.build_token(user)
+        expires = datetime.timedelta(minutes=3600)
+        access_token = create_access_token(
+            identity=f"{user_dto.id}",
+            additional_claims={"roles": user_dto.roles, "mail": user_dto.email},
+            expires_delta=expires,
+        )
         self.logger.info(f"JWT token refreshed successfully for user_id={identity}")
         return access_token
 
