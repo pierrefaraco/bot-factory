@@ -14,14 +14,13 @@ A full-stack AI bot creation and management platform that empowers users to crea
 - **Real-time Chat** - Interactive conversations with bots powered by LLM providers
 - **Token Tracking** - Automatic token usage tracking and analytics
 - **Avatar Builder** - SVG-based customizable bot avatars (body, eyes, hat, mouth, colors)
-- 
+
 ### Advanced Features
 - **LLM Support** - Integration with Mistral AI
 - **Vector Search** - ChromaDB-powered semantic search for knowledge retrieval
 - **JWT Authentication** - Secure token-based authentication with refresh tokens
 - **Role-Based Access Control** - Admin, User, Guest, and Iframe roles
-
-
+ 
 ---
 
 ## 🏗️ Architecture
