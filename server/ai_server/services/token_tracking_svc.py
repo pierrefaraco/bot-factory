@@ -1,6 +1,6 @@
 from typing import Optional, Dict, List
 from datetime import datetime, timezone, timedelta
-from ai_server.dao.database import TokenUsage, db, get_async_session
+from ai_server.dao.database import TokenUsage, get_async_session
 from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from sqlalchemy import case, func, select
@@ -16,13 +16,14 @@ class TokenTrackingService:
     def __init__(self):
         self.logger = logger
 
-    # Stays sync (db.session, not get_async_session()): called synchronously
-    # from LlmService's TokenCountingCallback.on_llm_end (llm_svc.py),
-    # itself invoked from rag_svc.py's still-sync LCEL chain -- see
-    # /root/.claude/plans/moonlit-leaping-salamander.md. Only the read
-    # methods below (used by token_stats_router.py) are migrated to the
-    # async engine in this pass.
-    def record_token_usage(
+    # Migrated to async: the only caller, LlmService's
+    # TokenCountingCallback.on_llm_end (llm_svc.py), is itself now an
+    # AsyncCallbackHandler -- LangChain's async callback manager awaits it
+    # directly (no thread hop, see langchain_core.callbacks.manager.
+    # _ahandle_event_for_handler's `if inspect.iscoroutinefunction(event)`
+    # branch), so it can use get_async_session() like everything else
+    # rag_svc.py's now-fully-async chain touches.
+    async def record_token_usage(
         self,
         user_id: int,
         user_guest_id: int,
@@ -48,6 +49,7 @@ class TokenTrackingService:
         Returns:
             bool: True si l'enregistrement a réussi, False sinon
         """
+        session = get_async_session()
         try:
             token_usage = TokenUsage(
                 user_id=user_id,
@@ -59,8 +61,8 @@ class TokenTrackingService:
                 session_id=session_id,
                 model_name=model_name,
             )
-            db.session.add(token_usage)
-            db.session.commit()
+            session.add(token_usage)
+            await session.commit()
 
             self.logger.info(
                 f"Token usage recorded: user_id={user_id} bot_id={bot_id} "
@@ -73,10 +75,10 @@ class TokenTrackingService:
             self.logger.exception(
                 f"Error recording token usage for user_id={user_id} bot_id={bot_id}: {e}"
             )
-            db.session.rollback()
+            await session.rollback()
             return False
         finally:
-            db.session.close()
+            await session.close()
 
     async def get_user_total_tokens(self, user_id: int) -> int:
         """

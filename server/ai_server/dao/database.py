@@ -36,8 +36,8 @@ class Base(DeclarativeBase):
 # automatically when that context popped. Every route is now native
 # FastAPI, so this scopes the same way but on a contextvar this module
 # owns directly instead: db_session_scope() (used by
-# ai_server/dependencies/db_session.py's with_db_session /
-# stream_with_db_session) sets it to a fresh, unique value for one
+# ai_server/dependencies/db_session.py's async_db_session_dependency /
+# stream_with_async_db_session) sets it to a fresh, unique value for one
 # request -- or one streamed chunk, for a long-lived streaming response --
 # and calls SessionLocal.remove() when that unit of work ends, so a
 # Session never survives past the request that created it, same lifecycle
@@ -100,9 +100,9 @@ db = _DbCompat()
 #
 # Coexists with the sync engine/session above; nothing sync is removed or
 # changed by this. Migrated async services call get_async_session() instead
-# of `db.session`, inside a request wrapped by
-# dependencies/db_session.py::with_async_db_session (the async counterpart
-# of with_db_session). There is no async equivalent of Model.query
+# of `db.session`, inside a request scoped by
+# dependencies/db_session.py::async_db_session_dependency (a FastAPI
+# Depends()). There is no async equivalent of Model.query
 # (scoped_session.query_property() has no AsyncSession analogue), so async
 # call sites use SQLAlchemy 2.0's own idiomatic style instead:
 # `await session.execute(select(Model).filter_by(...))`.
@@ -160,14 +160,15 @@ async def async_db_session_scope():
 def get_async_session() -> AsyncSession:
     """Current request's AsyncSession -- the async counterpart of `db.session`.
 
-    Must be called from inside async_db_session_scope() (i.e. an endpoint
-    wrapped with dependencies.db_session.with_async_db_session): raises
+    Must be called from inside async_db_session_scope() (i.e. a request
+    scoped by dependencies.db_session.async_db_session_dependency): raises
     instead of silently opening an unscoped session that would never get
     torn down."""
     if _async_db_scope_id.get() is None:
         raise RuntimeError(
             "get_async_session() called outside async_db_session_scope() -- "
-            "wrap the caller with dependencies.db_session.with_async_db_session"
+            "make sure the router declares "
+            "dependencies=[Depends(async_db_session_dependency)]"
         )
     return AsyncSessionLocal()
 

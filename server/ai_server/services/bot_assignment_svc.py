@@ -276,8 +276,9 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         assignments = result.scalars().all()
         return [assignment.bot_id for assignment in assignments]
 
-    # Stays sync: also called from BotService (bot_svc.py) and
-    # rag_router.py (not migrated yet).
+    # Stays sync: also called from BotService (bot_svc.py, itself called from
+    # bot_router.py's get_bot) and bot_assignment_router.py's check_assignment,
+    # neither migrated.
     def is_bot_assigned_to_user(self, bot_id: int, user_id: int) -> bool:
         """
         Check if a bot is assigned to a user.
@@ -300,6 +301,19 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             bot_id=bot_id, user_id=user_id, is_active=True
         ).first()
         return assignment is not None
+
+    # Async counterpart of is_bot_assigned_to_user, for rag_router.py's
+    # now-async routes.
+    async def is_bot_assigned_to_user_async(self, bot_id: int, user_id: int) -> bool:
+        session = get_async_session()
+        result = await session.execute(
+            select(BotAssignment).where(
+                BotAssignment.bot_id == bot_id,
+                BotAssignment.user_id == user_id,
+                BotAssignment.is_active.is_(True),
+            )
+        )
+        return result.scalar_one_or_none() is not None
 
     async def update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
         """

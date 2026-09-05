@@ -7,18 +7,24 @@ from ai_server.services.prompt_svc import PromptService
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable, RunnableLambda, RunnablePassthrough
 from ai_server.decorators.singleton import singleton
-from typing import Iterator, Callable
+from typing import AsyncIterator, Callable
 from ai_server.services.message_svc import MessageService
+from ai_server.dto.message_dto import MessageDto
+from starlette.concurrency import run_in_threadpool
 import langchain
 import json
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
-from ai_server.dao.database import Session, Message, db
-from sqlalchemy.exc import SQLAlchemyError
 import time
+import asyncio
+from collections import OrderedDict
 
 langchain.debug = False
 
+# Cap on how many (bot_id, user_id) chat histories RagService keeps in
+# memory at once. Without this, self.store below grows for the life of the
+# process -- one entry per pair that has ever chatted, never evicted.
+MAX_CACHED_SESSIONS = 500
 
 # ===== LOGGERS INIT =====
 logger = BotFactoryLogger()
@@ -34,7 +40,16 @@ class RagService:
         self._prompt_service = None
         self.language = "french"
         self.config = app_config
-        self.store = {}
+        # LRU-ish cache of in-memory chat histories, keyed by "bot_id_user_id".
+        # OrderedDict so the least-recently-used entry can be evicted once
+        # MAX_CACHED_SESSIONS is exceeded (see get_session_history below).
+        self.store: "OrderedDict[str, BaseChatMessageHistory]" = OrderedDict()
+        # Guards the check-then-load-then-insert below: two concurrent
+        # requests for the same new key would otherwise both miss the cache
+        # and both hit the DB, with the second load silently discarding the
+        # first (RagService is a singleton, so self.store is shared by every
+        # in-flight request).
+        self._store_lock = asyncio.Lock()
 
     @property
     def llm_service(self):
@@ -76,6 +91,12 @@ class RagService:
         and the singleton RagService is shared across concurrent requests, so
         the built chain is returned instead of stored as instance state.
 
+        Genuinely blocking under the hood, with no async equivalent for
+        either step: db_service.build_retriever() (a real ChromaDB client
+        init) and prompt_service.get_qa_prompt() (a sync Bot.query read).
+        Callers (ask()/ask_with_stream()) run this via run_in_threadpool so
+        it doesn't block the event loop.
+
         Retrieval runs directly on the raw question (no LLM reformulation
         pass) — one LLM call per question instead of two. The trade-off:
         an ambiguous follow-up like "et pour lui ?" is searched against
@@ -102,7 +123,13 @@ class RagService:
         llm = self.llm_service.get_llm(
             user_id=user_id, bot_id=bot_id, session_id=session_id
         )
-        retriever = self.db_service.get_retriever()
+        # build_retriever() (not build()+get_retriever()): ChromaDbService is
+        # itself a singleton shared across every concurrent request, and the
+        # two-call form only communicates the built retriever back via
+        # self.retriever -- two bots' requests can interleave in between and
+        # steal each other's retriever. build_retriever() returns it directly
+        # instead, from purely local values -- see its own docstring.
+        retriever = self.db_service.build_retriever(f"Collection{bot_id}")
         qa_prompt = self.prompt_service.get_qa_prompt(bot_id)
 
         return (
@@ -189,11 +216,17 @@ class RagService:
         called from outside the chain so it can't block `.stream()`."""
         prompt_debug_logger.debug(f"④ raw LLM answer: {self._truncate(answer)}")
 
-    def get_session_history(self, bot_id: int, user_id: int) -> BaseChatMessageHistory:
+    async def get_session_history(self, bot_id: int, user_id: int) -> BaseChatMessageHistory:
         key = f"{bot_id}_{user_id}"
-        if key not in self.store:
-            self.store[key] = self.load_session_history(bot_id, user_id)
-        return self.store[key]
+        async with self._store_lock:
+            if key in self.store:
+                self.store.move_to_end(key)
+                return self.store[key]
+            history = await self.load_session_history(bot_id, user_id)
+            self.store[key] = history
+            if len(self.store) > MAX_CACHED_SESSIONS:
+                self.store.popitem(last=False)
+            return history
 
     def ingest_pdf(self, pdf_file_path: str, collection_name="MY_COLLECTION"):
         logger.info(f"Ingesting PDF '{pdf_file_path}' into collection={collection_name}")
@@ -231,15 +264,18 @@ class RagService:
             f"in {elapsed_ms}ms"
         )
 
-    def ask(self, bot_id: int, user_id: int, query: str, hide: bool = False):
+    async def ask(self, bot_id: int, user_id: int, query: str, hide: bool = False):
         logger.debug(f"RAG query for bot {bot_id}, user {user_id}")
         start = time.perf_counter()
         try:
-            collection_name = f"Collection{bot_id}"
-            self.db_service.build(collection_name)
-            # Passer user_id pour activer le tracking de tokens
-            rag_chain = self.build(bot_id, user_id=user_id)
-            result = self.invoke_and_save(rag_chain, bot_id, user_id, query, hide)
+            # build() is called via run_in_threadpool, not awaited directly:
+            # it's still genuinely blocking under the hood (ChromaDB client
+            # init in db_service.build_retriever(), a sync Bot.query read in
+            # prompt_service.get_qa_prompt()), with no async equivalent for
+            # either -- see build()'s own docstring. run_in_threadpool keeps
+            # that off the event loop.
+            rag_chain = await run_in_threadpool(self.build, bot_id, user_id)
+            result = await self.invoke_and_save(rag_chain, bot_id, user_id, query, hide)
         except Exception as e:
             elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
             logger.exception(
@@ -253,7 +289,7 @@ class RagService:
         )
         return result
 
-    def ask_with_stream(
+    async def ask_with_stream(
         self,
         bot_id: int,
         user_id,
@@ -265,29 +301,27 @@ class RagService:
         logger.debug(
             f"RAG streaming query for bot {bot_id}, user {user_id}, session {session_id}"
         )
-        collection_name = f"Collection{bot_id}"
-        message_service.save_message(bot_id, user_id, "user", query, hide)
-        self.db_service.build(collection_name)
-        # Ensure the collection is built before invoking the chain
-        # Passer user_id pour activer le tracking de tokens
-        rag_chain = self.build(bot_id, user_id=user_id, session_id=session_id)
-        history = self.get_session_history(bot_id, user_id)
+        await message_service.save_message(bot_id, user_id, "user", query, hide)
+        rag_chain = await run_in_threadpool(
+            self.build, bot_id, user_id, session_id
+        )
+        history = await self.get_session_history(bot_id, user_id)
 
-        def generate() -> Iterator[str]:
+        async def generate() -> AsyncIterator[str]:
             start = time.perf_counter()
             try:
                 answer_str = ""
-                chunk_iterator = rag_chain.stream(
+                chunk_iterator = rag_chain.astream(
                     {"input": query, "chat_history": history.messages}
                 )
-                for chunk in chunk_iterator:
+                async for chunk in chunk_iterator:
                     if chunk:
                         answer_str += chunk
                         yield f"data: {json.dumps({'answer': chunk})}\n\n"
                 self._log_llm_answer(answer_str)
                 history.add_user_message(query)
                 history.add_ai_message(answer_str)
-                message_service.save_message(bot_id, user_id, "assistant", answer_str)
+                await message_service.save_message(bot_id, user_id, "assistant", answer_str)
                 elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
                 logger.info(
                     f"RAG streaming completed for bot_id={bot_id} user_id={user_id} "
@@ -307,17 +341,17 @@ class RagService:
 
         return generate
 
-    def invoke_and_save(
+    async def invoke_and_save(
         self, rag_chain: Runnable, bot_id, user_id, input_text, hide: bool = False
     ) -> str:
         # Save the user question with role "human"
-        message_service.save_message(bot_id, user_id, "user", input_text, hide)
+        await message_service.save_message(bot_id, user_id, "user", input_text, hide)
 
         # Get the AI response
         logger.debug(f"Invoking RAG chain for bot_id={bot_id} user_id={user_id}")
         start = time.perf_counter()
-        history = self.get_session_history(bot_id, user_id)
-        result = rag_chain.invoke(
+        history = await self.get_session_history(bot_id, user_id)
+        result = await rag_chain.ainvoke(
             {"input": input_text, "chat_history": history.messages}
         )
         elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
@@ -330,11 +364,11 @@ class RagService:
         history.add_ai_message(result)
 
         # Save the AI answer with role "ai"
-        message_service.save_message(bot_id, user_id, "assistant", result)
+        await message_service.save_message(bot_id, user_id, "assistant", result)
         return result
 
     # Function to load chat history
-    def load_session_history(self, bot_id: int, user_id: int) -> BaseChatMessageHistory:
+    async def load_session_history(self, bot_id: int, user_id: int) -> BaseChatMessageHistory:
         """Reload prior turns from MySQL via the DB `Session` row for this
         bot/user pair. Messages are keyed in the DB by the integer
         `Session.id` (see message_svc.py::save_message), not by any
@@ -342,33 +376,26 @@ class RagService:
         passing a synthetic key straight to `message_service.load_session_history`
         would silently never match and always come back empty."""
         chat_history = ChatMessageHistory()
-        try:
-            session = message_service.get_session(bot_id, user_id)
-            if session is None:
-                logger.debug(f"No DB session yet for bot_id={bot_id} user_id={user_id}")
-                return chat_history
-            messages: list[Message] = message_service.load_session_history(session.id)
-            if messages:
-                logger.debug(
-                    f"Loaded {len(messages)} messages for bot_id={bot_id} "
-                    f"user_id={user_id} (session_id={session.id})"
-                )
-                for message in messages:
-                    # add_message({"role": ..., "content": ...}) looked
-                    # equivalent but isn't: ChatMessageHistory.add_message()
-                    # does no coercion, so it stored raw dicts instead of
-                    # HumanMessage/AIMessage — anything reading
-                    # chat_history.messages downstream (e.g. message.type)
-                    # blew up with AttributeError as soon as history was
-                    # actually non-empty.
-                    if message.role == "assistant":
-                        chat_history.add_ai_message(message.content)
-                    else:
-                        chat_history.add_user_message(message.content)
-        except SQLAlchemyError as e:
-            logger.exception(
-                f"Failed to load session history for bot_id={bot_id} user_id={user_id}: {e}"
+        session = await message_service.get_session(bot_id, user_id)
+        if session is None:
+            logger.debug(f"No DB session yet for bot_id={bot_id} user_id={user_id}")
+            return chat_history
+        messages: list[MessageDto] = await message_service.load_session_history(session.id)
+        if messages:
+            logger.debug(
+                f"Loaded {len(messages)} messages for bot_id={bot_id} "
+                f"user_id={user_id} (session_id={session.id})"
             )
-        finally:
-            db.session.close()
+            for message in messages:
+                # add_message({"role": ..., "content": ...}) looked
+                # equivalent but isn't: ChatMessageHistory.add_message()
+                # does no coercion, so it stored raw dicts instead of
+                # HumanMessage/AIMessage — anything reading
+                # chat_history.messages downstream (e.g. message.type)
+                # blew up with AttributeError as soon as history was
+                # actually non-empty.
+                if message.role == "assistant":
+                    chat_history.add_ai_message(message.content)
+                else:
+                    chat_history.add_user_message(message.content)
         return chat_history

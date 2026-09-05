@@ -98,6 +98,15 @@ class BotService(BaseService[BotDto]):
         bot: Bot = Bot.query.get(bot_id)
         return bot is not None and int(bot.user_account_id) == int(user_account_id)
 
+    # Async counterpart of is_bot_belong_to_user, for rag_router.py's now-async
+    # routes. is_bot_belong_to_user itself stays sync: still shared with
+    # knowledge_router.py's save_imported_knowledges, not migrated.
+    async def is_bot_belong_to_user_async(self, bot_id: int, user_account_id: int) -> bool:
+        session = get_async_session()
+        result = await session.execute(select(Bot).where(Bot.id == bot_id))
+        bot = result.scalar_one_or_none()
+        return bot is not None and int(bot.user_account_id) == int(user_account_id)
+
     def create_random_bot(self, user_account_id) -> BotDto:
         self.logger.info(f"create_random_bot starting for user_account_id={user_account_id}")
         bot = Bot(user_account_id=user_account_id, prompt="")

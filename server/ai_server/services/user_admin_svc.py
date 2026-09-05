@@ -248,9 +248,9 @@ class UserAdminService(BaseService[UserDto]):
         self.logger.debug(f"Fetched user id={entity_id}")
         return user_dto
 
-    # Stays sync: shared with rag_router.py (get_user_by_id, called in
-    # chat/trigfirstmessage/streamchat/delete_selected_bot_session_history)
-    # and llm_svc.py's TokenCountingCallback, none migrated yet.
+    # Stays sync: shared with llm_svc.py's TokenCountingCallback (not
+    # migrated). rag_router.py used to call this too, but now calls
+    # get_user_dto_by_id() below instead (its own routes are async).
     def get_user_by_id(self, user_id: int) -> Optional[User]:
         """
         Get User entity by ID (for backward compatibility).

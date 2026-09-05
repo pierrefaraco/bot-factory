@@ -4,18 +4,42 @@ Flask -> FastAPI migration; rest_authent.py is the one remaining
 blueprint after this). Same URLs, same response shapes, same
 role/ownership checks.
 
+Every route here is `async def`: this is the "dedicated RAG-phase pass"
+bot_svc.py's delete() previously deferred to, covering rag_svc.py,
+message_svc.py and the handful of bot_svc/bot_assignment_svc/
+bot_parameters_svc lookups this router needs -- transmit_to_alfred
+included, its one still-fully-sync call (knowledge_svc.
+recordChaptersToVectorDB, see its own docstring) pushed onto
+run_in_threadpool rather than left as a sync `def` route. Genuinely
+blocking, non-DB-async work with no async equivalent (ChromaDB, the LLM's
+own retriever step) is pushed onto FastAPI's threadpool explicitly via
+run_in_threadpool from inside rag_svc.py/knowledge_svc.py, or -- for the
+retriever, invoked from deep inside the LCEL chain -- picked up
+automatically by LangChain's own executor-offloading default for a sync
+RunnableLambda under .ainvoke()/.astream().
+
+DB session scoping uses no decorator at all: since every route is `async
+def`, the router declares `dependencies=[Depends(async_db_session_dependency)]`
+once, applying it to every path operation -- see
+dependencies/db_session.py's module docstring for why an async-generator
+Depends is safe here (no thread hop between it and the endpoint call)
+where it wouldn't be for a sync `def` route.
+
 Streaming (trigfirstmessage?stream=TRUE, streamchat): rag_svc.py's
-generators do a DB write (saving the assistant's reply) on their very
-last step, which runs *during* StreamingResponse's iteration of the body
--- i.e. after this endpoint function has already returned and its own
-with_db_session has already exited. Starlette also dispatches each
-individual next() call on that body iterator through its own
-independent threadpool call, so a scope entered on one next() call
-isn't visible on another regardless of when the function itself
-returns. dependencies.db_session.stream_with_db_session wraps the
-generator so every single next() call gets its own self-contained
-push/pop, exactly like with_db_session does for the synchronous part
-of the request.
+ask_with_stream() returns an *async* generator now (rag_chain.astream()
+instead of .stream()), which changes how the per-chunk DB scope has to
+work. A sync generator only reaches StreamingResponse via Starlette's
+iterate_in_threadpool, which dispatches every next() call through its own
+independent threadpool call -- a scope entered on one such call is
+invisible on the next regardless of when the endpoint function itself
+returns, which is why the old sync path needed dependencies.db_session.
+stream_with_db_session to push/pop a fresh scope around every single
+next(). An async generator gets no such treatment: StreamingResponse
+drives it with a plain `async for`, directly on the one task already
+handling this request (see starlette.responses.StreamingResponse), so
+dependencies.db_session.stream_with_async_db_session only needs to open
+the scope once, around the whole generator -- it naturally stays entered
+across every `yield`.
 
 The original had no @api.validate on either streaming route specifically
 because SpecTree's Flask integration drains a streamed Response into
@@ -37,15 +61,16 @@ from typing import Callable
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import (
-    stream_with_db_session,
-    with_db_session,
+    async_db_session_dependency,
+    stream_with_async_db_session,
 )
+from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_assignment_svc import BotAssignmentService
@@ -55,7 +80,11 @@ from ai_server.services.knowledge_svc import KnowledgeSvc
 from ai_server.services.rag_svc import RagService, message_service
 from ai_server.services.user_admin_svc import UserAdminService
 
-router = APIRouter(prefix="/api/rag", tags=["rag"])
+router = APIRouter(
+    prefix="/api/rag",
+    tags=["rag"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 rag_svc = RagService()
@@ -81,23 +110,22 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1)
 
 
-def _check_bot_access_permission(user: User, bot_id: int) -> bool:
+async def _check_bot_access_permission(user: UserDto, bot_id: int) -> bool:
     if user.roles == ADMIN_ROLE:
         return True
     elif user.roles == USER_ROLE:
-        return bot_svc.is_bot_belong_to_user(bot_id, user.id)
+        return await bot_svc.is_bot_belong_to_user_async(bot_id, user.id)
     elif user.roles == GUEST_ROLE:
-        return bot_assignment_svc.is_bot_assigned_to_user(bot_id, user.id)
+        return await bot_assignment_svc.is_bot_assigned_to_user_async(bot_id, user.id)
     return False
 
 
 @router.post("/chat", dependencies=[Depends(require_json_body(ChatRequest))])
-@with_db_session
-def chat(body: ChatRequest, claims: dict = Depends(any_role)):
+async def chat(body: ChatRequest, claims: dict = Depends(any_role)):
     """Basic chat endpoint"""
     logger.info("POST /rag/chat - chat called")
     user_id = claims["sub"]
-    user: User = user_svc.get_user_by_id(user_id)
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"chat rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
@@ -107,12 +135,12 @@ def chat(body: ChatRequest, claims: dict = Depends(any_role)):
         logger.warning(f"chat rejected: user {user_id} has no selected bot")
         raise ApiError("You have to select a bot on the app", status_code=409)
 
-    if not _check_bot_access_permission(user, selected_bot_id):
+    if not await _check_bot_access_permission(user, selected_bot_id):
         logger.warning(f"chat forbidden: user {user_id} has no access to bot {selected_bot_id}")
         raise ApiError(f"You don't have permission to access bot {selected_bot_id}", status_code=403)
 
     started_at = time.perf_counter()
-    response = rag_svc.ask(selected_bot_id, user_id, body.question)
+    response = await rag_svc.ask(selected_bot_id, user_id, body.question)
     elapsed_ms = (time.perf_counter() - started_at) * 1000
     logger.info(
         f"chat succeeded for user_id={user_id} bot_id={selected_bot_id} elapsed_ms={elapsed_ms:.1f}"
@@ -121,8 +149,7 @@ def chat(body: ChatRequest, claims: dict = Depends(any_role)):
 
 
 @router.get("/trigfirstmessage")
-@with_db_session
-def trigfirstmessage(
+async def trigfirstmessage(
     claims: dict = Depends(any_role),
     stream: str = Query(default="TRUE"),
     data: str = Query(default="{}"),
@@ -130,7 +157,7 @@ def trigfirstmessage(
     """Trigger first welcome message for a bot"""
     logger.info("GET /rag/trigfirstmessage - trigfirstmessage called")
     user_id = claims["sub"]
-    user: User = user_svc.get_user_by_id(user_id)
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"trigfirstmessage rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
@@ -146,11 +173,11 @@ def trigfirstmessage(
         logger.warning(f"trigfirstmessage rejected: invalid bot_id format {bot_id!r}")
         raise ApiError("Invalid bot_id format", status_code=400)
 
-    if not _check_bot_access_permission(user, bot_id):
+    if not await _check_bot_access_permission(user, bot_id):
         logger.warning(f"trigfirstmessage forbidden: user {user_id} has no access to bot {bot_id}")
         raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
 
-    question = bot_parameters_svc.get_welcome_message(user.name, bot_id)
+    question = await bot_parameters_svc.get_welcome_message(user.name, bot_id)
     stream_response = stream.upper() == "TRUE"
     logger.debug(f"trigfirstmessage params: bot_id={bot_id} stream={stream_response}")
 
@@ -161,8 +188,8 @@ def trigfirstmessage(
             logger.warning("trigfirstmessage rejected: invalid JSON in data parameter")
             raise ApiError("Invalid JSON in data parameter", status_code=400)
 
-        session = message_service.get_session(bot_id, user_id)
-        generate: Callable = rag_svc.ask_with_stream(
+        session = await message_service.get_session(bot_id, user_id)
+        generate: Callable = await rag_svc.ask_with_stream(
             bot_id, user_id, parsed_data, question, hide=True,
             session_id=session.id if session else -1,
         )
@@ -170,14 +197,14 @@ def trigfirstmessage(
 
         logger.info(f"trigfirstmessage streaming started for user_id={user_id} bot_id={bot_id}")
         return StreamingResponse(
-            stream_with_db_session(response_iterator),
+            stream_with_async_db_session(response_iterator),
             media_type="text/event-stream",
             headers=SSE_HEADERS,
         )
     else:
-        _delete_session_history(bot_id, user_id)
+        await _delete_session_history(bot_id, user_id)
         started_at = time.perf_counter()
-        response = rag_svc.ask(bot_id, user_id, question, hide=True)
+        response = await rag_svc.ask(bot_id, user_id, question, hide=True)
         elapsed_ms = (time.perf_counter() - started_at) * 1000
         logger.info(
             f"trigfirstmessage succeeded for user_id={user_id} bot_id={bot_id} elapsed_ms={elapsed_ms:.1f}"
@@ -186,8 +213,7 @@ def trigfirstmessage(
 
 
 @router.get("/streamchat")
-@with_db_session
-def streamchat(
+async def streamchat(
     claims: dict = Depends(any_role),
     question: str = Query(default=None),
     bot_id: str = Query(default=None),
@@ -196,7 +222,7 @@ def streamchat(
     """Stream chat endpoint with real-time responses"""
     logger.info("GET /rag/streamchat - streamchat called")
     user_id = claims["sub"]
-    user: User = user_svc.get_user_by_id(user_id)
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"streamchat rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
@@ -214,7 +240,7 @@ def streamchat(
         logger.warning(f"streamchat rejected: invalid bot_id format {bot_id!r}")
         raise ApiError("Invalid bot_id format", status_code=400)
 
-    if not _check_bot_access_permission(user, bot_id):
+    if not await _check_bot_access_permission(user, bot_id):
         logger.warning(f"streamchat forbidden: user {user_id} has no access to bot {bot_id}")
         raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
 
@@ -225,46 +251,57 @@ def streamchat(
         raise ApiError("Invalid JSON in data parameter", status_code=400)
 
     logger.debug(f"streamchat question length={len(question)}")
-    session = message_service.get_session(bot_id, user_id)
-    generate: Callable = rag_svc.ask_with_stream(
+    session = await message_service.get_session(bot_id, user_id)
+    generate: Callable = await rag_svc.ask_with_stream(
         bot_id, user_id, parsed_data, question, session_id=session.id if session else -1
     )
     response_iterator = generate()
 
     logger.info(f"streamchat streaming started for user_id={user_id} bot_id={bot_id}")
     return StreamingResponse(
-        stream_with_db_session(response_iterator),
+        stream_with_async_db_session(response_iterator),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
 
 
 @router.post("/transmit_to_alfred/{bot_id:int}")
-@with_db_session
-def transmit_to_alfred(bot_id: int, claims: dict = Depends(admin_or_user)):
-    """Transmit chapters to vector database"""
+async def transmit_to_alfred(bot_id: int, claims: dict = Depends(admin_or_user)):
+    """Transmit chapters to vector database.
+
+    knowledge_svc.recordChaptersToVectorDB() itself stays fully sync: it
+    re-fetches each Knowledge row and then mutates+commits it
+    (vector_synced_at) via the plain sync `db.session` from inside the
+    same call (see knowledge_svc.py::_ingest_knowledge_node) while also
+    driving ChromaDB writes that have no async client at all
+    (chroma_db_svc.py) -- fetching those rows async instead would hand
+    back objects bound to a different session than the one the commit
+    runs on, silently losing that write. Same class of blocker as
+    BotService.delete's own "Left for a dedicated RAG-phase pass" note.
+    Run via run_in_threadpool so this route can still be `async def` like
+    every other one in this router (and share its Depends-based session
+    scoping) without blocking the event loop for the call's duration."""
     logger.info(f"POST /rag/transmit_to_alfred/{bot_id} - transmit_to_alfred called")
     user_id = claims["sub"]
     logger.info(f"User {user_id} transmitting chapters for bot {bot_id} to vector DB")
 
     started_at = time.perf_counter()
-    knowledge_svc.recordChaptersToVectorDB(bot_id)
+    await run_in_threadpool(knowledge_svc.recordChaptersToVectorDB, bot_id)
     elapsed_ms = (time.perf_counter() - started_at) * 1000
     logger.info(f"transmit_to_alfred succeeded for bot_id={bot_id} elapsed_ms={elapsed_ms:.1f}")
     return {"message": "Chapters transmitted to Alfred successfully"}
 
 
 @router.get("/{bot_id:int}")
-@with_db_session
-def get_session_history(bot_id: int, claims: dict = Depends(any_role)):
+async def get_session_history(bot_id: int, claims: dict = Depends(any_role)):
     """Get session history for a bot"""
     logger.info(f"GET /rag/{bot_id} - get_session_history called")
     user_id = claims["sub"]
-    session = message_service.get_session(bot_id, user_id)
+    session = await message_service.get_session(bot_id, user_id)
     if session is None:
         logger.info(f"get_session_history({bot_id}) no session")
         return Response(status_code=204)
-    messages = message_service.load_session_history(session_id=session.id)
+    messages = await message_service.load_session_history(session_id=session.id)
     if not messages:
         logger.info(f"get_session_history({bot_id}) no messages")
         return Response(status_code=204)
@@ -274,12 +311,11 @@ def get_session_history(bot_id: int, claims: dict = Depends(any_role)):
 
 
 @router.delete("")
-@with_db_session
-def delete_selected_bot_session_history(claims: dict = Depends(any_role)):
+async def delete_selected_bot_session_history(claims: dict = Depends(any_role)):
     """Delete session history for the selected bot"""
     logger.info("DELETE /rag - delete_selected_bot_session_history called")
     user_id = claims["sub"]
-    user: User = user_svc.get_user_by_id(user_id)
+    user = await user_svc.get_user_dto_by_id(user_id)
     if not user:
         logger.warning(f"delete_selected_bot_session_history rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
@@ -289,24 +325,23 @@ def delete_selected_bot_session_history(claims: dict = Depends(any_role)):
         logger.warning(f"delete_selected_bot_session_history rejected: user {user_id} has no selected bot")
         raise ApiError("Bot_id is required", status_code=400)
 
-    return _delete_session_history(int(bot_id), user_id)
+    return await _delete_session_history(int(bot_id), user_id)
 
 
 @router.delete("/{bot_id:int}")
-@with_db_session
-def delete_session_history(bot_id: int, claims: dict = Depends(any_role)):
+async def delete_session_history(bot_id: int, claims: dict = Depends(any_role)):
     """Delete session history for a bot"""
     logger.info(f"DELETE /rag/{bot_id} - delete_session_history called")
-    return _delete_session_history(bot_id, claims["sub"])
+    return await _delete_session_history(bot_id, claims["sub"])
 
 
-def _delete_session_history(bot_id: int, user_id):
+async def _delete_session_history(bot_id: int, user_id):
     logger.info(f"User {user_id} deleting session history for bot {bot_id}")
-    session = message_service.get_session(bot_id, user_id)
+    session = await message_service.get_session(bot_id, user_id)
     if session is None:
         logger.info(f"_delete_session_history({bot_id}) no session")
         return {"deleted_message_count": 0}
 
-    deleted_message_count = message_service.delete_session_history(session.id)
+    deleted_message_count = await message_service.delete_session_history(session.id)
     logger.info(f"_delete_session_history({bot_id}) succeeded deleted_message_count={deleted_message_count}")
     return {"deleted_message_count": deleted_message_count}

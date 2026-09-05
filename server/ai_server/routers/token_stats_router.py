@@ -22,12 +22,16 @@ from fastapi import APIRouter, Depends, Query
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.dependencies.auth import require_roles
-from ai_server.dependencies.db_session import with_async_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.token_tracking_svc import TokenTrackingService
 
-router = APIRouter(prefix="/api/token-stats", tags=["token-stats"])
+router = APIRouter(
+    prefix="/api/token-stats",
+    tags=["token-stats"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 token_tracking_svc = TokenTrackingService()
@@ -48,7 +52,6 @@ def _enforce_user_scope(caller_id, target_id: int, allow_self: bool = True) -> N
 
 
 @router.get("/me")
-@with_async_db_session
 async def get_token_stats_self(claims: dict = Depends(any_role)):
     """Get token statistics for the current user"""
     user_id = claims["sub"]
@@ -59,7 +62,6 @@ async def get_token_stats_self(claims: dict = Depends(any_role)):
 
 
 @router.get("/user/{user_id}")
-@with_async_db_session
 async def get_token_stats_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get token statistics for a user (own guest, or any user if admin)"""
     logger.info(f"GET /token-stats/user/{user_id} - get_token_stats_by_id called")
@@ -70,7 +72,6 @@ async def get_token_stats_by_id(user_id: int, claims: dict = Depends(admin_or_us
 
 
 @router.get("/history/me")
-@with_async_db_session
 async def get_token_history_self(
     claims: dict = Depends(any_role),
     limit: int = Query(default=100, ge=1, le=1000),
@@ -85,7 +86,6 @@ async def get_token_history_self(
 
 
 @router.get("/history/user/{user_id}")
-@with_async_db_session
 async def get_token_history_by_id(
     user_id: int,
     claims: dict = Depends(admin_or_user),
@@ -102,7 +102,6 @@ async def get_token_history_by_id(
 
 
 @router.get("/bot/{bot_id}", dependencies=[Depends(admin_or_user)])
-@with_async_db_session
 async def get_bot_token_stats(bot_id: int):
     """Get token statistics for a specific bot"""
     logger.info(f"GET /token-stats/bot/{bot_id} - get_bot_token_stats called")
@@ -112,7 +111,6 @@ async def get_bot_token_stats(bot_id: int):
 
 
 @router.get("/all-users", dependencies=[Depends(admin_only)])
-@with_async_db_session
 async def get_all_users_token_stats():
     """Get token statistics for all users (admin only)"""
     logger.info("GET /token-stats/all-users - get_all_users_token_stats called")
@@ -122,7 +120,6 @@ async def get_all_users_token_stats():
 
 
 @router.get("/total/me")
-@with_async_db_session
 async def get_total_tokens_self(claims: dict = Depends(any_role)):
     """Get total tokens consumed by the current user"""
     user_id = claims["sub"]
@@ -133,7 +130,6 @@ async def get_total_tokens_self(claims: dict = Depends(any_role)):
 
 
 @router.get("/total/user/{user_id}")
-@with_async_db_session
 async def get_total_tokens_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get total tokens consumed by a user (own guest, or any user if admin)"""
     logger.info(f"GET /token-stats/total/user/{user_id} - get_total_tokens_by_id called")
@@ -144,7 +140,6 @@ async def get_total_tokens_by_id(user_id: int, claims: dict = Depends(admin_or_u
 
 
 @router.get("/last-24h/me")
-@with_async_db_session
 async def get_tokens_last_24h_self(claims: dict = Depends(any_role)):
     """Get total tokens consumed by the current user in the last 24 hours"""
     user_id = claims["sub"]
@@ -155,7 +150,6 @@ async def get_tokens_last_24h_self(claims: dict = Depends(any_role)):
 
 
 @router.get("/last-24h/user/{user_id}")
-@with_async_db_session
 async def get_tokens_last_24h_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get total tokens consumed by a user in the last 24h (own guest, or
     any user if admin)"""
@@ -167,7 +161,6 @@ async def get_tokens_last_24h_by_id(user_id: int, claims: dict = Depends(admin_o
 
 
 @router.get("/stats-24h/me")
-@with_async_db_session
 async def get_stats_last_24h_self(claims: dict = Depends(any_role)):
     """Get detailed token statistics for the current user in the last 24 hours"""
     user_id = claims["sub"]
@@ -178,7 +171,6 @@ async def get_stats_last_24h_self(claims: dict = Depends(any_role)):
 
 
 @router.get("/stats-24h/user/{user_id}")
-@with_async_db_session
 async def get_stats_last_24h_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get detailed token stats for a user in the last 24h (own guest, or
     any user if admin)"""
@@ -190,7 +182,6 @@ async def get_stats_last_24h_by_id(user_id: int, claims: dict = Depends(admin_or
 
 
 @router.get("/admin-summary")
-@with_async_db_session
 async def get_admin_token_usage_summary(claims: dict = Depends(admin_or_user)):
     """Get 24h/30d token totals for every account and guest the caller can
     see in one batch call (for the admin Guest/User tables) -- everyone for

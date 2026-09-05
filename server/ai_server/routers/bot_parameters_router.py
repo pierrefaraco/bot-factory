@@ -20,12 +20,16 @@ runs), and bot-ownership scoping was never implemented in the original
 either -- not something to add silently as part of a framework-only
 migration.
 
-Only delete_bot_parameters is async (`async def` + @with_async_db_session):
-BotParametersService.delete_by_bot_id has no caller outside this router.
-The other three routes stay sync -- their BotParametersService methods
-all funnel through update_prompt(), which calls BotService.update()
-(bot_svc.py, not migrated yet) to persist the regenerated prompt; see
-/root/.claude/plans/moonlit-leaping-salamander.md.
+Only delete_bot_parameters is async (`async def`): BotParametersService.
+delete_by_bot_id has no caller outside this router. The other three
+routes stay sync -- their BotParametersService methods all funnel
+through update_prompt(), which calls BotService.update() (bot_svc.py,
+not migrated yet) to persist the regenerated prompt; see
+/root/.claude/plans/moonlit-leaping-salamander.md. DB session scoping
+doesn't care either way: it's wired once, at the router level, via
+Depends(async_db_session_dependency) -- see that dependency's own
+docstring for why an async-generator Depends works for both a sync and
+an async route (no per-route decorator needed for either).
 """
 
 from typing import Optional
@@ -37,12 +41,16 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dao.database import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_async_db_session, with_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_parameters_svc import BotParametersService
 
-router = APIRouter(prefix="/api/bot-parameters", tags=["bot-parameters"])
+router = APIRouter(
+    prefix="/api/bot-parameters",
+    tags=["bot-parameters"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 bot_parameters_svc = BotParametersService()
@@ -88,7 +96,6 @@ class BotParametersPatchRequest(BaseModel):
     status_code=201,
     dependencies=[Depends(require_json_body(BotParametersRequest))],
 )
-@with_db_session
 def create_or_update_bot_parameters(
     body: BotParametersRequest, claims: dict = Depends(admin_or_user)
 ):
@@ -116,7 +123,6 @@ def create_or_update_bot_parameters(
     "/{bot_id}",
     dependencies=[Depends(require_json_body(BotParametersPatchRequest))],
 )
-@with_db_session
 def patch_bot_parameters_admin(
     bot_id: int, body: BotParametersPatchRequest, claims: dict = Depends(admin_or_user)
 ):
@@ -143,7 +149,6 @@ def patch_bot_parameters_admin(
 
 
 @router.get("/{bot_id}", dependencies=[Depends(any_role)])
-@with_db_session
 def get_bot_parameters_by_bot_id(bot_id: int):
     """Get bot parameters by bot ID"""
     logger.info(f"GET /bot-parameters/{bot_id} - get_bot_parameters_by_bot_id called")
@@ -156,7 +161,6 @@ def get_bot_parameters_by_bot_id(bot_id: int):
 
 
 @router.delete("/{bot_id}", status_code=204, dependencies=[Depends(admin_or_user)])
-@with_async_db_session
 async def delete_bot_parameters(bot_id: int):
     """Delete bot parameters by bot ID"""
     logger.info(f"DELETE /bot-parameters/{bot_id} - delete_bot_parameters called")

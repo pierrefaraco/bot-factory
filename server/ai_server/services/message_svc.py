@@ -1,7 +1,9 @@
 from datetime import datetime
-from ai_server.dao.database import Session, Message, db
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import and_
+from typing import Optional
+
+from sqlalchemy import delete, select
+
+from ai_server.dao.database import Session, Message, get_async_session
 from ai_server.dto.message_dto import MessageDto
 from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -11,19 +13,20 @@ logger = BotFactoryLogger()
 
 @singleton
 class MessageService:
-    def get_session(self, bot_id: int, user_id: int) -> Session:
-        try:
-            # Check if the session already exists
+    """Async throughout: the only callers (rag_svc.py, rag_router.py) are
+    both migrated together. No manual rollback/close here -- same convention
+    as the other async-migrated services (bot_svc.py, user_admin_svc.py,
+    ...): a failure propagates up to the request's own
+    async_db_session_scope() teardown instead of being swallowed here."""
 
-            session = Session.query.filter_by(bot_id=bot_id, user_id=user_id).first()
-            return session
-        except SQLAlchemyError:
-            logger.exception(f"DB error getting session bot_id={bot_id} user_id={user_id}")
-            db.session.rollback()
-        finally:
-            db.session.close()
+    async def get_session(self, bot_id: int, user_id: int) -> Optional[Session]:
+        session_db = get_async_session()
+        result = await session_db.execute(
+            select(Session).where(Session.bot_id == bot_id, Session.user_id == user_id)
+        )
+        return result.scalar_one_or_none()
 
-    def save_message(
+    async def save_message(
         self, bot_id: int, user_id: int, role: str, content: str, hide: bool = False
     ) -> None:
         # content is raw chat text (may contain user PII): never logged in full,
@@ -32,19 +35,44 @@ class MessageService:
             f"save_message bot_id={bot_id} user_id={user_id} role={role} "
             f"content_len={len(content) if content else 0} hide={hide}"
         )
-        try:
-            # Check if the sessueryion already exists
-            session = self.get_session(bot_id, user_id)
+        session_db = get_async_session()
+        session = await self.get_session(bot_id, user_id)
 
-            if not session:
-                logger.info(
-                    f"Creating new session for bot_id={bot_id} user_id={user_id}"
+        if not session:
+            logger.info(f"Creating new session for bot_id={bot_id} user_id={user_id}")
+            session = Session(bot_id, user_id)
+            session_db.add(session)
+            await session_db.commit()
+            await session_db.refresh(session)
+            message = Message(
+                0,
+                session_id=session.id,
+                role=role,
+                content=content,
+                time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                hide=hide,
+            )
+        else:
+            result = await session_db.execute(
+                select(Message)
+                .where(Message.session_id == session.id)
+                .order_by(Message.order.desc())
+            )
+            last_message: Optional[Message] = result.scalars().first()
+            if last_message:
+                logger.debug(
+                    f"Appending after last_message id={last_message.id} "
+                    f"order={last_message.order} session_id={session.id}"
                 )
-                # Create a new session if it doesn't exist
-                session = Session(bot_id, user_id)
-                db.session.add(session)
-                db.session.commit()
-                db.session.refresh(session)
+                message = Message(
+                    last_message.order + 1,
+                    session_id=session.id,
+                    role=role,
+                    content=content,
+                    time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    hide=hide,
+                )
+            else:
                 message = Message(
                     0,
                     session_id=session.id,
@@ -53,101 +81,59 @@ class MessageService:
                     time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     hide=hide,
                 )
-            else:
-                last_message: Message = (
-                    Message.query.filter_by(session_id=session.id)
-                    .order_by(Message.order.desc())
-                    .first()
-                )
-                if last_message:
-                    logger.debug(
-                        f"Appending after last_message id={last_message.id} "
-                        f"order={last_message.order} session_id={session.id}"
-                    )
-                    message = Message(
-                        last_message.order + 1,
-                        session_id=session.id,
-                        role=role,
-                        content=content,
-                        time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        hide=hide,
-                    )
-                else:
-                    message = Message(
-                        0,
-                        session_id=session.id,
-                        role=role,
-                        content=content,
-                        time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        hide=hide,
-                    )
-            db.session.add(message)
-            db.session.commit()
-            db.session.refresh(message)
-            logger.info(
-                f"Message saved id={message.id} session_id={session.id} "
-                f"bot_id={bot_id} user_id={user_id} role={role}"
-            )
+        session_db.add(message)
+        await session_db.commit()
+        await session_db.refresh(message)
+        logger.info(
+            f"Message saved id={message.id} session_id={session.id} "
+            f"bot_id={bot_id} user_id={user_id} role={role}"
+        )
 
-        except SQLAlchemyError:
-            logger.exception(f"DB error saving message bot_id={bot_id} user_id={user_id}")
-            db.session.rollback()
-        finally:
-            db.session.close()
+    async def load_session_history(self, session_id) -> list[MessageDto]:
+        session_db = get_async_session()
+        result = await session_db.execute(
+            select(Message)
+            .where(Message.session_id == session_id, Message.hide.is_(False))
+            .order_by(Message.order.asc())
+        )
+        msg_list = result.scalars().all()
+        msg_list_dto = [
+            MessageDto(msg.id, msg.session_id, msg.role, msg.content, msg.order, msg.time)
+            for msg in msg_list
+        ]
+        logger.info(f"Loaded {len(msg_list_dto)} messages for session_id={session_id}")
+        return msg_list_dto
 
-    def load_session_history(self, session_id) -> list[Message]:
-        try:
-            # def __init__(self, id: str, session_id:int,  role: str, content: str, order: int,time:str):
-            msg_list: list[Message] = (
-                Message.query.filter_by(session_id=session_id, hide=0)
-                .order_by(Message.order.asc())
-                .all()
-            )
-            msg_list_dto = [
-                MessageDto(
-                    msg.id, msg.session_id, msg.role, msg.content, msg.order, msg.time
-                )
-                for msg in msg_list
-            ]
-            logger.info(
-                f"Loaded {len(msg_list_dto)} messages for session_id={session_id}"
-            )
-            return msg_list_dto
-        except SQLAlchemyError:
-            logger.exception(f"DB error loading session history for session_id={session_id}")
-        finally:
-            db.session.close()
-
-    def delete_all_users_sessions(self, user_id):
-        sessions: list[Session] = Session.query.filter_by(user_id=user_id).all()
+    async def delete_all_users_sessions(self, user_id):
+        session_db = get_async_session()
+        result = await session_db.execute(select(Session).where(Session.user_id == user_id))
+        sessions = result.scalars().all()
         logger.info(f"Deleting {len(sessions)} sessions for user_id={user_id}")
         for session in sessions:
-            self.delete_session_history(session.id)
+            await self.delete_session_history(session.id)
 
-    def delete_all_bots_sessions(self, bot_id):
-        sessions: list[Session] = Session.query.filter_by(bot_id=bot_id).all()
+    async def delete_all_bots_sessions(self, bot_id):
+        session_db = get_async_session()
+        result = await session_db.execute(select(Session).where(Session.bot_id == bot_id))
+        sessions = result.scalars().all()
         logger.info(f"Deleting {len(sessions)} sessions for bot_id={bot_id}")
         for session in sessions:
-            self.delete_session_history(session.id)
+            await self.delete_session_history(session.id)
 
-    def delete_session_history(self, session_id) -> tuple[int, int]:
-        try:
-            deleted_message_count = Message.query.filter_by(
-                session_id=session_id
-            ).delete()
-            if deleted_message_count == 0:
-                logger.info(f"No messages found for session_id={session_id}")
-                return 0, 0
-            deleted_session_count = Session.query.filter_by(id=session_id).delete()
-            db.session.commit()
-            logger.info(
-                f"Deleted {deleted_message_count} messages and "
-                f"{deleted_session_count} session for session_id={session_id}"
-            )
-            return deleted_message_count, deleted_session_count
-        except SQLAlchemyError:
-            logger.exception(f"DB error deleting session history for session_id={session_id}")
-            db.session.rollback()
+    async def delete_session_history(self, session_id) -> tuple[int, int]:
+        session_db = get_async_session()
+        result = await session_db.execute(
+            delete(Message).where(Message.session_id == session_id)
+        )
+        deleted_message_count = result.rowcount
+        if deleted_message_count == 0:
+            logger.info(f"No messages found for session_id={session_id}")
             return 0, 0
-        finally:
-            db.session.close()
+        result = await session_db.execute(delete(Session).where(Session.id == session_id))
+        deleted_session_count = result.rowcount
+        await session_db.commit()
+        logger.info(
+            f"Deleted {deleted_message_count} messages and "
+            f"{deleted_session_count} session for session_id={session_id}"
+        )
+        return deleted_message_count, deleted_session_count

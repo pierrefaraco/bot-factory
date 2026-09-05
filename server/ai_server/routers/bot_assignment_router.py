@@ -16,11 +16,14 @@ reproducing that unreachable code and reads straight off the validated
 body model instead.
 
 get_assignments_by_parent/get_assigned_bot_ids/update_assignment are
-async (`async def` + @with_async_db_session): their BotAssignmentService
-methods have no caller outside this router. The other five routes stay
-sync -- their methods are also called from BotService/UserAdminService/
-rag_router.py (none migrated yet); see
-/root/.claude/plans/moonlit-leaping-salamander.md.
+async (`async def`): their BotAssignmentService methods have no caller
+outside this router. The other five routes stay sync -- their methods
+are also called from BotService/UserAdminService/rag_router.py (none
+migrated yet); see /root/.claude/plans/moonlit-leaping-salamander.md. DB
+session scoping doesn't care either way: it's wired once, at the router
+level, via Depends(async_db_session_dependency) -- see that dependency's
+own docstring for why an async-generator Depends works for both a sync
+and an async route (no per-route decorator needed for either).
 """
 
 from fastapi import APIRouter, Depends, Response
@@ -30,12 +33,16 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dao.database import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_async_db_session, with_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 
-router = APIRouter(prefix="/api/bot-guest-assignment", tags=["bot-assignment"])
+router = APIRouter(
+    prefix="/api/bot-guest-assignment",
+    tags=["bot-assignment"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 bot_assignment_svc = BotAssignmentService()
@@ -75,7 +82,6 @@ def _current_user(user_id) -> User:
 @router.post(
     "", status_code=201, dependencies=[Depends(require_json_body(BotGuestAssignmentRequest))]
 )
-@with_db_session
 def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depends(admin_or_user)):
     """Create a new bot guest assignment"""
     logger.info("POST /bot-guest-assignment - create_assignment called")
@@ -102,7 +108,6 @@ def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depends(ad
 
 
 @router.get("/parent/{parent_user_id:int}", dependencies=[Depends(admin_or_user)])
-@with_async_db_session
 async def get_assignments_by_parent(parent_user_id: int, claims: dict = Depends(admin_or_user)):
     """Get all assignments created by a parent user"""
     logger.info(f"GET /bot-guest-assignment/parent/{parent_user_id} - get_assignments_by_parent called")
@@ -133,7 +138,6 @@ def _authorize_guest_scope(user: User, user_id, guest_user_id: int) -> None:
 
 
 @router.get("/guest/{guest_user_id:int}", dependencies=[Depends(any_role)])
-@with_db_session
 def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(any_role)):
     """Get all assignments for a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id} - get_assignments_by_guest called")
@@ -151,7 +155,6 @@ def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(any_role
 
 
 @router.get("/guest/{guest_user_id:int}/bot-ids", dependencies=[Depends(any_role)])
-@with_async_db_session
 async def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_role)):
     """Get list of bot IDs assigned to a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id}/bot-ids - get_assigned_bot_ids called")
@@ -172,7 +175,6 @@ async def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_ro
     "/{assignment_id:int}",
     dependencies=[Depends(require_json_body(BotGuestAssignmentUpdateRequest))],
 )
-@with_async_db_session
 async def update_assignment(
     assignment_id: int, body: BotGuestAssignmentUpdateRequest, claims: dict = Depends(admin_or_user)
 ):
@@ -197,7 +199,6 @@ async def update_assignment(
 
 
 @router.delete("/{assignment_id:int}", status_code=204, dependencies=[Depends(admin_or_user)])
-@with_db_session
 def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_user)):
     """Delete a bot guest assignment"""
     logger.info(f"DELETE /bot-guest-assignment/{assignment_id} - delete_assignment called")
@@ -223,7 +224,6 @@ def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_user))
 @router.delete(
     "/remove", dependencies=[Depends(require_json_body(BotGuestAssignmentRefRequest))]
 )
-@with_db_session
 def remove_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(admin_or_user)):
     """Remove assignment between a bot and guest user"""
     logger.info("DELETE /bot-guest-assignment/remove - remove_assignment called")
@@ -241,7 +241,6 @@ def remove_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends
 @router.post(
     "/check", dependencies=[Depends(require_json_body(BotGuestAssignmentRefRequest))]
 )
-@with_db_session
 def check_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(any_role)):
     """Check if a bot is assigned to a guest user"""
     logger.info("POST /bot-guest-assignment/check - check_assignment called")

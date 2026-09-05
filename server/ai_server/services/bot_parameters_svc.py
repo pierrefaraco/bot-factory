@@ -513,7 +513,8 @@ class BotParametersService(BaseService[BotParametersDto]):
         self.logger.info(f"BotParameters deleted id={entity_id} bot_id={bot_id}")
         return True
 
-    def get_welcome_message(self, user_name: str, bot_id: int) -> str:
+    # Migrated to async: rag_router.py (trigfirstmessage) is the only caller.
+    async def get_welcome_message(self, user_name: str, bot_id: int) -> str:
         """
         Get welcome message for a bot.
 
@@ -527,7 +528,7 @@ class BotParametersService(BaseService[BotParametersDto]):
         Raises:
             ServiceError: When welcome message generation fails
         """
-        result = self._perform_get_welcome_message(
+        result = await self._perform_get_welcome_message(
             user_name,
             bot_id,
         )
@@ -535,12 +536,14 @@ class BotParametersService(BaseService[BotParametersDto]):
             raise ServiceError("Get welcome message failed.")
         return result
 
-    def _perform_get_welcome_message(self, user_name: str, bot_id: int) -> str:
+    async def _perform_get_welcome_message(self, user_name: str, bot_id: int) -> str:
         self.logger.debug(f"get_welcome_message bot_id={bot_id} user_name={user_name}")
-        # bot_params_dto = self.get_dto_by_id(bot_id)
         behaviour_dict = yaml_svc.behaviour_dict
-        # Convert DTO back to entity for prompt service
-        params = BotParameters.query.filter_by(bot_id=bot_id).first()
+        session = get_async_session()
+        result = await session.execute(
+            select(BotParameters).where(BotParameters.bot_id == bot_id)
+        )
+        params = result.scalar_one_or_none()
         question = prompt_svc.welcome_message_trigger(user_name, params, behaviour_dict)
         return question
 

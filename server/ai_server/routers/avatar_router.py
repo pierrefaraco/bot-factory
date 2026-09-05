@@ -11,15 +11,18 @@ dependencies/content_type.py's require_json_body() docstring for exactly
 how that plays out differently for the required-bot_id models here vs.
 the all-optional AvatarPatchRequest.
 
-Routes here are a deliberate mix of sync (`def` + @with_db_session) and
-async (`async def` + @with_async_db_session): patch_avatar/update_avatar/
-delete_avatar's underlying AvatarService methods have no caller besides
-this router, so they've been migrated to the async engine (see
-/root/.claude/plans/moonlit-leaping-salamander.md); create_random_avatar/
-create_avatar/get_avatar_by_bot_id still stay sync because their
-AvatarService methods are also called directly from BotService
-(bot_svc.py, not migrated yet) -- converting them now would either break
-that sync caller or require duplicating the logic.
+Routes here are a deliberate mix of sync (`def`) and async (`async def`):
+patch_avatar/update_avatar/delete_avatar's underlying AvatarService
+methods have no caller besides this router, so they've been migrated to
+the async engine (see /root/.claude/plans/moonlit-leaping-salamander.md);
+create_random_avatar/create_avatar/get_avatar_by_bot_id still stay sync
+because their AvatarService methods are also called directly from
+BotService (bot_svc.py, not migrated yet) -- converting them now would
+either break that sync caller or require duplicating the logic. DB
+session scoping doesn't care either way: it's wired once, at the router
+level, via Depends(async_db_session_dependency) -- see that dependency's
+own docstring for why an async-generator Depends works for both a sync
+and an async route (no per-route decorator needed for either).
 """
 
 from typing import Optional
@@ -29,13 +32,17 @@ from fastapi import APIRouter, Depends, Response
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_async_db_session, with_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.avatar_svc import AvatarService
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/api/avatar", tags=["avatar"])
+router = APIRouter(
+    prefix="/api/avatar",
+    tags=["avatar"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 avatar_service = AvatarService()
@@ -85,7 +92,6 @@ class AvatarRequest(BaseModel):
     status_code=201,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRandomRequest))],
 )
-@with_db_session
 def create_random_avatar(body: AvatarRandomRequest):
     """Create a random avatar for a bot"""
     logger.info("POST /avatar/random - create_random_avatar called")
@@ -99,7 +105,6 @@ def create_random_avatar(body: AvatarRandomRequest):
     status_code=204,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarPatchRequest))],
 )
-@with_async_db_session
 async def patch_avatar(body: AvatarPatchRequest):
     """Partially update an avatar"""
     logger.info("PATCH /avatar - patch_avatar called")
@@ -113,7 +118,6 @@ async def patch_avatar(body: AvatarPatchRequest):
     status_code=201,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRequest))],
 )
-@with_db_session
 def create_avatar(body: AvatarRequest):
     """Create an avatar"""
     logger.info("POST /avatar - create_avatar called")
@@ -126,7 +130,6 @@ def create_avatar(body: AvatarRequest):
     "",
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRequest))],
 )
-@with_async_db_session
 async def update_avatar(body: AvatarRequest):
     """Update an avatar"""
     logger.info("PUT /avatar - update_avatar called")
@@ -136,7 +139,6 @@ async def update_avatar(body: AvatarRequest):
 
 
 @router.get("/{bot_id}", dependencies=[Depends(any_role)])
-@with_db_session
 def get_avatar_by_bot_id(bot_id: int):
     """Get avatar by bot ID"""
     logger.info(f"GET /avatar/{bot_id} - get_avatar_by_bot_id called")
@@ -149,7 +151,6 @@ def get_avatar_by_bot_id(bot_id: int):
 
 
 @router.delete("/{bot_id}", status_code=204, dependencies=[Depends(admin_or_user)])
-@with_async_db_session
 async def delete_avatar(bot_id: int):
     """Delete avatar by bot ID"""
     logger.info(f"DELETE /avatar/{bot_id} - delete_avatar called")

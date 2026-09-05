@@ -5,13 +5,26 @@ docstring) get a fresh SQLAlchemy Session for the duration of one
 request -- or one streamed chunk, for a long-lived streaming response --
 released back to the pool when that unit of work ends.
 
-This has to wrap the whole endpoint call, not run as a separate `yield`
-Depends: FastAPI resolves each sync dependency via its own
-run_in_threadpool() call, and anyio copies contextvars into that call
-independently of the endpoint function's own run_in_threadpool() call --
-a context entered in one such call is invisible to the other, even
-though both belong to the same request. Wrapping the endpoint itself
-keeps everything entered under it in one call frame.
+Wired via Depends (async_db_session_dependency below), not a decorator on
+the endpoint function: it's an *async* generator dependency, and FastAPI
+resolves those with a plain `await` (fastapi.dependencies.utils.
+_solve_generator), in the very same task that then calls the endpoint --
+no thread hop, so a contextvar set there is still visible in the endpoint
+body, whether that endpoint is itself `async def` (called directly, same
+task) or plain `def` (FastAPI's own separate run_in_threadpool() call for
+it still copies the *current* context -- i.e. already carrying whatever
+this dependency set -- into that thread; verified empirically against a
+throwaway FastAPI app with both an async and a sync route). A *sync*
+generator dependency wouldn't have this property: FastAPI dispatches it
+via its own independent run_in_threadpool() call, and a contextvar set
+inside that copied, thrown-away context never makes it back to the
+request's real one -- which is why this dependency is written as an
+async generator even though it's used by routers with sync `def` routes
+too (avatar_router.py, knowledge_router.py, ...).
+
+Use as `dependencies=[Depends(async_db_session_dependency)]` on the
+APIRouter(...) constructor, once per router -- applies to every route
+registered on it, sync or async alike.
 
 (This module used to also push a Flask app context here -- needed only
 by authent_svc.py/google_authent_svc.py's create_access_token() calls,
@@ -20,67 +33,52 @@ AppConfig directly instead -- see ai_server/dependencies/auth.py -- so
 there's no Flask app left anywhere in the process to push a context for.)
 """
 
-from functools import wraps
-
 from ai_server.dao.database import async_db_session_scope, db_session_scope
 
 
-def with_db_session(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        with db_session_scope():
-            return fn(*args, **kwargs)
-
-    return wrapper
-
-
-def with_async_db_session(fn):
-    """Async counterpart of with_db_session, for `async def` endpoints whose
-    services have been migrated to the async engine (see
-    ai_server/dao/database.py's async_db_session_scope /
-    get_async_session()). Same one-call-frame reasoning as with_db_session
-    above applies here too.
-
-    Also opens the *sync* db_session_scope() alongside the async one: while
-    this migration is incremental, an async endpoint can still call
-    not-yet-migrated sync helpers (e.g. decorators/user_scope.py's
-    authorize_user_scope, shared with still-sync routers) that rely on
-    Model.query/db.session. Without the sync scope open too, such a call
-    would silently run against SessionLocal's un-scoped default (its
-    scopefunc returning None), a single Session shared by every such call
-    for the life of the process and never torn down -- a stale-snapshot /
-    cross-request bleed bug, exactly what db_session_scope() exists to
-    prevent. Drop this once every sync call site an async router might
-    reach has itself been migrated."""
-
-    @wraps(fn)
-    async def wrapper(*args, **kwargs):
-        with db_session_scope():
-            async with async_db_session_scope():
-                return await fn(*args, **kwargs)
-
-    return wrapper
+async def async_db_session_dependency():
+    """FastAPI Depends() dependency opening one DB session scope (sync
+    `db_session_scope()` + async `async_db_session_scope()`) for the
+    lifetime of one request. Yields nothing -- it's only entered for its
+    open/close side effect. See the module docstring for why an
+    async-generator dependency is safe here regardless of whether the
+    route it's applied to is `async def` or plain `def`."""
+    with db_session_scope():
+        async with async_db_session_scope():
+            yield
 
 
-def stream_with_db_session(iterator):
-    """Same problem as above, one level deeper: a StreamingResponse's body
-    iterator has each of its next() calls dispatched independently via
-    Starlette's iterate_in_threadpool (its own anyio.to_thread.run_sync
-    per call). rag_svc.py's SSE generators do a DB write on their very
-    last step (saving the assistant's reply) *after* the endpoint
-    function has already returned the StreamingResponse and its own
-    with_db_session has already exited -- and a scope entered during one
-    next() call is invisible to the next one regardless, so wrapping the
-    whole generator in one `with` (relying on it staying "open" across
-    yields) would not actually keep the scope alive by the time that last
-    step runs. Push/pop around each individual next() call instead, so
-    every step is self-contained the same way with_db_session's single
-    call frame is.
+async def stream_with_async_db_session(async_iterator):
+    """DB session scoping for a StreamingResponse body, one level deeper
+    than async_db_session_dependency above: rag_svc.py's SSE generators do
+    a DB write on their very last step (saving the assistant's reply)
+    *during* StreamingResponse's iteration of the body -- i.e. after the
+    endpoint function has already returned and async_db_session_dependency
+    has already closed its own scope for this request.
+
+    Only the async scope, unlike async_db_session_dependency: everything
+    that runs inside this generator (rag_chain.astream(), message_svc.py's
+    save_message, and llm_svc.py's TokenCountingCallback -- now an
+    AsyncCallbackHandler, see its own docstring) is fully migrated to
+    get_async_session(), with no remaining sync Model.query/db.session
+    call reachable from here. (async_db_session_dependency itself still
+    needs both: rag_svc.py's build(), called from ask()/ask_with_stream()
+    *before* this generator starts, still reads bot_svc.get_prompt() via
+    plain sync Bot.query -- and every router using that same dependency
+    for its own still-sync routes needs it regardless.)
+
+    A single scope opened once here, around the whole generator, is
+    enough (no per-chunk push/pop needed): starlette.responses.
+    StreamingResponse stores an async iterable as-is and drives it with a
+    plain `async for`, entirely within the one task already handling this
+    request (see its own __init__/stream_response) -- unlike a *sync*
+    iterator, which only reaches StreamingResponse via Starlette's
+    iterate_in_threadpool, dispatching every single next() call through
+    its own independent anyio.to_thread.run_sync() call (a scope entered
+    on one such call would be invisible on the next). Since every route
+    in this codebase now returns an async generator for its streaming
+    body, there's no sync counterpart of this function to reach for.
     """
-    while True:
-        with db_session_scope():
-            try:
-                chunk = next(iterator)
-            except StopIteration:
-                return
-        yield chunk
+    async with async_db_session_scope():
+        async for chunk in async_iterator:
+            yield chunk

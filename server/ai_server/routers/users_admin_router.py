@@ -35,17 +35,20 @@ a legitimate `old_parent_id: 0` is falsy in Python, so this check can
 still reject a validly-present-but-zero id that pydantic already
 accepted -- a real (if obscure) behavior of the original, not dead code.
 
-Most routes here are async (`async def` + @with_async_db_session): their
-UserAdminService methods have no caller outside this router. register/
-register_guest and change_password_self/change_password_guest stay sync
--- their UserAdminService methods (create/_perform_create,
-change_password/_perform_change_password) do
-werkzeug.security.generate_password_hash()/check_password_hash(),
-deliberately CPU-heavy work that would block the event loop for every
-concurrent request if run directly inside an `async def` route (no
-FastAPI threadpool to absorb it); register is also shared with
-GoogleAuthentSvc (google_authent_svc.py, not migrated). See
-/root/.claude/plans/moonlit-leaping-salamander.md.
+Most routes here are async (`async def`): their UserAdminService methods
+have no caller outside this router. register/register_guest and
+change_password_self/change_password_guest stay sync -- their
+UserAdminService methods (create/_perform_create, change_password/
+_perform_change_password) do werkzeug.security.generate_password_hash()/
+check_password_hash(), deliberately CPU-heavy work that would block the
+event loop for every concurrent request if run directly inside an
+`async def` route (no FastAPI threadpool to absorb it); register is also
+shared with GoogleAuthentSvc (google_authent_svc.py, not migrated). See
+/root/.claude/plans/moonlit-leaping-salamander.md. DB session scoping
+doesn't care either way, sync or async: it's wired once, at the router
+level, via Depends(async_db_session_dependency) -- see that dependency's
+own docstring for why an async-generator Depends works for both a sync
+and an async route (no per-route decorator needed for either).
 """
 
 from typing import List, Literal, Optional
@@ -58,13 +61,17 @@ from ai_server.dao.database import Bot, User, get_async_session
 from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_async_db_session, with_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.user_admin_svc import UserAdminService
 
-router = APIRouter(prefix="/api/users", tags=["users-admin"])
+router = APIRouter(
+    prefix="/api/users",
+    tags=["users-admin"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 app_logger = BotFactoryLogger()
@@ -130,7 +137,6 @@ def _enforce_user_scope(caller_id, target_id: int, allow_self: bool = True) -> N
 
 
 @router.post("", status_code=201, dependencies=[Depends(require_json_body(UserRegistrationRequest))])
-@with_db_session
 def register(body: UserRegistrationRequest):
     """Register a new user"""
     logger.info("POST /users - register called")
@@ -145,7 +151,6 @@ def register(body: UserRegistrationRequest):
 
 
 @router.put("/me", dependencies=[Depends(require_json_body(UserUpdateRequest))])
-@with_async_db_session
 async def update_users_self(body: UserUpdateRequest, claims: dict = Depends(any_role)):
     """Update current user's information"""
     user_id = claims["sub"]
@@ -154,7 +159,6 @@ async def update_users_self(body: UserUpdateRequest, claims: dict = Depends(any_
 
 
 @router.put("/{user_id:int}", dependencies=[Depends(require_json_body(UserUpdateRequest))])
-@with_async_db_session
 async def update_users_by_id(user_id: int, body: UserUpdateRequest, claims: dict = Depends(admin_or_user)):
     """Update a user's information (own guest, or any user if admin)"""
     logger.info(f"PUT /users/{user_id} - update_users_by_id called")
@@ -173,7 +177,6 @@ async def _update_users_impl(user_id, body: UserUpdateRequest):
 @router.post(
     "/guest", status_code=201, dependencies=[Depends(require_json_body(UserRegistrationRequest))]
 )
-@with_db_session
 def register_guest(body: UserRegistrationRequest, claims: dict = Depends(admin_or_user)):
     """Register a new guest user"""
     logger.info("POST /users/guest - register_guest called")
@@ -191,7 +194,6 @@ def register_guest(body: UserRegistrationRequest, claims: dict = Depends(admin_o
 
 
 @router.get("")
-@with_async_db_session
 async def get_all_users(claims: dict = Depends(admin_only)):
     """Get all users (admin only) -- excludes every other Admin account,
     matching authorize_user_scope's "no acting on peer admins" rule: those
@@ -205,7 +207,6 @@ async def get_all_users(claims: dict = Depends(admin_only)):
 
 
 @router.get("/guests")
-@with_async_db_session
 async def get_all_guests(claims: dict = Depends(admin_or_user)):
     """Get all guest users for current user"""
     logger.info("GET /users/guests - get_all_guests called")
@@ -216,7 +217,6 @@ async def get_all_guests(claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/role/{role}")
-@with_async_db_session
 async def get_users_by_role(role: str, claims: dict = Depends(admin_only)):
     """Get users by role"""
     logger.info(f"GET /users/role/{role} - get_users_by_role called")
@@ -237,7 +237,6 @@ async def _get_children(parent_id):
 
 
 @router.get("/children/me")
-@with_async_db_session
 async def get_children_self(claims: dict = Depends(admin_or_user)):
     """Get children users for current user"""
     user_id = claims["sub"]
@@ -246,7 +245,6 @@ async def get_children_self(claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/children/{parent_id:int}", dependencies=[Depends(admin_only)])
-@with_async_db_session
 async def get_children_admin(parent_id: int):
     """Get children users for a parent (admin only)"""
     logger.info(f"GET /users/children/{parent_id} - get_children_admin called")
@@ -261,7 +259,6 @@ async def delete_user(user_id):
 
 
 @router.delete("/me")
-@with_async_db_session
 async def delete_user_self(claims: dict = Depends(any_role)):
     user_id = claims["sub"]
     logger.info(f"DELETE /users/me - delete_user_self called for user_id={user_id}")
@@ -269,7 +266,6 @@ async def delete_user_self(claims: dict = Depends(any_role)):
 
 
 @router.delete("/{user_id:int}")
-@with_async_db_session
 async def delete_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Delete a user (own guest, or any user if admin)"""
     logger.info(f"DELETE /users/{user_id} - delete_user_by_id called")
@@ -280,7 +276,6 @@ async def delete_user_by_id(user_id: int, claims: dict = Depends(admin_or_user))
 @router.put(
     "/{user_id:int}/role", dependencies=[Depends(require_json_body(RoleChangeRequest))]
 )
-@with_async_db_session
 async def change_role(user_id: int, body: RoleChangeRequest, claims: dict = Depends(admin_only)):
     """Change le rôle d'un utilisateur"""
     logger.info(f"PUT /users/{user_id}/role - change_role called")
@@ -308,7 +303,6 @@ def change_password(user_id, body: PasswordChangeRequest):
 @router.put(
     "/password/me", dependencies=[Depends(require_json_body(PasswordChangeRequest))]
 )
-@with_db_session
 def change_password_self(body: PasswordChangeRequest, claims: dict = Depends(any_role)):
     """Change le mot de passe de l'utilisateur connecté"""
     logger.info("PUT /users/password/me - change_password_self called")
@@ -319,7 +313,6 @@ def change_password_self(body: PasswordChangeRequest, claims: dict = Depends(any
     "/password/guest/{guest_id:int}",
     dependencies=[Depends(require_json_body(PasswordChangeRequest))],
 )
-@with_db_session
 def change_password_guest(guest_id: int, body: PasswordChangeRequest, claims: dict = Depends(admin_or_user)):
     """Change le mot de passe de l'utilisateur connecté"""
     logger.info(f"PUT /users/password/guest/{guest_id} - change_password_guest called")
@@ -342,7 +335,6 @@ async def deactivate_user(user_id):
 
 
 @router.put("/{user_id:int}/deactivate")
-@with_async_db_session
 async def deactivate_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Deactivate a user (own guest, or any user if admin). No self-service
     deactivation, same as before the guest/admin merge -- there was never a
@@ -360,7 +352,6 @@ async def activate_user(user_id):
 
 
 @router.put("/{user_id:int}/activate")
-@with_async_db_session
 async def activate_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Activate a user (own guest, or any user if admin). No self-service
     activation, same as before the guest/admin merge -- there was never a
@@ -373,7 +364,6 @@ async def activate_user_by_id(user_id: int, claims: dict = Depends(admin_or_user
 @router.put(
     "/reassign-children", dependencies=[Depends(require_json_body(ReassignChildrenRequest))]
 )
-@with_async_db_session
 async def reassign_children(body: ReassignChildrenRequest, claims: dict = Depends(admin_only)):
     """Réassigne les utilisateurs enfants à un nouveau parent"""
     logger.info("PUT /users/reassign-children - reassign_children called")
@@ -399,7 +389,6 @@ async def get_user(user_id):
 
 
 @router.get("/me")
-@with_async_db_session
 async def get_user_self(claims: dict = Depends(any_role)):
     user_id = claims["sub"]
     logger.info(f"GET /users/me - get_user_self called for user_id={user_id}")
@@ -407,7 +396,6 @@ async def get_user_self(claims: dict = Depends(any_role)):
 
 
 @router.get("/{user_id:int}")
-@with_async_db_session
 async def get_user_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get a user's details (own guest, or any user if admin)"""
     logger.info(f"GET /users/{user_id} - get_user_by_id called")
@@ -425,7 +413,6 @@ async def _patch_user(parent_id, body: PatchBotRequest, guest_id=-1):
 
 
 @router.patch("/me", dependencies=[Depends(require_json_body(PatchBotRequest))])
-@with_async_db_session
 async def patch_user_self(body: PatchBotRequest, claims: dict = Depends(any_role)):
     """Update current user's selected bot"""
     user_id = claims["sub"]
@@ -436,7 +423,6 @@ async def patch_user_self(body: PatchBotRequest, claims: dict = Depends(any_role
 @router.patch(
     "/{target_user_id:int}", dependencies=[Depends(require_json_body(PatchBotRequest))]
 )
-@with_async_db_session
 async def patch_user_by_id(target_user_id: int, body: PatchBotRequest, claims: dict = Depends(admin_or_user)):
     """Update a user's selected bot (own guest, or any user if admin)"""
     logger.info(f"PATCH /users/{target_user_id} - patch_user_by_id called")
@@ -466,7 +452,6 @@ async def _get_selected_bot(user_id):
 
 
 @router.get("/selected_bot/me")
-@with_async_db_session
 async def get_selected_bot_self(claims: dict = Depends(any_role)):
     """Get current user's selected bot"""
     user_id = claims["sub"]
@@ -475,7 +460,6 @@ async def get_selected_bot_self(claims: dict = Depends(any_role)):
 
 
 @router.get("/selected_bot/{user_id:int}")
-@with_async_db_session
 async def get_selected_bot_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
     """Get a user's selected bot (own guest, or any user if admin)"""
     logger.info(f"GET /users/selected_bot/{user_id} - get_selected_bot_by_id called")

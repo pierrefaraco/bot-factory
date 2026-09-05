@@ -19,6 +19,12 @@ ImportedChaptersRequest/KnowledgeRequest's manual `if not data` /
 like in previous phases (a required `importedChapters` field means an
 absent/empty body already 400s via SpecTree's own gate first) --
 skipped here in favor of reading straight off the validated body model.
+
+All routes here stay sync (`def`): their services aren't migrated to the
+async engine. DB session scoping is still wired via Depends, not a
+decorator -- Depends(async_db_session_dependency) on the router itself --
+see that dependency's own docstring for why an async-generator Depends
+works even for a sync route (no per-route decorator needed).
 """
 
 import json
@@ -34,7 +40,7 @@ from ai_server.config.validation import pydantic_error_messages
 from ai_server.dao.database import ROOT_CHAPTER_ID
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
-from ai_server.dependencies.db_session import with_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_svc import BotService
@@ -42,7 +48,11 @@ from ai_server.services.knowledge_svc import KnowledgeSvc
 from ai_server.services.rag_svc import RagService
 from ai_server.services.template_svc import TemplateSvc
 
-router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
+router = APIRouter(
+    prefix="/api/knowledge",
+    tags=["knowledge"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 knowledge_svc = KnowledgeSvc(RagService())
@@ -88,7 +98,6 @@ class _FlaskFileStorageAdapter:
 
 @router.post("/save/{bot_id:int}/{knowledge_dad_id}", dependencies=[Depends(admin_or_user)])
 @router.put("/save/{bot_id:int}/{knowledge_dad_id}", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def create_empty_knowledge(bot_id: int, knowledge_dad_id: str):
     """Save or update a knowledge"""
     logger.info(f"POST/PUT /knowledge/save/{bot_id}/{knowledge_dad_id} - create_empty_knowledge called")
@@ -99,7 +108,6 @@ def create_empty_knowledge(bot_id: int, knowledge_dad_id: str):
 
 @router.post("/save/{bot_id:int}", dependencies=[Depends(admin_or_user)])
 @router.put("/save/{bot_id:int}", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def save_knowledge(
     bot_id: int,
     pdf: Optional[UploadFile] = File(default=None),
@@ -153,7 +161,6 @@ def patch_knowledge_admin(knowledge_id: int):
     "/save_knowledges/{bot_id:int}",
     dependencies=[Depends(require_json_body(ImportedChaptersRequest))],
 )
-@with_db_session
 def save_imported_knowledges(
     bot_id: int, body: ImportedChaptersRequest, claims: dict = Depends(admin_or_user)
 ):
@@ -178,7 +185,6 @@ def save_imported_knowledges(
 
 
 @router.get("/{bot_id:int}", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def get_knowledges(bot_id: int, claims: dict = Depends(admin_or_user)):
     """Get all knowledges for a bot"""
     logger.info(f"GET /knowledge/{bot_id} - get_knowledges called")
@@ -190,7 +196,6 @@ def get_knowledges(bot_id: int, claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/{bot_id:int}/{knowledge_id:int}", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def get_knowledge(bot_id: int, knowledge_id: int, claims: dict = Depends(admin_or_user)):
     """Get a specific knowledge"""
     logger.info(f"GET /knowledge/{bot_id}/{knowledge_id} - get_knowledge called")
@@ -204,7 +209,6 @@ def get_knowledge(bot_id: int, knowledge_id: int, claims: dict = Depends(admin_o
 
 
 @router.delete("/{knowledge_id:int}", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def delete_knowledge(knowledge_id: int, claims: dict = Depends(admin_or_user)):
     """Delete a specific knowledge"""
     logger.info(f"DELETE /knowledge/{knowledge_id} - delete_knowledge called")
@@ -220,7 +224,6 @@ def delete_knowledge(knowledge_id: int, claims: dict = Depends(admin_or_user)):
 
 
 @router.delete("/all/{bot_id:int}", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def delete_all_knowledges(bot_id: int, claims: dict = Depends(admin_or_user)):
     """Delete all knowledges for a bot"""
     logger.info(f"DELETE /knowledge/all/{bot_id} - delete_all_knowledges called")
@@ -236,7 +239,6 @@ def delete_all_knowledges(bot_id: int, claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/load_template/{bot_id:int}/{template_name}", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def load_template(bot_id: int, template_name: str, claims: dict = Depends(admin_or_user)):
     """Load a template into the database for a bot"""
     logger.info(f"GET /knowledge/load_template/{bot_id}/{template_name} - load_template called")

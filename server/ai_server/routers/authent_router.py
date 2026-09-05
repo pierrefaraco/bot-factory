@@ -27,14 +27,18 @@ from pydantic import BaseModel, EmailStr, Field
 
 from ai_server.dependencies.auth import get_current_claims
 from ai_server.dependencies.content_type import require_json_content_type
-from ai_server.dependencies.db_session import with_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.exceptions.service_exceptions import AuthenticationError, NotFoundError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.authent_svc import AuthenticationService
 from ai_server.services.google_authent_svc import GoogleAuthentSvc
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(
+    prefix="/api/auth",
+    tags=["auth"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 app_logger = BotFactoryLogger()
 auth_svc = AuthenticationService()
@@ -55,7 +59,6 @@ class GoogleOAuthRequest(BaseModel):
 
 
 @router.post("/login", dependencies=[Depends(require_json_content_type)])
-@with_db_session
 def login(body: LoginRequest):
     """User login with email and password. Returns a JWT access token."""
     app_logger.info("POST /auth/login - login called")
@@ -78,7 +81,6 @@ def login(body: LoginRequest):
 
 
 @router.post("/google", dependencies=[Depends(require_json_content_type)])
-@with_db_session
 def login_with_google(body: GoogleOAuthRequest):
     """User login with a Google OAuth credential. Returns a JWT access token."""
     app_logger.info("POST /auth/google - login_with_google called")
@@ -96,7 +98,6 @@ def login_with_google(body: GoogleOAuthRequest):
 
 
 @router.post("/refresh", dependencies=[Depends(require_json_content_type)])
-@with_db_session
 def refresh(claims: dict = Depends(get_current_claims)):
     """Refresh JWT access token"""
     user_id = claims["sub"]
@@ -107,7 +108,6 @@ def refresh(claims: dict = Depends(get_current_claims)):
 
 
 @router.post("/logout", dependencies=[Depends(require_json_content_type)])
-@with_db_session
 def logout(claims: dict = Depends(get_current_claims)):
     """User logout"""
     app_logger.info("POST /auth/logout - logout called")

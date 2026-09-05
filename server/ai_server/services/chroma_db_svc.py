@@ -98,6 +98,44 @@ class ChromaDbService(BaseService[DocumentDto]):
         elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info(f"ChromaDB connection OK ({elapsed_ms:.1f}ms).")
 
+    def _build_client_and_db(self, collection_name: str):
+        """Construct a fresh chromadb client + Chroma vector store for
+        `collection_name` as plain local values (no `self` mutation) --
+        shared by _perform_build() (which does assign the result to
+        self.client/self.db/self.retriever, for the other methods below
+        that read those back within the same call) and build_retriever()
+        (which deliberately doesn't, see its own docstring)."""
+        if self.config.CHROMA_CONTAINER:
+            mode = "container (client mode)"
+            client = chromadb.HttpClient(
+                host=self.config.CHROMA_HOST,
+                port=self.config.CHROMA_PORT,
+                settings=Settings(allow_reset=True),
+            )
+            db = Chroma(
+                client=client,
+                collection_name=collection_name,
+                embedding_function=self.embedding_function,
+            )
+        elif self.config.PERSIST:
+            mode = f"local persistent (dir={self.config.PERSIST_DIRECTORY})"
+            client = chromadb.PersistentClient(settings=Settings(allow_reset=True))
+            db = Chroma(
+                client=client,
+                persist_directory=self.config.PERSIST_DIRECTORY,
+                collection_name=collection_name,
+                embedding_function=self.embedding_function,
+            )
+        else:
+            mode = "local ephemeral (no persistence)"
+            client = chromadb.EphemeralClient()
+            db = Chroma(
+                client=client,
+                collection_name=collection_name,
+                embedding_function=self.embedding_function,
+            )
+        return client, db, mode
+
     def build_collection(self, collection_name: str) -> None:
         """
         Build and initialize a collection.
@@ -114,38 +152,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         logger.debug(f"Building ChromaDB collection: {collection_name}")
         start = time.perf_counter()
         try:
-            if self.config.CHROMA_CONTAINER:
-                mode = "container (client mode)"
-                self.client = chromadb.HttpClient(
-                    host=self.config.CHROMA_HOST,
-                    port=self.config.CHROMA_PORT,
-                    settings=Settings(allow_reset=True),
-                )
-                self.db = Chroma(
-                    client=self.client,
-                    collection_name=collection_name,
-                    embedding_function=self.embedding_function,
-                )
-
-            if self.config.PERSIST and not self.config.CHROMA_CONTAINER:
-                mode = f"local persistent (dir={self.config.PERSIST_DIRECTORY})"
-                self.client = chromadb.PersistentClient(settings=Settings(allow_reset=True))
-
-                self.db = Chroma(
-                    client=self.client,
-                    persist_directory=self.config.PERSIST_DIRECTORY,
-                    collection_name=collection_name,
-                    embedding_function=self.embedding_function,
-                )
-
-            if not self.config.PERSIST and not self.config.CHROMA_CONTAINER:
-                mode = "local ephemeral (no persistence)"
-                self.client = chromadb.EphemeralClient()
-                self.db = Chroma(
-                    client=self.client,
-                    collection_name=collection_name,
-                    embedding_function=self.embedding_function,
-                )
+            self.client, self.db, mode = self._build_client_and_db(collection_name)
             self.retriever = self.db.as_retriever(
                 search_kwargs={"k": self.config.RAG_RETRIEVER_K}
             )
@@ -159,6 +166,36 @@ class ChromaDbService(BaseService[DocumentDto]):
         logger.info(
             f"ChromaDB collection '{collection_name}' built - mode={mode} - {elapsed_ms:.1f}ms"
         )
+
+    def build_retriever(self, collection_name: str) -> VectorStoreRetriever:
+        """Atomic, concurrency-safe counterpart of
+        build_collection()+get_retriever(): this class is a singleton
+        shared by every concurrent request, and build_collection()/
+        get_retriever() communicate only through self.client/self.db/
+        self.retriever -- two requests for two different bots (different
+        collection_name) can interleave between one's build_collection()
+        and its own get_retriever(), so one ends up invoking the *other*
+        bot's retriever. Returning the retriever directly, built from
+        purely local values, removes that shared-state hand-off entirely.
+        """
+        logger.debug(f"Building retriever for ChromaDB collection: {collection_name}")
+        start = time.perf_counter()
+        try:
+            _client, db, mode = self._build_client_and_db(collection_name)
+            retriever = db.as_retriever(
+                search_kwargs={"k": self.config.RAG_RETRIEVER_K}
+            )
+        except Exception as e:
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.exception(
+                f"Failed to build retriever for collection '{collection_name}' after {elapsed_ms:.1f}ms: {e}"
+            )
+            raise
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            f"Retriever for ChromaDB collection '{collection_name}' built - mode={mode} - {elapsed_ms:.1f}ms"
+        )
+        return retriever
 
     def create(self, data: Dict[str, Any]) -> DocumentDto:
         """

@@ -25,14 +25,17 @@ Path params use the `{bot_id:int}` Starlette converter (not a bare
 segment falls through to the next route (e.g. "/me", "/owned") instead
 of matching here and 422ing.
 
-get_user_bots/get_all_bots/get_all_owned_bots are async (`async def` +
-@with_async_db_session): their BotService methods
-(get_owned_and_assigned_bots/get_all/get_bots_by_user, plus the
-get_assigned_bots they compose) have no caller outside this router. The
-other routes stay sync -- create_bot/update_bot_admin/delete_bot rely on
-BotService methods shared with PromptService, UserAdminService, or
-KnowledgeSvc/rag_svc.py, none migrated yet; see
-/root/.claude/plans/moonlit-leaping-salamander.md.
+get_user_bots/get_all_bots/get_all_owned_bots are async (`async def`):
+their BotService methods (get_owned_and_assigned_bots/get_all/
+get_bots_by_user, plus the get_assigned_bots they compose) have no
+caller outside this router. The other routes stay sync --
+create_bot/update_bot_admin/delete_bot rely on BotService methods shared
+with PromptService, UserAdminService, or KnowledgeSvc/rag_svc.py, none
+migrated yet; see /root/.claude/plans/moonlit-leaping-salamander.md. DB
+session scoping doesn't care either way: it's wired once, at the router
+level, via Depends(async_db_session_dependency) -- see that dependency's
+own docstring for why an async-generator Depends works for both a sync
+and an async route (no per-route decorator needed for either).
 """
 
 from typing import List, Optional
@@ -44,13 +47,17 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dao.database import User, db
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_content_type
-from ai_server.dependencies.db_session import with_async_db_session, with_db_session
+from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.dto.bot_dto import BotDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_svc import BotService
 
-router = APIRouter(prefix="/api/bot", tags=["bot"])
+router = APIRouter(
+    prefix="/api/bot",
+    tags=["bot"],
+    dependencies=[Depends(async_db_session_dependency)],
+)
 
 logger = BotFactoryLogger()
 bot_svc = BotService()
@@ -84,7 +91,6 @@ def _can_modify_bot(user: User, bot_id: int) -> bool:
 
 
 @router.post("", status_code=201, dependencies=[Depends(require_json_content_type)])
-@with_db_session
 def create_bot(claims: dict = Depends(admin_or_user)):
     """Create a new bot with random parameters for the authenticated user."""
     logger.info("POST /bot - create_bot called")
@@ -103,7 +109,6 @@ def create_bot(claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/me", dependencies=[Depends(any_role)])
-@with_async_db_session
 async def get_user_bots(claims: dict = Depends(any_role)):
     """Récupère tous les bots d'un utilisateur"""
     logger.info("GET /bot/me - get_user_bots called")
@@ -119,7 +124,6 @@ async def get_user_bots(claims: dict = Depends(any_role)):
 
 
 @router.get("", dependencies=[Depends(admin_or_user)])
-@with_async_db_session
 async def get_all_bots():
     """Récupère tous les bots"""
     logger.info("GET /bot - get_all_bots called")
@@ -129,7 +133,6 @@ async def get_all_bots():
 
 
 @router.get("/owned", dependencies=[Depends(any_role)])
-@with_async_db_session
 async def get_all_owned_bots(claims: dict = Depends(any_role)):
     """Récupère tous les bots"""
     user_id = claims["sub"]
@@ -140,7 +143,6 @@ async def get_all_owned_bots(claims: dict = Depends(any_role)):
 
 
 @router.get("/parameters-description", dependencies=[Depends(admin_or_user)])
-@with_db_session
 def get_bot_parameters_description():
     logger.info("GET /bot/parameters-description - get_bot_parameters_description called")
     result = bot_svc.get_bot_parameters_description()
@@ -149,7 +151,6 @@ def get_bot_parameters_description():
 
 
 @router.patch("/selectbot/{bot_id:int}", status_code=204, dependencies=[Depends(any_role)])
-@with_db_session
 def select_bot(bot_id: int, claims: dict = Depends(any_role)):
     """Select a bot by its ID and user ID."""
     logger.info(f"PATCH /bot/selectbot/{bot_id} - select_bot called")
@@ -166,7 +167,6 @@ def select_bot(bot_id: int, claims: dict = Depends(any_role)):
 
 
 @router.get("/{bot_id:int}", dependencies=[Depends(any_role)])
-@with_db_session
 def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Query(default="minimal")):
     """Get a bot by its ID."""
     logger.info(f"GET /bot/{bot_id} - get_bot called")
@@ -199,7 +199,6 @@ def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Query(def
 
 
 @router.put("/{bot_id:int}", dependencies=[Depends(require_json_content_type)])
-@with_db_session
 def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = Depends(admin_or_user)):
     """Met à jour un bot existant"""
     logger.info(f"PUT /bot/{bot_id} - update_bot_admin called")
@@ -224,7 +223,6 @@ def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = Depends
 
 
 @router.delete("/{bot_id:int}", status_code=204, dependencies=[Depends(admin_or_user)])
-@with_db_session
 def delete_bot(bot_id: int, claims: dict = Depends(admin_or_user)):
     """Supprime un bot"""
     logger.info(f"DELETE /bot/{bot_id} - delete_bot called")

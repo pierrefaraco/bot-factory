@@ -1,11 +1,10 @@
-from ai_server.dao.database import User
 from langchain_community.llms import Ollama
 
 # from langchain.embeddings.ollama import OllamaEmbeddings
 from langchain_mistralai.chat_models import ChatMistralAI
 from ai_server.config.config import app_config
 from ai_server.decorators.singleton import singleton
-from langchain_core.callbacks.base import BaseCallbackHandler
+from langchain_core.callbacks.base import AsyncCallbackHandler
 from typing import Any, Optional, Dict
 from ai_server.services.token_tracking_svc import TokenTrackingService
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -14,13 +13,25 @@ import time
 
 
 
-class TokenCountingCallback(BaseCallbackHandler):
-    """Callback pour compter les tokens consommés lors des appels LLM"""
+class TokenCountingCallback(AsyncCallbackHandler):
+    """Callback pour compter les tokens consommés lors des appels LLM.
+
+    Async (not BaseCallbackHandler): rag_svc.py's chain only ever runs via
+    .ainvoke()/.astream() now, and LangChain's async callback manager
+    awaits an async handler's on_llm_end directly -- same task, no thread
+    hop (see langchain_core.callbacks.manager._ahandle_event_for_handler's
+    `if inspect.iscoroutinefunction(event)` branch) -- so this can use
+    get_async_session()-based calls (user_svc.get_user_dto_by_id,
+    token_tracking_service.record_token_usage) instead of the sync
+    Model.query ones a plain BaseCallbackHandler would have been limited
+    to. That in turn means the DB write this callback does mid-stream no
+    longer needs the sync db_session_scope() dependencies/db_session.py's
+    stream_with_async_db_session used to open alongside the async one."""
 
     def __init__(self, user_id: int, bot_id: int, session_id: Optional[int] = None):
         # Import lazy pour éviter l'importation circulaire
         from ai_server.services.user_admin_svc import UserAdminService
-       
+
         self.user_id = user_id
         self.bot_id = bot_id
         self.session_id = session_id
@@ -32,7 +43,7 @@ class TokenCountingCallback(BaseCallbackHandler):
         self.user_svc = UserAdminService()
         self.logger = BotFactoryLogger()
 
-    def on_llm_end(self, response: Any, **kwargs) -> None:
+    async def on_llm_end(self, response: Any, **kwargs) -> None:
         """Appelé à la fin d'un appel LLM"""
         try:
             # Pour ChatMistralAI, les tokens sont dans les generations
@@ -53,7 +64,7 @@ class TokenCountingCallback(BaseCallbackHandler):
                             response_metadata = message["response_metadata"]
                             self.model_name = response_metadata.get("model")
 
-                        user: User = self.user_svc.get_user_by_id(
+                        user = await self.user_svc.get_user_dto_by_id(
                             self.user_id
                         )  # Just to ensure user exists
                         user_guest_id = -1
@@ -61,7 +72,7 @@ class TokenCountingCallback(BaseCallbackHandler):
                             self.user_id = user.parent_id
                             user_guest_id = user.id
                         # Enregistrer l'utilisation des tokens
-                        self.token_tracking_service.record_token_usage(
+                        await self.token_tracking_service.record_token_usage(
                             user_id=self.user_id,
                             user_guest_id=user_guest_id,
                             bot_id=self.bot_id,
@@ -88,7 +99,7 @@ class TokenCountingCallback(BaseCallbackHandler):
                     self.model_name = response.llm_output.get("model_name")
 
                     # Enregistrer l'utilisation des tokens
-                    self.token_tracking_service.record_token_usage(
+                    await self.token_tracking_service.record_token_usage(
                         user_id=self.user_id,
                         bot_id=self.bot_id,
                         prompt_tokens=self.prompt_tokens,
