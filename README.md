@@ -271,7 +271,7 @@ DATABASE_URL=mysql+pymysql://botcraft_user:123456789@127.0.0.1:3306/botcraft?cha
 ### Initialize Database
 ```bash
 make migrate       # Run all pending migrations (inside the `api` Docker container)
-make db-upgrade     # Run all pending migrations locally via uv (uses DATABASE_URL from server/.env)
+make db-upgrade     # Run all pending migrations locally via uv (DATABASE_URL built from the root .env's MYSQL_* vars)
 ```
 
 ### Database Operations

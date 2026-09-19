@@ -204,9 +204,13 @@ db-shell:
 	@echo "Connecting to MySQL database..."
 	docker-compose exec db mysql -u $${MYSQL_USER:-botcraft_user} -p$${MYSQL_PASSWORD:-123456789} $${MYSQL_DATABASE:-botcraft}
 
-# Alembic migrations, run locally via uv (DATABASE_URL loaded from server/.env).
+# Alembic migrations, run locally via uv (DATABASE_URL built from the root
+# .env's MYSQL_* vars, host forced to localhost since this runs on the host,
+# not inside the docker-compose network).
 # Requires a reachable MySQL (e.g. `make db-only` or a local instance) — no
 # Docker container exec needed since the DB port is published to the host.
+DB_ENV_CMD = set -a && . ../../.env && set +a && export DATABASE_URL="mysql+pymysql://$${MYSQL_USER:-botcraft_user}:$${MYSQL_PASSWORD:-123456789}@127.0.0.1:3306/$${MYSQL_DATABASE:-botcraft}?charset=utf8mb4"
+
 db-init:
 	@bash server/db/bootstrap_alembic.sh
 
@@ -215,33 +219,33 @@ ifndef MSG
 	$(error Usage: make db-create MSG="Description of the migration")
 endif
 	@echo "Creating new migration: $(MSG)"
-	cd server/db && set -a && . ../.env && set +a && uv run alembic revision --autogenerate -m "$(MSG)"
+	cd server/db && $(DB_ENV_CMD) && uv run alembic revision --autogenerate -m "$(MSG)"
 	@echo "✓ Migration created — review the generated file in server/db/alembic/versions/"
 
 db-upgrade:
 	@echo "Applying pending migrations..."
-	cd server/db && set -a && . ../.env && set +a && uv run alembic upgrade head
+	cd server/db && $(DB_ENV_CMD) && uv run alembic upgrade head
 	@echo "✓ Migrations applied"
 
 db-downgrade:
 	@echo "Reverting last migration..."
-	cd server/db && set -a && . ../.env && set +a && uv run alembic downgrade -1
+	cd server/db && $(DB_ENV_CMD) && uv run alembic downgrade -1
 	@echo "✓ Migration reverted"
 
 db-history:
 	@echo "Migration history:"
-	cd server/db && set -a && . ../.env && set +a && uv run alembic history
+	cd server/db && $(DB_ENV_CMD) && uv run alembic history
 
 db-current:
 	@echo "Current database revision:"
-	cd server/db && set -a && . ../.env && set +a && uv run alembic current
+	cd server/db && $(DB_ENV_CMD) && uv run alembic current
 
 db-stamp:
 ifndef REV
 	$(error Usage: make db-stamp REV=<revision|head>)
 endif
 	@echo "Stamping database at revision: $(REV)"
-	cd server/db && set -a && . ../.env && set +a && uv run alembic stamp $(REV)
+	cd server/db && $(DB_ENV_CMD) && uv run alembic stamp $(REV)
 	@echo "✓ Database stamped"
 
 # Cleanup
