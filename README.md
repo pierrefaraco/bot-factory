@@ -105,7 +105,7 @@ cp .env.example .env
 # Edit .env and configure (optional for development)
 nano .env  # or use your editor
 
-##################### Only if you run the project, follow these 3 steps  #####################
+##################### Only if you run the project for the first time, follow these 3 steps  #####################
 # run only mysql container 
 make db-only
 # init the database
