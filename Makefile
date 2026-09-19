@@ -205,11 +205,12 @@ db-shell:
 	docker-compose exec db mysql -u $${MYSQL_USER:-botcraft_user} -p$${MYSQL_PASSWORD:-123456789} $${MYSQL_DATABASE:-botcraft}
 
 # Alembic migrations, run locally via uv (DATABASE_URL built from the root
-# .env's MYSQL_* vars, host forced to localhost since this runs on the host,
-# not inside the docker-compose network).
-# Requires a reachable MySQL (e.g. `make db-only` or a local instance) — no
-# Docker container exec needed since the DB port is published to the host.
-DB_ENV_CMD = set -a && . ../../.env && set +a && export DATABASE_URL="mysql+pymysql://$${MYSQL_USER:-botcraft_user}:$${MYSQL_PASSWORD:-123456789}@127.0.0.1:3306/$${MYSQL_DATABASE:-botcraft}?charset=utf8mb4"
+# .env's MYSQL_* vars). Host comes from MYSQL_HOST in .env (defaults to "db"):
+# that resolves when running from a devcontainer attached to the
+# docker-compose network (see README "Database Connection Error"); override
+# MYSQL_HOST=127.0.0.1 in .env instead if you're on the Docker host itself.
+# Requires a reachable MySQL (e.g. `make db-only` or a local instance).
+DB_ENV_CMD = set -a && . ../../.env && set +a && export DATABASE_URL="mysql+pymysql://$${MYSQL_USER:-botcraft_user}:$${MYSQL_PASSWORD:-123456789}@$${MYSQL_HOST:-db}:3306/$${MYSQL_DATABASE:-botcraft}?charset=utf8mb4"
 
 db-init:
 	@bash server/db/bootstrap_alembic.sh
