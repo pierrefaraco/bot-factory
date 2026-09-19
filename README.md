@@ -105,12 +105,21 @@ cp .env.example .env
 # Edit .env and configure (optional for development)
 nano .env  # or use your editor
 
+##################### Only if you run the project, follow these 3 steps  #####################
+# run only mysql container 
+make db-only
+# init the database
+make db-upgrade
+# onece db is created remove all containers
+make down
+###############################################################################################
+
 # Start all services
 make setup
 make dev
 
 # Services are now running:
-# - Frontend: http://localhost:4200
+# - Frontend: http://localhost:8080
 # - Backend API: http://localhost:444
 # - MySQL: localhost:3306
 ```
@@ -183,7 +192,7 @@ uv sync                # Creates .venv and installs dependencies
 ```bash
 cd client
 npm install
-npm start          # Starts on port 4200
+npm start          # Starts on port 8080
 ```
 
 ### Option 3: Development Mode (Individual Services)
@@ -402,7 +411,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) - "Deployment Readiness" section.
 ### Port Already in Use
 ```bash
 # Find process using port
-lsof -i :4200   # Frontend
+lsof -i :8080   # Frontend
 lsof -i :444    # Backend
 lsof -i :3306   # Database
 lsof -i :8000   # ChromaDB

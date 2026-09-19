@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve --host 0.0.0.0 --port 443 --poll 2000",
+    "start": "ng serve --host 0.0.0.0 --port 8080 --poll 2000",
     "build": "ng build",
     "build:prod": "ng build --configuration production && node optimize-build.js",
     "watch": "ng build --watch --configuration development",

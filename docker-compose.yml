@@ -68,12 +68,12 @@ services:
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
     ports:
       - "4444:444"
-    volumes:
-      # HOST_PROJECT_PATH: absolute path of this project as seen by the Docker
-      # daemon. Needed when compose runs inside a dev-container whose paths
-      # differ from the host's (e.g. /home/devuser/workspace vs /mnt/c/...).
-      - ${HOST_PROJECT_PATH:-.}/server/ai_server:/app/ai_server
-      - ${HOST_PROJECT_PATH:-.}/server/db:/app/db
+    # volumes:
+    #   # HOST_PROJECT_PATH: absolute path of this project as seen by the Docker
+    #   # daemon. Needed when compose runs inside a dev-container whose paths
+    #   # differ from the host's (e.g. /home/devuser/workspace vs /mnt/c/...).
+    #   - ${HOST_PROJECT_PATH:-.}/server/ai_server:/app/ai_server
+    #   - ${HOST_PROJECT_PATH:-.}/server/db:/app/db
     networks:
       - botfactory-network
     healthcheck:
@@ -95,7 +95,7 @@ services:
       # to reach a backend run locally via server/z-run.sh instead.
       API_HOST: ${API_HOST:-api}
     ports:
-      - "4200:8080"
+      - "8080:8080"
     networks:
       - botfactory-network
     healthcheck:

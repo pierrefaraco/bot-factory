@@ -1,11 +1,11 @@
 import { defineConfig } from '@playwright/test';
 import * as path from 'path';
 
-// The Angular dev server (ng serve --port 443, see package.json) proxies
+// The Angular dev server (ng serve --port 8080, see package.json) proxies
 // /api/* to the Flask backend (proxy.conf.json -> 127.0.0.1:444), so hitting
 // this single baseURL exercises the exact same request path a real browser
 // session uses -- no separate API base URL needed.
-const BASE_URL = process.env['E2E_BASE_URL'] || 'http://localhost:443';
+const BASE_URL = process.env['E2E_BASE_URL'] || 'http://localhost:8080';
 const AUTH_DIR = path.join(__dirname, 'e2e', '.auth');
 
 export default defineConfig({

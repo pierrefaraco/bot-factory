@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { login, authHeaders, expectOk } from './support/api-client';
 
-const BASE_URL = process.env['E2E_BASE_URL'] || 'http://localhost:443';
+const BASE_URL = process.env['E2E_BASE_URL'] || 'http://localhost:8080';
 const AUTH_DIR = path.join(__dirname, '.auth');
 const RUN_ID = Date.now();
 
