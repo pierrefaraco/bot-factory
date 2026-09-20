@@ -384,10 +384,8 @@ walkthrough (DNS, `.env`, one-time bootstrap). Short version, once DNS and
 `.env` (`DOMAIN`, `LETSENCRYPT_EMAIL`) are set:
 
 ```bash
-make prod-build
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build db chromadb api web certbot
-make certbot-init   # one-time, obtains the first certificate
-make prod-up        # every subsequent start
+make prod-deploy   # one-time, first deploy on a fresh host: build, start, get the HTTPS cert
+make prod-up       # every subsequent start
 ```
 
 ### Manual Deployment

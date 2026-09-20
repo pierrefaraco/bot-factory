@@ -38,16 +38,13 @@ reachable from outside the host, on 80 and 443.
    origins" in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
    -- Google Identity Services rejects the popup otherwise.
 
-5. **Build and start everything except the reverse proxy**:
+5. **Build, start, and get the first certificate** (builds the images,
+   starts every service except `reverse-proxy` -- which has no certificate
+   yet -- then bootstraps it: a temporary self-signed cert so nginx can
+   start, the real Let's Encrypt cert via the webroot challenge, and a
+   reload; see `deploy/certbot/init-letsencrypt.sh` for the details):
    ```bash
-   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build db chromadb api web certbot
-   ```
-
-6. **Bootstrap the first certificate** (obtains a real cert, then starts
-   `reverse-proxy` with it -- see the script for why this is a separate
-   step from every other service):
-   ```bash
-   ./deploy/certbot/init-letsencrypt.sh
+   make prod-deploy
    ```
 
 `https://<DOMAIN>` should now be live. Renewal is automatic from here on:
@@ -58,13 +55,13 @@ certificate is close to expiry.
 
 ```bash
 # Bring the whole prod stack up (after the one-time setup above)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+make prod-up
 
 # Logs
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f reverse-proxy
+make prod-logs
 
 # Stop everything
-docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+make prod-down
 ```
 
 ## Troubleshooting
