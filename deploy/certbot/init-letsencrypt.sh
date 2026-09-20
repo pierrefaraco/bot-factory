@@ -37,6 +37,23 @@ $COMPOSE run --rm --entrypoint sh certbot -c "
 echo "### Starting reverse-proxy with the dummy certificate ..."
 $COMPOSE up -d reverse-proxy
 
+# "up -d" returns as soon as the container process starts, not once nginx has
+# actually loaded the certificate -- deleting the dummy cert before that
+# happens crashes nginx (it re-reads the cert on every restart) and leaves it
+# permanently unable to start, since it now has no certificate at all. Wait
+# for the nginx master process to actually be running first.
+echo "### Waiting for reverse-proxy to finish starting ..."
+for i in $(seq 1 30); do
+  if $COMPOSE exec -T reverse-proxy pgrep -x nginx >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" = 30 ]; then
+    echo "### reverse-proxy did not start in time -- check 'docker compose logs reverse-proxy'." >&2
+    exit 1
+  fi
+  sleep 1
+done
+
 echo "### Deleting dummy certificate ..."
 $COMPOSE run --rm --entrypoint sh certbot -c "
   rm -rf '/etc/letsencrypt/live/$DOMAIN' \
