@@ -20,9 +20,10 @@
         <div class="nav-links" [class.mobile-open]="mobileMenuOpen">
           <a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link" class="nav-link">Features</a>
           <a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link" class="nav-link">How It Works</a>
-          <a (click)="scrollToSection('stats')" (keydown.enter)="scrollToSection('stats')" tabindex="0" role="link" class="nav-link">Stats</a>
+          <a (click)="scrollToSection('stack')" (keydown.enter)="scrollToSection('stack')" tabindex="0" role="link" class="nav-link">Tech Stack</a>
+          <a (click)="scrollToSection('contact')" (keydown.enter)="scrollToSection('contact')" tabindex="0" role="link" class="nav-link">Contact</a>
           <div class="nav-buttons">
-            <app-button [label]="'Login / Signup'" [type]="'custom-button'" [color]="'var(--text-on-accent)'"
+            <app-button [label]="'Try the Demo'" [type]="'custom-button'" [color]="'var(--text-on-accent)'"
               [backgroundColor]="'var(--text-accent)'" [disabled]="false"
               (buttonClickedEvent)="navigateToAuth(); closeMobileMenu()">
             </app-button>
@@ -40,22 +41,23 @@
       <div class="hero-content">
         <div class="hero-text">
           <h1 class="hero-title">
-            Create Your Perfect
-            <span class="gradient-text">AI Companion</span>
+            A Full-Stack AI Product,
+            <span class="gradient-text">Built From Scratch</span>
           </h1>
           <p class="hero-subtitle">
-            Build, customize, and chat with intelligent bots tailored to your needs.
-            Powered by advanced AI technology, designed for everyone.
+            Bot Factory is a portfolio project by Pierre Faraco: an Angular + FastAPI
+            application to design, customize, and chat with your own AI bots — RAG,
+            JWT + Google OAuth, and Docker Compose included. Try the live demo or read the code.
           </p>
           <div class="hero-cta">
-            <app-button [label]="'Get Started Free'" [icon]="'arrow_forward'" [type]="'custom-button'"
+            <app-button [label]="'Try the Live Demo'" [icon]="'arrow_forward'" [type]="'custom-button'"
               [color]="'var(--text-on-accent)'" [backgroundColor]="'var(--text-accent)'" [size]="'large'"
               (buttonClickedEvent)="navigateToAuth()" [disabled]="false">
             </app-button>
-            <app-button [label]="'Learn More'" [icon]="'play_circle'" [type]="'link-button'"
-              [color]="'var(--text-primary)'" [backgroundColor]="'transparent'" [size]="'large'"
-              (buttonClickedEvent)="scrollToSection('features')" [disabled]="false">
-            </app-button>
+            <a class="external-link-button size-large" [href]="githubUrl" target="_blank" rel="noopener noreferrer">
+              <span class="material-icons">code</span>
+              <span>View Source Code</span>
+            </a>
           </div>
         </div>
         <div class="hero-image">
@@ -75,13 +77,17 @@
     </div>
   </section>
 
-  <!-- Stats Section -->
-  <section id="stats" class="stats-section">
+  <!-- Tech Stack Section -->
+  <section id="stack" class="stack-section">
     <div class="container">
-      <div class="stats-grid">
-        <div class="stat-card" *ngFor="let stat of stats">
-          <div class="stat-value">{{ stat.value }}</div>
-          <div class="stat-label">{{ stat.label }}</div>
+      <div class="section-header">
+        <h2 class="section-title">Built With</h2>
+        <p class="section-subtitle">The stack powering this project, end to end</p>
+      </div>
+      <div class="stack-grid">
+        <div class="stack-card" *ngFor="let tech of techStack">
+          <span class="material-icons stack-icon">{{ tech.icon }}</span>
+          <span class="stack-name">{{ tech.name }}</span>
         </div>
       </div>
     </div>
@@ -91,8 +97,8 @@
   <section id="features" class="features-section">
     <div class="container">
       <div class="section-header">
-        <h2 class="section-title">Powerful Features</h2>
-        <p class="section-subtitle">Everything you need to create amazing AI experiences</p>
+        <h2 class="section-title">What You Can Do In The Demo</h2>
+        <p class="section-subtitle">This isn't a mockup — every one of these features actually works</p>
       </div>
       <div class="features-grid">
         <div class="feature-card" *ngFor="let feature of features">
@@ -111,7 +117,7 @@
     <div class="container">
       <div class="section-header">
         <h2 class="section-title">How It Works</h2>
-        <p class="section-subtitle">Get started in three simple steps</p>
+        <p class="section-subtitle">Three steps from zero to your own AI bot</p>
       </div>
       <div class="steps-container">
         <div class="step-card" *ngFor="let step of steps">
@@ -130,18 +136,27 @@
   <section class="cta-section">
     <div class="container">
       <div class="cta-content">
-        <h2 class="cta-title">Ready to Get Started?</h2>
-        <p class="cta-subtitle">Join thousands of users creating amazing AI experiences</p>
-        <app-button [label]="'Create Your Bot Now'" [icon]="'rocket_launch'" [type]="'custom-button'"
-          [color]="'var(--text-on-accent)'" [backgroundColor]="'var(--text-accent)'" [size]="'large'"
-          (buttonClickedEvent)="navigateToAuth()">
-        </app-button>
+        <h2 class="cta-title">Like What You See?</h2>
+        <p class="cta-subtitle">
+          I'm actively looking for full-stack / AI engineering opportunities.
+          Let's talk about how I can bring this level of craft to your team.
+        </p>
+        <div class="cta-buttons">
+          <a class="external-link-button size-large on-accent" [href]="'mailto:' + contactEmail">
+            <span class="material-icons">mail</span>
+            <span>Get In Touch</span>
+          </a>
+          <a class="external-link-button size-large on-accent" [href]="linkedinUrl" target="_blank" rel="noopener noreferrer">
+            <span class="material-icons">work</span>
+            <span>Connect on LinkedIn</span>
+          </a>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- Footer -->
-  <footer class="footer">
+  <footer id="contact" class="footer">
     <div class="container">
       <div class="footer-content">
         <div class="footer-section">
@@ -150,36 +165,38 @@
             <span class="logo-text">Bot Factory</span>
           </div>
           <p class="footer-description">
-            Create intelligent AI companions tailored to your needs.
+            A full-stack AI playground — portfolio project by Pierre Faraco
+            showcasing production-style engineering practices.
           </p>
         </div>
         <div class="footer-section">
-          <h4 class="footer-title">Product</h4>
+          <h4 class="footer-title">Project</h4>
           <ul class="footer-links">
             <li><a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link">Features</a></li>
             <li><a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link">How It Works</a></li>
-            <li><a (click)="navigateToAuth()" (keydown.enter)="navigateToAuth()" tabindex="0" role="link">Pricing</a></li>
-          </ul>
-        </div>
-        <div class="footer-section">
-          <h4 class="footer-title">Company</h4>
-          <ul class="footer-links">
-            <li><a (click)="navigateToAuth()" (keydown.enter)="navigateToAuth()" tabindex="0" role="link">About</a></li>
-            <li><a (click)="navigateToAuth()" (keydown.enter)="navigateToAuth()" tabindex="0" role="link">Contact</a></li>
-            <li><a (click)="navigateToPolicies()" (keydown.enter)="navigateToPolicies()" tabindex="0" role="link">Policies</a></li>
+            <li><a (click)="scrollToSection('stack')" (keydown.enter)="scrollToSection('stack')" tabindex="0" role="link">Tech Stack</a></li>
           </ul>
         </div>
         <div class="footer-section">
           <h4 class="footer-title">Connect</h4>
           <div class="social-links">
-            <a class="social-link"><span class="material-icons">language</span></a>
-            <a class="social-link"><span class="material-icons">mail</span></a>
-            <a class="social-link"><span class="material-icons">chat</span></a>
+            <a class="social-link" [href]="githubUrl" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
+              <span class="material-icons">code</span>
+            </a>
+            <a class="social-link" [href]="linkedinUrl" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn profile">
+              <span class="material-icons">work</span>
+            </a>
+            <a class="social-link" [href]="'mailto:' + contactEmail" aria-label="Send an email">
+              <span class="material-icons">mail</span>
+            </a>
           </div>
         </div>
       </div>
       <div class="footer-bottom">
-        <p>&copy; 2026 Bot Factory. All rights reserved.</p>
+        <p>
+          &copy; 2026 Pierre Faraco — Portfolio project.
+          <a class="footer-bottom-link" (click)="navigateToPolicies()" (keydown.enter)="navigateToPolicies()" tabindex="0" role="link">Policies</a>
+        </p>
       </div>
     </div>
   </footer>

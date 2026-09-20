@@ -1,10 +1,9 @@
-version: '3.9'
-
 services:
   # MySQL Database
   db:
     image: mysql:8.0
     container_name: botfactory-db
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-botcraft}
@@ -25,6 +24,7 @@ services:
   chromadb:
     image: chromadb/chroma:0.5.20
     container_name: botfactory-chromadb
+    restart: unless-stopped
     environment:
       IS_PERSISTENT: "TRUE"
       PERSIST_DIRECTORY: /chroma/chroma
@@ -47,6 +47,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: botfactory-api
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
@@ -66,6 +67,7 @@ services:
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-123}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-a}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com}
     ports:
       - "4444:444"
     # volumes:
@@ -88,14 +90,18 @@ services:
       context: ./client
       dockerfile: Dockerfile
     container_name: botfactory-web
+    restart: unless-stopped
     depends_on:
       - api
     environment:
       # "api" targets the Docker-Compose backend; set to "host.docker.internal"
       # to reach a backend run locally via server/z-run.sh instead.
       API_HOST: ${API_HOST:-api}
+      # Same value as the "api" service's GOOGLE_CLIENT_ID -- baked into the
+      # static bundle at container start (see client/Dockerfile, assets/env.js).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com}
     ports:
-      - "8080:8080"
+      - "${WEB_PORT:-8080}:8080"
     networks:
       - botfactory-network
     healthcheck:

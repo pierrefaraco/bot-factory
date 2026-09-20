@@ -49,7 +49,7 @@ http {
     }
 
     # Proxy API requests to backend
-    # API_HOST defaults to "api" (docker-compose service). Override to
+    # API_HOST defaults to "api" (docker compose service). Override to
     # "host.docker.internal" to reach a backend run locally via z-run.sh.
     location /api/ {
       proxy_pass http://${API_HOST}:444;

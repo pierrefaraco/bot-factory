@@ -9,6 +9,9 @@ import { Router } from '@angular/router';
 import { User } from '@app/models/user.model';
 import { UsersService } from '@app/services/users.service';
 declare const google: any;
+declare global {
+  interface Window { __env?: { GOOGLE_CLIENT_ID?: string }; }
+}
 // Interface pour les données de login
 export interface LoginData {
   email: string;
@@ -76,7 +79,10 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
   signupForm!: FormGroup;
   loginSubmitting = false;
   signupSubmitting = false;
-  private readonly GOOGLE_CLIENT_ID = '913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com'
+  // Loaded from assets/env.js (see index.html), itself generated from the
+  // GOOGLE_CLIENT_ID env var at container start (client/docker-entrypoint.sh)
+  // -- keep this in sync with the backend's GOOGLE_CLIENT_ID (same .env var).
+  private readonly GOOGLE_CLIENT_ID = window.__env?.GOOGLE_CLIENT_ID ?? '';
   constructor(private fb: FormBuilder,
     private authService: AuthService,
     private router: Router,

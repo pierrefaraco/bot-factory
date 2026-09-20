@@ -119,7 +119,7 @@ The API Dockerfile copies the `db/` folder into the image (`/app/db`). Run migra
 ```bash
 make migrate
 # equivalent to:
-docker-compose exec -w /app/db api alembic upgrade head
+docker compose exec -w /app/db api alembic upgrade head
 ```
 
 > The `-w /app/db` flag is necessary: Alembic looks for `alembic.ini` in the current working directory, and the container default `WORKDIR` is `/app` while the file is at `/app/db`.
@@ -127,10 +127,10 @@ docker-compose exec -w /app/db api alembic upgrade head
 To create a migration from the container:
 
 ```bash
-docker-compose exec -w /app/db api alembic revision --autogenerate -m "Description"
+docker compose exec -w /app/db api alembic revision --autogenerate -m "Description"
 ```
 
-Note: Because the `db` container publishes MySQL on the host at `3306:3306`, the `make db-*` targets also work against the database started with `make db-only` / `make dev` without using `docker-compose exec`.
+Note: Because the `db` container publishes MySQL on the host at `3306:3306`, the `make db-*` targets also work against the database started with `make db-only` / `make dev` without using `docker compose exec`.
 
 ## 9. Reset the database completely (destructive)
 

@@ -4,6 +4,9 @@
 # used by test-server-http-dev. Override: make test-server-http-dev PORT=8080
 PORT ?= 444
 
+# Docker Compose CLI (V2 plugin syntax; requires Docker with the compose plugin)
+DOCKER_COMPOSE := docker compose
+
 help:
 	@echo "Bot Factory - Development Commands"
 	@echo "===================================="
@@ -34,7 +37,7 @@ help:
 	@echo "Testing:"
 	@echo "  make test           Run all tests"
 	@echo "  make test-server    Run backend tests"
-	@echo "  make test-server-http  Run the HTTP regression suite (docker-compose + mock LLM)"
+	@echo "  make test-server-http  Run the HTTP regression suite (docker compose + mock LLM)"
 	@echo "  make test-server-http-dev PORT=444  Run it against an API already running in dev mode"
 	@echo "  make test-client    Run frontend tests"
 	@echo ""
@@ -73,10 +76,11 @@ install-deps:
 
 # Development
 dev: up
-	@echo "✓ All services running. Access:"
-	@echo "  Frontend: http://localhost:8080"
-	@echo "  API: http://localhost:4444"
-	@echo "  Database: localhost:3306"
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	echo "✓ All services running. Access:"; \
+	echo "  Frontend: http://localhost:$${WEB_PORT:-8080} (override WEB_PORT in .env)"; \
+	echo "  API: http://localhost:4444"; \
+	echo "  Database: localhost:3306"
 
 dev-client:
 	@echo "Starting Angular development server..."
@@ -89,53 +93,53 @@ dev-server:
 # Docker commands
 build:
 	@echo "Building Docker images..."
-	docker-compose build
+	$(DOCKER_COMPOSE) build
 
 up:
 	@echo "Starting Docker services..."
-	docker-compose up -d
+	$(DOCKER_COMPOSE) up -d
 	@echo "✓ Services started. View logs with: make logs"
 
 db-only:
 	@echo "Starting MySQL container only..."
-	docker-compose up -d db
+	$(DOCKER_COMPOSE) up -d db
 	@echo "✓ MySQL running on localhost:3306"
 
 chromadb-only:
 	@echo "Starting ChromaDB container only..."
-	docker-compose up -d chromadb
+	$(DOCKER_COMPOSE) up -d chromadb
 	@echo "✓ ChromaDB running on localhost:8000"
 
 down:
 	@echo "Stopping Docker services..."
-	docker-compose down
+	$(DOCKER_COMPOSE) down
 
 stop:
 	@echo "Stopping Docker services..."
-	docker-compose stop
+	$(DOCKER_COMPOSE) stop
 
 start:
 	@echo "Starting Docker services..."
-	docker-compose start
+	$(DOCKER_COMPOSE) start
 
 restart:
 	@echo "Restarting Docker services..."
-	docker-compose restart
+	$(DOCKER_COMPOSE) restart
 
 logs:
-	docker-compose logs -f
+	$(DOCKER_COMPOSE) logs -f
 
 logs-api:
-	docker-compose logs -f api
+	$(DOCKER_COMPOSE) logs -f api
 
 logs-db:
-	docker-compose logs -f db
+	$(DOCKER_COMPOSE) logs -f db
 
 logs-chromadb:
-	docker-compose logs -f chromadb
+	$(DOCKER_COMPOSE) logs -f chromadb
 
 logs-web:
-	docker-compose logs -f web
+	$(DOCKER_COMPOSE) logs -f web
 
 # Testing
 test: test-server test-client
@@ -153,9 +157,9 @@ endif
 
 test-server-http:
 	@echo "Starting stack with mock LLM for the HTTP regression suite..."
-	docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d --build db chromadb mock-llm api
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d --build db chromadb mock-llm api
 	@echo "Running tests in a container on the compose network (reaches api/db by service name, no host networking involved)..."
-	docker-compose -f docker-compose.yml -f docker-compose.test.yml run --rm test-runner
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm test-runner
 	@echo "✓ HTTP regression suite complete (stack left running; 'make down' to stop)"
 	@echo "  Point a future FastAPI server instead: TEST_API_BASE_URL=http://api:<port>/api make test-server-http"
 
@@ -165,11 +169,11 @@ test-server-http-dev:
 	@echo "Note: a manually-started dev server (z-run.sh) has no MISTRAL_BASE_URL set, so"
 	@echo "test_rag.py will call the real Mistral API unless you export MISTRAL_BASE_URL"
 	@echo "yourself before starting it."
-	docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d db chromadb mock-llm
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d db chromadb mock-llm
 	@TARGET_HOST=""; \
 	for candidate in $$(hostname) host.docker.internal; do \
 		echo "Trying to reach the dev server via $$candidate:$(PORT)..."; \
-		if docker-compose -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps test-runner \
+		if $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps test-runner \
 			curl -sf http://$$candidate:$(PORT)/api/health > /dev/null 2>&1; then \
 			TARGET_HOST=$$candidate; \
 			break; \
@@ -184,7 +188,7 @@ test-server-http-dev:
 	fi; \
 	echo "Reaching dev server via $$TARGET_HOST:$(PORT)"; \
 	TEST_API_BASE_URL="http://$$TARGET_HOST:$(PORT)/api" \
-	docker-compose -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps test-runner
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps test-runner
 
 test-client:
 	@echo "Running frontend tests..."
@@ -197,17 +201,17 @@ test-client-watch:
 # Database
 migrate:
 	@echo "Running database migrations..."
-	docker-compose exec -w /app/db api alembic upgrade head
+	$(DOCKER_COMPOSE) exec -w /app/db api alembic upgrade head
 	@echo "✓ Migrations completed"
 
 db-shell:
 	@echo "Connecting to MySQL database..."
-	docker-compose exec db mysql -u $${MYSQL_USER:-botcraft_user} -p$${MYSQL_PASSWORD:-123456789} $${MYSQL_DATABASE:-botcraft}
+	$(DOCKER_COMPOSE) exec db mysql -u $${MYSQL_USER:-botcraft_user} -p$${MYSQL_PASSWORD:-123456789} $${MYSQL_DATABASE:-botcraft}
 
 # Alembic migrations, run locally via uv (DATABASE_URL built from the root
 # .env's MYSQL_* vars). Host comes from MYSQL_HOST in .env (defaults to "db"):
 # that resolves when running from a devcontainer attached to the
-# docker-compose network (see README "Database Connection Error"); override
+# docker compose network (see README "Database Connection Error"); override
 # MYSQL_HOST=127.0.0.1 in .env instead if you're on the Docker host itself.
 # Requires a reachable MySQL (e.g. `make db-only` or a local instance).
 DB_ENV_CMD = set -a && . ../../.env && set +a && export DATABASE_URL="mysql+pymysql://$${MYSQL_USER:-botcraft_user}:$${MYSQL_PASSWORD:-123456789}@$${MYSQL_HOST:-db}:3306/$${MYSQL_DATABASE:-botcraft}?charset=utf8mb4"
@@ -261,7 +265,7 @@ clean:
 
 clean-docker:
 	@echo "Removing Docker containers and volumes..."
-	docker-compose down -v
+	$(DOCKER_COMPOSE) down -v
 	@echo "✓ Docker resources cleaned"
 
 clean-all: clean clean-docker

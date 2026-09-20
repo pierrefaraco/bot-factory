@@ -13,6 +13,10 @@ import { ButtonComponent } from '../base/button/button.component';
 export class LandingComponent {
   mobileMenuOpen = false;
 
+  readonly githubUrl = 'https://github.com/pierrefaraco/bot-factory';
+  readonly linkedinUrl = 'https://www.linkedin.com/in/pierre-faraco-03088149/';
+  readonly contactEmail = 'pierre.faraco@gmail.com';
+
   features = [
     {
       icon: 'smart_toy',
@@ -67,11 +71,13 @@ export class LandingComponent {
     }
   ];
 
-  stats = [
-    { value: '10K+', label: 'Active Users' },
-    { value: '50K+', label: 'Bots Created' },
-    { value: '1M+', label: 'Conversations' },
-    { value: '99.9%', label: 'Uptime' }
+  techStack = [
+    { icon: 'web', name: 'Angular' },
+    { icon: 'bolt', name: 'FastAPI' },
+    { icon: 'storage', name: 'MySQL + SQLAlchemy' },
+    { icon: 'hub', name: 'ChromaDB (RAG)' },
+    { icon: 'psychology', name: 'LangChain + Mistral AI' },
+    { icon: 'inventory_2', name: 'Docker Compose' }
   ];
 
   constructor(private router: Router) {}

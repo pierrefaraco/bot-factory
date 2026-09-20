@@ -2,7 +2,7 @@
 
 Used only by the HTTP regression suite (server/test/): the real ai-server
 container is pointed at this service via the MISTRAL_BASE_URL env var
-(docker-compose.test.yml) instead of https://api.mistral.ai/v1, so RAG/chat
+(docker compose test overlay) instead of https://api.mistral.ai/v1, so RAG/chat
 endpoints can be tested without a real API key, network access, or
 non-deterministic model output.
 """

@@ -121,4 +121,12 @@ class AppConfig(BaseConfig):
             "VIBE_MODEL", "your-secret-key-change-this-in-production"
         )
 
+    # OAuth client ID Google (Google Identity Services) : doit être le même
+    # sur le frontend (client/src/assets/env.js) et le backend, sinon
+    # verify_oauth2_token() rejette le jeton ("Invalid email or password").
+    GOOGLE_CLIENT_ID = os.environ.get(
+        "GOOGLE_CLIENT_ID",
+        "913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com",
+    )
+
 app_config = AppConfig()

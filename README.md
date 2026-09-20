@@ -251,13 +251,13 @@ MYSQL_PASSWORD=123456789
 
 Start just the database container:
 ```bash
-make db-only        # docker-compose up -d db
+make db-only        # docker compose up -d db
 # ✓ MySQL running on localhost:3306, data persisted in the `mysql_data` volume
 ```
 
 Point the backend at it via `server/.env`:
 ```bash
-# Running the api inside docker-compose (same network, resolves the service by name):
+# Running the api inside docker compose (same network, resolves the service by name):
 DATABASE_URL=mysql+pymysql://botcraft_user:123456789@db:3306/botcraft?charset=utf8mb4
 
 # Running the api locally with `./z-run.sh` / `uv run`, from the host or a container
@@ -265,7 +265,7 @@ DATABASE_URL=mysql+pymysql://botcraft_user:123456789@db:3306/botcraft?charset=ut
 DATABASE_URL=mysql+pymysql://botcraft_user:123456789@127.0.0.1:3306/botcraft?charset=utf8mb4
 ```
 > If you're working from a separate dev/devcontainer (not the host, not part of
-> `docker-compose`), see [Database Connection Error](#database-connection-error) below —
+> `docker compose`), see [Database Connection Error](#database-connection-error) below —
 > `127.0.0.1` won't resolve to `botfactory-db` in that case.
 
 ### Initialize Database
@@ -280,13 +280,13 @@ make db-upgrade     # Run all pending migrations locally via uv (DATABASE_URL bu
 make db-shell
 
 # Create new migration
-docker-compose exec -w /app/db api alembic revision --autogenerate -m "Description"
+docker compose exec -w /app/db api alembic revision --autogenerate -m "Description"
 
 # Revert last migration
-docker-compose exec -w /app/db api alembic downgrade -1
+docker compose exec -w /app/db api alembic downgrade -1
 
 # View migration history
-docker-compose exec -w /app/db api alembic current
+docker compose exec -w /app/db api alembic current
 ```
 
 ---
@@ -394,10 +394,10 @@ bot-factory/
 
 ```bash
 # Build images
-docker-compose build
+docker compose build
 
 # Run with production compose file (if available)
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ### Manual Deployment
@@ -432,7 +432,7 @@ make logs-db
 ```
 
 **Working from a separate dev container** (e.g. a devcontainer/SSH box that is not
-the Docker host and not part of `docker-compose`)? `127.0.0.1` and `db` won't
+the Docker host and not part of `docker compose`)? `127.0.0.1` and `db` won't
 resolve to `botfactory-db` by default — it lives on the `bot-factory_botfactory-network`
 Docker network, which your dev container isn't attached to.
 
@@ -468,11 +468,11 @@ make logs-api
 ### Docker Build Issues
 ```bash
 # Rebuild without cache
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # Full reset
 docker system prune -a
-docker-compose up --build
+docker compose up --build
 ```
 
 For more troubleshooting, see [DEVELOPMENT.md](DEVELOPMENT.md#troubleshooting).

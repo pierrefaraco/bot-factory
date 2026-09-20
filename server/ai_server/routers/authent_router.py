@@ -19,7 +19,9 @@ Flask-JWT-Extended's own token context via get_jwt()/get_jwt_identity()
 
 Anti-enumeration: login()'s AuthenticationError/NotFoundError (wrong
 password, inactive account, unknown email) all collapse to the same
-"Invalid email or password" 401, same as the original.
+"Invalid email or password" 401, same as the original. login_with_google()
+applies the same collapse for its own AuthenticationError case (inactive
+account) so a disabled Google-linked account isn't distinguishable either.
 
 refresh/logout are async (`async def`): refresh_token()'s only DB read is
 migrated (UserAdminService.get_user_dto_by_id, get_async_session()), and
@@ -102,7 +104,14 @@ def login_with_google(body: GoogleOAuthRequest):
     # one was received.
     app_logger.info("User attempting login with Google OAuth credential")
 
-    access_token = google_auth_svc.verify_google_token(body.credential)
+    try:
+        access_token = google_auth_svc.verify_google_token(body.credential)
+    except AuthenticationError as exc:
+        # Même message générique que /login (voir commentaire plus haut) :
+        # un compte désactivé ne doit pas être distinguable d'un jeton invalide.
+        app_logger.warning(f"Failed login attempt with Google OAuth credential: {exc}")
+        raise ApiError("Invalid email or password", status_code=401) from exc
+
     if access_token is None:
         app_logger.warning("Failed login attempt with Google OAuth credential")
         raise ApiError("Invalid email or password", status_code=401)

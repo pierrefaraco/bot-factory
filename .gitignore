@@ -112,6 +112,7 @@ temp/
 .claude/
 .playwright-mcp/
 *CLAUDE.md
+.vibe/
 
 
 # Playwright E2E (client/e2e) - JWTs + generated reports, never committed

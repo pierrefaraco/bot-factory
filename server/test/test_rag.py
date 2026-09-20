@@ -3,7 +3,7 @@
 Chat/streaming endpoints call the real LLM via langchain_mistralai, which is
 redirected to the deterministic mock server (server/test/mock_llm/) via the
 MISTRAL_BASE_URL env var on the api container (see
-docker-compose.test.yml) -- no real Mistral API key or network call needed.
+docker compose test overlay) -- no real Mistral API key or network call needed.
 """
 
 import json

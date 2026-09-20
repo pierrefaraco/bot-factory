@@ -1,15 +1,14 @@
 import datetime
-from multiprocessing import AuthenticationError
+from ai_server.exceptions.service_exceptions import AuthenticationError
 from ai_server.services.base_service import BaseService
 from google.oauth2 import id_token
 from google.auth.transport import requests
+from ai_server.config.config import app_config
 from ai_server.dependencies.auth import create_access_token
 from ai_server.services.user_admin_svc import UserAdminService
 from ai_server.dao.database import User
 from ai_server.dto.user_dto import UserDto
 from ai_server.decorators.singleton import singleton
-
-CLIENT_ID = "913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com"
 
 
 @singleton
@@ -23,7 +22,7 @@ class GoogleAuthentSvc(BaseService):
     def verify_google_token(self, credential):
         try:
             id_info = id_token.verify_oauth2_token(
-                credential, requests.Request(), CLIENT_ID
+                credential, requests.Request(), app_config.GOOGLE_CLIENT_ID
             )
             # Never log the full id_info payload: it carries PII (name,
             # picture, locale...) beyond what's needed for the audit trail.
