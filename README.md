@@ -116,7 +116,7 @@ make down
 
 # Start all services
 make setup
-make dev
+make up
 
 # Services are now running:
 # - Frontend: http://localhost:8080
@@ -139,21 +139,6 @@ make clean-docker      # Clean up Docker resources
 ```
 
 For detailed setup instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
-
----
-
-## 📖 Documentation
-
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Complete development setup and workflow guide
-- **[CLAUDE.md](CLAUDE.md)** - Architecture overview and development patterns (for AI assistants)
-- **[client/CLAUDE.md](client/CLAUDE.md)** - Frontend-specific guidance
-- **[server/doc/](server/doc/)** - Detailed implementation guides
-
-### Server Documentation
-- `ALEMBIC_SETUP.md` - Database migration commands
-- **[server/doc/LANGCHAIN_ARCHITECTURE.md](server/doc/LANGCHAIN_ARCHITECTURE.md)** - How LangChain is used (RAG chains, ingestion, streaming, token tracking) with diagrams
-- `CALLBACK_IMPLEMENTATION.md` - LLM token counting with LangChain
-- `IMPLEMENTATION_SUMMARY.md` - Token tracking system overview
 
 ---
 
@@ -392,12 +377,17 @@ bot-factory/
 
 ### Docker Production Build
 
-```bash
-# Build images
-docker compose build
+`docker-compose.prod.yml` adds a public, TLS-terminating nginx reverse
+proxy (with Let's Encrypt certificates via Certbot, auto-renewed) in front
+of the app -- see [deploy/README.md](deploy/README.md) for the full
+walkthrough (DNS, `.env`, one-time bootstrap). Short version, once DNS and
+`.env` (`DOMAIN`, `LETSENCRYPT_EMAIL`) are set:
 
-# Run with production compose file (if available)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```bash
+make prod-build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build db chromadb api web certbot
+make certbot-init   # one-time, obtains the first certificate
+make prod-up        # every subsequent start
 ```
 
 ### Manual Deployment

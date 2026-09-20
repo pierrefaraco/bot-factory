@@ -52,6 +52,14 @@ help:
 	@echo "  make db-current     Show current database revision"
 	@echo "  make db-stamp REV=head  Mark database at a revision without running SQL"
 	@echo ""
+	@echo "Production (HTTPS -- see deploy/README.md):"
+	@echo "  make prod-deploy    First deploy on a fresh host: build, start, get HTTPS cert"
+	@echo "  make prod-up        Start the production stack (subsequent starts)"
+	@echo "  make prod-down      Stop the production stack"
+	@echo "  make prod-logs      View production logs"
+	@echo "  make prod-build     Build production images"
+	@echo "  make certbot-init   Re-run the Let's Encrypt bootstrap on its own"
+	@echo ""
 	@echo "Cleanup:"
 	@echo "  make clean          Remove generated files and caches"
 	@echo "  make clean-docker   Remove Docker containers and volumes"
@@ -252,6 +260,38 @@ endif
 	@echo "Stamping database at revision: $(REV)"
 	cd server/db && $(DB_ENV_CMD) && uv run alembic stamp $(REV)
 	@echo "✓ Database stamped"
+
+# Production (HTTPS via reverse-proxy + Certbot -- see deploy/README.md)
+PROD_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
+
+prod-build:
+	@echo "Building production images..."
+	$(PROD_COMPOSE) build
+
+prod-up:
+	@echo "Starting production stack (reverse-proxy + certbot + app services)..."
+	$(PROD_COMPOSE) up -d
+	@echo "✓ Started. First deploy on a fresh host? Run 'make certbot-init' once."
+
+prod-down:
+	@echo "Stopping production stack..."
+	$(PROD_COMPOSE) down
+
+prod-logs:
+	$(PROD_COMPOSE) logs -f
+
+certbot-init:
+	@echo "Bootstrapping the first Let's Encrypt certificate (see deploy/README.md)..."
+	./deploy/certbot/init-letsencrypt.sh
+
+# One-shot first deploy on a fresh host: builds, starts every service except
+# reverse-proxy (which has no certificate yet), then bootstraps it. Requires
+# DOMAIN/LETSENCRYPT_EMAIL in .env and DNS already pointed at this host --
+# see deploy/README.md. Subsequent starts: just 'make prod-up'.
+prod-deploy: prod-build
+	@echo "Starting app services (db, chromadb, api, web) and certbot..."
+	$(PROD_COMPOSE) up -d db chromadb api web certbot
+	$(MAKE) certbot-init
 
 # Cleanup
 clean:

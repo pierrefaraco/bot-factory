@@ -10,7 +10,9 @@ services:
       MYSQL_USER: ${MYSQL_USER:-botcraft_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-123456789}
     ports:
-      - "3306:3306"
+      # Bound to loopback only: MySQL has no business being reachable from
+      # outside the host, in dev or in prod (see deploy/README.md).
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -30,7 +32,8 @@ services:
       PERSIST_DIRECTORY: /chroma/chroma
       ANONYMIZED_TELEMETRY: "FALSE"
     ports:
-      - "8000:8000"
+      # Bound to loopback only, same reasoning as the "db" service above.
+      - "127.0.0.1:8000:8000"
     volumes:
       - chroma_data:/chroma/chroma
     networks:
@@ -69,7 +72,10 @@ services:
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com}
     ports:
-      - "4444:444"
+      # Bound to loopback only: in prod, the "reverse-proxy" service
+      # (docker-compose.prod.yml) is the sole public entry point, reaching
+      # this through the Docker network -- not through the published port.
+      - "127.0.0.1:4444:444"
     # volumes:
     #   # HOST_PROJECT_PATH: absolute path of this project as seen by the Docker
     #   # daemon. Needed when compose runs inside a dev-container whose paths
@@ -101,7 +107,8 @@ services:
       # static bundle at container start (see client/Dockerfile, assets/env.js).
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com}
     ports:
-      - "${WEB_PORT:-8080}:8080"
+      # Bound to loopback only, same reasoning as "api" above.
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
     networks:
       - botfactory-network
     healthcheck:

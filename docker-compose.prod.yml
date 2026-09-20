@@ -1,0 +1,43 @@
+# Production overlay: adds a public TLS-terminating reverse proxy (nginx +
+# Let's Encrypt via certbot) in front of the "web" service, which stays
+# loopback-only in docker-compose.yml. See deploy/README.md for the full
+# setup walkthrough (DNS, .env, first-run bootstrap, renewal).
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  reverse-proxy:
+    image: nginx:alpine
+    container_name: botfactory-reverse-proxy
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env -- the FQDN pointing at this server}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    networks:
+      - botfactory-network
+
+  # Long-running renewal loop (`certbot renew` is a no-op for certificates
+  # not close to expiry, so checking twice a day is cheap and safe). The
+  # *first* certificate is obtained by deploy/certbot/init-letsencrypt.sh,
+  # not by this service.
+  certbot:
+    image: certbot/certbot
+    container_name: botfactory-certbot
+    restart: unless-stopped
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: >
+      sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done;'
+
+volumes:
+  certbot-etc:
+  certbot-www:
