@@ -14,7 +14,7 @@ if [ -f .env ]; then
 fi
 
 : "${DOMAIN:?Set DOMAIN in .env first (the FQDN pointing at this server)}"
-: "${LETSENCRYPT_EMAIL:?Set LETSENCRYPT_EMAIL in .env first (Let's Encrypt renewal/abuse contact)}"
+: "${LETSENCRYPT_EMAIL:?Set LETSENCRYPT_EMAIL in .env first (contact email for certificate renewal/abuse notices)}"
 
 COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml"
 CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
