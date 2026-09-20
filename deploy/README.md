@@ -33,6 +33,12 @@ reachable from outside the host, on 80 and 443.
    to test against Let's Encrypt's staging CA first and avoid tripping its
    production rate limits while you get the setup right).
 
+   Also check `WEB_PORT`: it must stay a normal value like `8080` (the
+   default). `reverse-proxy` is the one that owns 80/443 -- if `WEB_PORT`
+   is set to `80` or `443`, `web`'s own `127.0.0.1:<WEB_PORT>:8080` binding
+   fights `reverse-proxy` for that port and one of the two containers will
+   fail to start ("address already in use").
+
 4. **Google OAuth**: if `GOOGLE_CLIENT_ID` is set (see root `.env.example`),
    add `https://<DOMAIN>` to that OAuth client's "Authorized JavaScript
    origins" in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
@@ -77,3 +83,10 @@ make prod-down
 - **Renewal isn't happening**: check `docker compose ... logs certbot`; the
   loop calls `certbot renew` every 12h, which is a no-op unless the
   certificate is within 30 days of expiring.
+- **`docker ps` shows `80/tcp` (or `443/tcp`) on `botfactory-web` and
+  `botfactory-certbot`, with no arrow / host address**: harmless. That's
+  Docker's `EXPOSE`, inherited from those images' own base images
+  (`nginx:alpine`, `certbot/certbot`) -- pure metadata, nothing is actually
+  listening on it inside those containers, and nothing is published to the
+  host. Only a mapping shown as `host:port->container_port` (with an
+  arrow) is a real, host-reachable port -- that's what would conflict.
