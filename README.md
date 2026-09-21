@@ -4,6 +4,8 @@ A full-stack AI bot creation and management platform that empowers users to crea
 
 ![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-teal) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-MIT-green)
 
+🔗 **Live demo:** [bot-factory.fr](https://bot-factory.fr)
+
 ---
 
 ## 🌟 Features
