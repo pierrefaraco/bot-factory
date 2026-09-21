@@ -6,6 +6,8 @@ A full-stack AI bot creation and management platform that empowers users to crea
 
 🔗 **Live demo:** [bot-factory.fr](https://bot-factory.fr)
 
+> 💼 **Portfolio project** — built solo by [Pierre Faraco](https://github.com/pierrefaraco) to showcase full-stack and DevOps skills (Angular, FastAPI, LLM/RAG integration, Docker, production HTTPS deployment). Not maintained as a commercial product.
+
 ---
 
 ## 🌟 Features
