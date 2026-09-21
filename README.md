@@ -2,7 +2,7 @@
 
 A full-stack AI bot creation and management platform that empowers users to create, customize, and deploy intelligent chatbots with advanced features like knowledge base management and token tracking.
 
-![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-teal) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-MIT-green)
+![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-teal) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
 
 🔗 **Live demo:** [bot-factory.fr](https://bot-factory.fr)
 
@@ -518,7 +518,7 @@ git push origin feature/your-feature
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the LICENSE file for details. This means any modified version deployed as a network service (e.g. a SaaS fork) must also make its source code available to its users.
 
 ---
 
