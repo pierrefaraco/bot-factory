@@ -41,10 +41,14 @@ $COMPOSE up -d reverse-proxy
 # actually loaded the certificate -- deleting the dummy cert before that
 # happens crashes nginx (it re-reads the cert on every restart) and leaves it
 # permanently unable to start, since it now has no certificate at all. Wait
-# for the nginx master process to actually be running first.
+# for the nginx master process to actually be running first. Checked via the
+# pid file rather than "pgrep -x nginx": nginx renames its own process (Linux
+# prctl) to "nginx: master process ..." for `ps`, so /proc/<pid>/comm no
+# longer reads exactly "nginx" and an exact-name pgrep never matches even
+# though nginx is up -- this previously made the script always time out here.
 echo "### Waiting for reverse-proxy to finish starting ..."
 for i in $(seq 1 30); do
-  if $COMPOSE exec -T reverse-proxy pgrep -x nginx >/dev/null 2>&1; then
+  if $COMPOSE exec -T reverse-proxy test -f /var/run/nginx.pid >/dev/null 2>&1; then
     break
   fi
   if [ "$i" = 30 ]; then
