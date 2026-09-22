@@ -11,6 +11,8 @@ from ai_server.decorators.singleton import singleton
 from ai_server.services.bot_parameters_svc import BotParametersService
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.template_svc import TemplateSvc
+from ai_server.services.knowledge_svc import KnowledgeSvc
+from ai_server.services.rag_svc import RagService
 from sqlalchemy import select
 
 # Lazy import to avoid circular dependency
@@ -29,6 +31,7 @@ class BotService(BaseService[BotDto]):
         self.avatar_svc = AvatarService()
         self.bot_assignment_svc = BotAssignmentService()
         self.bot_parameters_svc = BotParametersService()
+        self.knowledge_svc = KnowledgeSvc(RagService())
         self.template_svc = TemplateSvc()
         self._context_svc = None
         self.logger = BotFactoryLogger()
@@ -130,6 +133,7 @@ class BotService(BaseService[BotDto]):
             user.name, bot.id
         )
         self.template_svc.importTemplateInDB(bot.id, "start")
+        self.knowledge_svc.recordChaptersToVectorDB(bot.id)
         self.logger.info(
             f"create_random_bot succeeded bot_id={bot.id} user_account_id={user_account_id}"
         )
