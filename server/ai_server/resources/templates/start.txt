@@ -1,3 +1,124 @@
---- Chapter ID: 9 --- Name: My Knowledges --- Dad ID: this_is_a_root_chapter --- Indice: 1 --- Children Ref Id: 6872d9ac-645f-464c-91ea-8b125fc99208 ---
-My Knowledges
+--- Chapter ID: 8 --- Name: Mon parcours en resumé --- Dad ID: this_is_a_root_chapter --- Indice: 4 --- Children Ref Id: 5f3a0791-5548-4735-b4a9-9288cf4d1dcf ---
+J'ai débuté ma carrière en tant que technicien, et c'est à l'âge de 30 ans que j'ai décidé de devenir développeur.
+
+Pour ce faire, je me suis inscrit au CNAM afin de suivre des cours du soir en informatique. En parallèle, j'ai fait correspondre ma carrière à mes études.
+
+J'ai commencé à travailler dans une entreprise de téléphonie de marché en tant que QA, au sein d'une équipe Agile. Puis, une fois ma licence obtenue, je suis devenu développeur junior, toujours dans le même secteur d'activité. J'y ai travaillé sur un outil dont le but était de contrôler l'enregistrement des communications, avec les technologies suivantes : JavaScript, Java, Spring Boot et Docker.
+
+Ensuite, lorsque j'ai obtenu mon diplôme d'ingénieur en 2018, je suis devenu développeur senior — poste que j'occupe encore aujourd'hui.
+
+Au cours de cette période, j'ai eu l'occasion de travailler sur des sujets variés :
+
+du backend en Python
+du frontend en Angular 2
+du kubernetes 
+la conception d'une distribution Red Hat personnalisée pour nos serveurs bare metal
+
+Aujourd'hui, mon activité principale consiste à concevoir des microservices en Python fonctionnant sur Kubernetes.
+
+J'aime profondément ce que je fais et le chemin parcouru jusqu'ici, mais j'ai aujourd'hui envie de faire évoluer ma carrière. C'est dans cette optique que je profite d'un PDV pour prendre le temps de réfléchir à cette évolution et explorer de nouvelles opportunités.
+
+--- Chapter ID: 9 --- Name: Mon activité actuelle --- Dad ID: this_is_a_root_chapter --- Indice: 5 --- Children Ref Id: 0290bb40-8202-4c32-84fe-83227df26c87 ---
+Notre entreprise dispose de son propre réseau, doté d'équipements dédiés. Chacun de nos clients possède, chez lui, un système de télécommunication fonctionnant en partie sur Kubernetes et connecté à ce réseau.
+
+Une plateforme Kubernetes centrale permet de relier l'ensemble de ces systèmes et d'automatiser l'administration ainsi que l'allocation des ressources. C'est principalement sur cette plateforme centrale que j'interviens, où je développe des microservices en Python exposant une API pour les plateformes clientes.
+
+--- Chapter ID: 10 --- Name: Un exemple de ce que j'ai accompli  --- Dad ID: this_is_a_root_chapter --- Indice: 6 --- Children Ref Id: 5e529325-bbf0-4cfe-92e5-aa704594ffdb ---
+L'automatisation de la création des private lines avec des micros services en Python qui tournent sur Kubernetes.
+
+Ce mécanisme permet à un utilisateur, depuis un site A, de faire une demande de ligne via son interface. Si cette demande est acceptée par le client à l'autre extrémité, la configuration et l'allocation des ressources sont automatisées, rendant la ligne fonctionnelle. Auparavant, cela nécessitait des opérations manuelles fastidieuses, à la fois sur le système des client et sur le réseau.
+
+Voici le workflow détaillé :
+
+L'utilisateur A fait sa demande via son interface.
+L'utilisateur B accepte la demande.
+Un job cyclique sur la plateforme du site A détecte cette ligne et configure le système de téléphonie, qui expose une API.
+La même opération est effectuée côté site B.
+En parallèle, un microservice central configure un équipement du réseau, qui expose lui aussi une API.
+Une fois toutes les configurations effectuées les utilisateurs peuvent désormais l'utiliser.
+
+
+--- Chapter ID: 11 --- Name: Cette application --- Dad ID: this_is_a_root_chapter --- Indice: 11 --- Children Ref Id: bf2a9163-a13b-4f1b-bfaa-5fa1c56a2445 ---
+Bot Factory
+A full-stack AI bot creation and management platform that empowers users to create, customize, and deploy intelligent chatbots with advanced features like knowledge base management and token tracking.
+
+Bot Factory FastAPI Python Docker License
+
+💼 Portfolio project — built solo by Pierre Faraco to showcase full-stack and DevOps skills (Angular, FastAPI, LLM/RAG integration, Docker, production HTTPS deployment). Not maintained as a commercial product.
+
+🌟 Features
+Core Capabilities
+Bot Creation & Management - Create and customize AI bots with personalized parameters
+Knowledge Base Management - Upload and manage documents with RAG (Retrieval-Augmented Generation)
+Real-time Chat - Interactive conversations with bots powered by LLM providers
+Token Tracking - Automatic token usage tracking and analytics
+Avatar Builder - SVG-based customizable bot avatars (body, eyes, hat, mouth, colors)
+Advanced Features
+LLM Support - Integration with Mistral AI
+Vector Search - ChromaDB-powered semantic search for knowledge retrieval
+JWT Authentication - Secure token-based authentication with refresh tokens
+Role-Based Access Control - Admin, User, Guest, and Iframe roles
+🏗️ Architecture
+Tech Stack
+Frontend
+
+Angular 18 with TypeScript
+Bootstrap 5 + Custom SCSS themes (dark/light modes)
+RxJS for reactive programming
+JWT handling with interceptors
+Backend
+
+Python FastAPI 0.115
+SQLAlchemy 2.0 ORM
+LangChain ecosystem for LLM integration
+ChromaDB for vector storage (dedicated container)
+MySQL for persistence
+uv for dependency management
+Infrastructure
+
+Docker & Docker Compose
+Nginx as reverse proxy
+Alembic for database migrations
+pytest for backend testing
+
+--- Chapter ID: 12 --- Name: Utilisation de l'IA --- Dad ID: this_is_a_root_chapter --- Indice: 10 --- Children Ref Id: 5f226ea6-df48-4c74-af05-313c0df1042b ---
+Je pense que l'IA donne de véritables super-pouvoirs aux développeurs, à condition de savoir où lui laisser la main et où la garder.
+
+Pour le code destiné à la production, je préfère aujourd'hui lui confier de petites tâches et travailler en binôme avec elle, afin de garder la maîtrise de ce qui est livré. Cette frontière évoluera sans doute : avec une bonne couverture de tests, des spécifications claires et une CI solide, on pourra lui confier des tâches plus larges. La maîtrise viendra alors moins de la taille des tâches que de la qualité des garde-fous qui les entourent.
+
+Je l'utilise de façon plus intensive pour concevoir des outils de test et d'analyse autour du code, et je lui laisse davantage d'autonomie sur ce type de tâches. Je reste toutefois vigilant sur ce qu'ils vérifient réellement : un test qui passe à tort donne une fausse confiance, ce qui peut être plus dangereux que l'absence de test.
+
+Elle est aussi très efficace pour le débogage et l'analyse de problèmes, dès lors qu'on lui donne accès aux bons outils, comme des serveurs MCP et notre code source. Ces accès doivent cependant être cadrés : lecture seule quand c'est possible, aucun accès aux secrets, environnements isolés.
+
+Enfin, elle excelle dans tout ce qui est répétitif et fastidieux. Mais il faut rester lucide : en nous reposant trop sur elle, nous risquons non seulement de perdre la maîtrise des outils que nous concevons, mais aussi, peu à peu, le réflexe de raisonner nous-mêmes sur nos systèmes.
+
+--- Chapter ID: 14 --- Name: Les design Pattern --- Dad ID: this_is_a_root_chapter --- Indice: 12 --- Children Ref Id: a0ec6bac-93b8-4fbd-b007-4f4c9641c28a ---
+Il vaut  mieux régler un problème avec le design qu'avec des lignes de codes
+
+--- Chapter ID: 15 --- Name: Un deuxième exemple de ce que j'ai accompli  --- Dad ID: this_is_a_root_chapter --- Indice: 7 --- Children Ref Id: 4d69591c-3fbe-42ac-ae54-3750b2baf5aa ---
+L'automatisation de la création d'un OS custom
+
+Lors des augmentations des prix de VMware, nous avons décidé de nous tourner vers une autre technologie. Pour cela, j'ai automatisé la création d'un OS Linux customisé, afin qu'il puisse être installé sur des serveurs bare metal, avec tous les utilitaires nécessaires au déploiement de notre système basé sur Kubernetes.
+
+Les étapes mises en place
+
+Le processus s'exécute au sein d'un container, selon les étapes suivantes :
+
+Téléchargement de l'ISO
+Téléchargement de nos dépendances
+Montage de l'ISO dans le container
+Copie du contenu de l'ISO dans un répertoire
+Modification du contenu des repos internes du DVD : ajout de nos RPM et packages tiers nécessaires, suppression des dépendances inutiles
+Modification de certains fichiers d'installation
+Build de l'ISO custom à partir du répertoire
+Dépôt de l'ISO sur Artifactory
+
+--- Chapter ID: 18 --- Name: Mes loisirs --- Dad ID: this_is_a_root_chapter --- Indice: 13 --- Children Ref Id: 6762060a-3b51-4c86-9c1d-d5cf33e0f6c6 ---
+J'aime la musique, le cinéma, la randonné, les jeux videos
+
+--- Chapter ID: 19 --- Name: Mon expertise Python --- Dad ID: this_is_a_root_chapter --- Indice: 8 --- Children Ref Id: c8c9b8e3-446d-4ebc-b641-3eb48af2c677 ---
+
+
+--- Chapter ID: 20 --- Name: Mon expertise Kubernetes --- Dad ID: this_is_a_root_chapter --- Indice: 9 --- Children Ref Id: b3b0b0c0-9af8-4d58-aef3-99672808e715 ---
+
 
