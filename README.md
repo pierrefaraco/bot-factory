@@ -140,27 +140,6 @@ make logs              # View service logs
 make migrate           # Run database migrations
 make db-shell          # Connect to database
 make clean-docker      # Clean up Docker resources
-```
-
-For detailed setup instructions, see [DEVELOPMENT.md](DEVELOPMENT.md).
-
----
-
-## 🏃 Running the Project
-
-### Option 1: Docker Compose (Easiest)
-
-```bash
-# Initial setup
-make setup
-
-# Start services
-make dev
-
-# Stop services
-make down
-
-# View logs
 make logs
 make logs-api        # Backend only
 make logs-db         # Database only
@@ -204,26 +183,6 @@ make dev-server
 
 ---
 
-## 🧪 Testing
-
-```bash
-# Run all tests
-make test
-
-# Backend tests only
-make test-server
-make test-server-single TEST=test/test_file.py::test_name
-
-# Frontend tests only
-make test-client
-make test-client-watch    # Watch mode
-
-# With coverage
-cd server && uv run --extra test pytest test/ --cov=ai_server
-```
-
----
-
 ## 🗄️ Database
 
 ### Configure the MySQL Container
@@ -244,41 +203,11 @@ make db-only        # docker compose up -d db
 # ✓ MySQL running on localhost:3306, data persisted in the `mysql_data` volume
 ```
 
-Point the backend at it via `server/.env`:
-```bash
-# Running the api inside docker compose (same network, resolves the service by name):
-DATABASE_URL=mysql+pymysql://botcraft_user:123456789@db:3306/botcraft?charset=utf8mb4
-
-# Running the api locally with `./z-run.sh` / `uv run`, from the host or a container
-# that shares the host's Docker networking (port 3306 is published to the host):
-DATABASE_URL=mysql+pymysql://botcraft_user:123456789@127.0.0.1:3306/botcraft?charset=utf8mb4
-```
-> If you're working from a separate dev/devcontainer (not the host, not part of
-> `docker compose`), see [Database Connection Error](#database-connection-error) below —
-> `127.0.0.1` won't resolve to `botfactory-db` in that case.
-
 ### Initialize Database
 ```bash
 make migrate       # Run all pending migrations (inside the `api` Docker container)
 make db-upgrade     # Run all pending migrations locally via uv (DATABASE_URL built from the root .env's MYSQL_* vars)
 ```
-
-### Database Operations
-```bash
-# Connect to MySQL shell
-make db-shell
-
-# Create new migration
-docker compose exec -w /app/db api alembic revision --autogenerate -m "Description"
-
-# Revert last migration
-docker compose exec -w /app/db api alembic downgrade -1
-
-# View migration history
-docker compose exec -w /app/db api alembic current
-```
-
----
 
 ## 🔧 Configuration
 
@@ -311,7 +240,7 @@ PERSIST_DIRECTORY=chroma_db_2
 1. Use strong, random `JWT_SECRET_KEY`
 2. Configure proper SSL/TLS certificates
 3. Use environment-specific `.env.production`
-4. Configure secret management (GitHub Secrets, AWS Secrets Manager, etc.)
+4. Configure secret management 
 5. Enable logging and monitoring
 6. Review CORS settings in `server/ai_server/main.py`
 
@@ -334,8 +263,7 @@ bot-factory/
 │   ├── package.json
 │   ├── angular.json
 │   ├── Dockerfile
-│   ├── nginx.conf
-│   └── CLAUDE.md
+│   └── nginx.conf
 │
 ├── server/                       # Python FastAPI Backend
 │   ├── ai_server/
@@ -359,206 +287,14 @@ bot-factory/
 ├── .gitignore                   # Git ignore rules
 ├── .dockerignore                # Docker build ignore rules
 ├── Makefile                     # Development commands
-├── CLAUDE.md                    # Architecture guide
 ├── DEVELOPMENT.md               # Setup and workflow guide
 └── README.md                    # This file
 ```
 
----
-
-## 🔐 Security Features
-
-- **JWT Authentication** - Token-based auth with refresh tokens
-- **Role-Based Access Control** - Admin, User, Guest, Iframe roles
-- **CORS Configuration** - Restricted origin access
-- **Input Validation** - Validators for all user inputs
-- **Password Hashing** - Secure password storage
-- **Frame Token Validation** - Secure iframe embedding
-
----
-
-## 🚢 Deployment
-
-### Docker Production Build
-
-`docker-compose.prod.yml` adds a public, TLS-terminating nginx reverse
-proxy (with Let's Encrypt certificates via Certbot, auto-renewed) in front
-of the app -- see [deploy/README.md](deploy/README.md) for the full
-walkthrough (DNS, `.env`, one-time bootstrap). Short version, once DNS and
-`.env` (`DOMAIN`, `LETSENCRYPT_EMAIL`) are set:
-
-```bash
-make prod-deploy   # one-time, first deploy on a fresh host: build, start, get the HTTPS cert
-make prod-up       # every subsequent start
-```
-
-### Manual Deployment
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) - "Deployment Readiness" section.
-
----
-
-## 🐛 Troubleshooting
-
-### Port Already in Use
-```bash
-# Find process using port
-lsof -i :8080   # Frontend
-lsof -i :444    # Backend
-lsof -i :3306   # Database
-lsof -i :8000   # ChromaDB
-
-# Kill process
-kill -9 <PID>
-```
-
-### Database Connection Error
-```bash
-# Check database logs
-make logs-db
-
-# Verify DATABASE_URL in .env
-# For Docker: mysql+pymysql://user:pass@db:3306/botcraft
-# For local (host or a container sharing the host's Docker networking):
-#   mysql+pymysql://user:pass@127.0.0.1:3306/botcraft
-```
-
-**Working from a separate dev container** (e.g. a devcontainer/SSH box that is not
-the Docker host and not part of `docker compose`)? `127.0.0.1` and `db` won't
-resolve to `botfactory-db` by default — it lives on the `bot-factory_botfactory-network`
-Docker network, which your dev container isn't attached to.
-
-```bash
-# 1. Attach your dev container to the project's Docker network
-docker network connect bot-factory_botfactory-network <your-dev-container-name>
-
-# 2. Point DATABASE_URL at the service name (now resolvable) instead of 127.0.0.1
-#    server/.env:
-#    DATABASE_URL=mysql+pymysql://botcraft_user:123456789@db:3306/botcraft?charset=utf8mb4
-```
-This has to be redone if the dev container is recreated (it's not persisted in `docker-compose.yml`).
-
-### ChromaDB Connection Error
-```bash
-# Check ChromaDB logs
-make logs-chromadb
-
-# Verify CHROMA_HOST/CHROMA_PORT in .env
-# For Docker: CHROMA_HOST=chromadb (the service name, not localhost)
-# For local dev: CHROMA_HOST=localhost (with `make chromadb-only` running)
-```
-
-### Frontend Can't Connect to API
-```bash
-# Frontend calls a relative /api path, proxied to the backend:
-# - Docker: nginx.conf proxies /api/ -> http://api:444
-# - Local dev (ng serve): client/proxy.conf.json proxies /api -> http://127.0.0.1:444
-# Check the relevant proxy config and:
-make logs-api
-```
-
-### Docker Build Issues
-```bash
-# Rebuild without cache
-docker compose build --no-cache
-
-# Full reset
-docker system prune -a
-docker compose up --build
-```
-
-For more troubleshooting, see [DEVELOPMENT.md](DEVELOPMENT.md#troubleshooting).
-
----
-
-## 📦 Key Dependencies
-
-### Frontend
-- `@angular/core@18` - Frontend framework
-- `@angular/common` - Common utilities
-- `bootstrap@5` - UI framework
-- `jwt-decode` - JWT token handling
-- `ng-bootstrap` - Bootstrap components
-
-### Backend
-- `fastapi>=0.115` - Web framework
-- `uvicorn>=0.32` - ASGI server
-- `SQLAlchemy==2.0.40` - ORM
-- `langchain-*` - LLM integration
-- `chromadb>=1.3.0` - Vector database client
-- `python-jose==3.3.0` - JWT handling
-
-See `pyproject.toml` for the full dependency list.
-
----
-
-## 🤝 Contributing
-
-1. Create a feature branch from `main`
-2. Make your changes with clear commit messages
-3. Run tests locally: `make test`
-4. Push and create a pull request
-5. Ensure CI/CD checks pass
-
-### Development Workflow
-```bash
-# Update code
-git checkout -b feature/your-feature
-
-# Test locally
-make test
-
-# Commit and push
-git add .
-git commit -m "feat: Add your feature description"
-git push origin feature/your-feature
-
-# Create PR on GitHub
-```
-
----
 
 ## 📄 License
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the LICENSE file for details. This means any modified version deployed as a network service (e.g. a SaaS fork) must also make its source code available to its users.
-
----
-
-## 📞 Support
-
-- **Issues**: Report bugs on [GitHub Issues](https://github.com/your-org/bot-factory/issues)
-- **Documentation**: Check [DEVELOPMENT.md](DEVELOPMENT.md) and [CLAUDE.md](CLAUDE.md)
-- **Architecture**: See [CLAUDE.md](CLAUDE.md) for system architecture
-
----
-
-## 🎯 Roadmap
-
-### Completed ✅
-- [x] Core bot creation and management
-- [x] Avatar builder
-- [x] Knowledge base with RAG
-- [x] Token tracking and analytics
-- [x] Multiple LLM provider support
-- [x] Docker containerization
-
-### In Progress 🔄
-- [ ] GitHub Actions CI/CD pipeline
-- [ ] Enhanced analytics dashboard
-- [ ] Multi-language support
-
-### Planned 📋
-- [ ] GraphQL API option
-- [ ] WebSocket for real-time features
-- [ ] Advanced prompt engineering UI
-- [ ] Bot marketplace
-
----
-
-## 👥 Authors
-
-- **Bot Factory Team** - Initial development and maintenance
-
 ---
 
 ## 🙏 Acknowledgments
@@ -570,6 +306,4 @@ This project is licensed under the GNU Affero General Public License v3.0 (AGPL-
 
 ---
 
-**Happy coding! 🚀**
 
-Last Updated: 2026-08-03
