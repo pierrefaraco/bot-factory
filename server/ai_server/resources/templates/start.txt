@@ -1,4 +1,4 @@
---- Chapter ID: 8 --- Name: Mon parcours en resumé --- Dad ID: this_is_a_root_chapter --- Indice: 4 --- Children Ref Id: 5f3a0791-5548-4735-b4a9-9288cf4d1dcf ---
+--- Chapter ID: 61 --- Name: Mon parcours en resumé --- Dad ID: this_is_a_root_chapter --- Indice: 5 --- Children Ref Id: 5f3a0791-5548-4735-b4a9-9288cf4d1dcf ---
 J'ai débuté ma carrière en tant que technicien, et c'est à l'âge de 30 ans que j'ai décidé de devenir développeur.
 
 Pour ce faire, je me suis inscrit au CNAM afin de suivre des cours du soir en informatique. En parallèle, j'ai fait correspondre ma carrière à mes études.
@@ -18,12 +18,14 @@ Aujourd'hui, mon activité principale consiste à concevoir des microservices en
 
 J'aime profondément ce que je fais et le chemin parcouru jusqu'ici, mais j'ai aujourd'hui envie de faire évoluer ma carrière. C'est dans cette optique que je profite d'un PDV pour prendre le temps de réfléchir à cette évolution et explorer de nouvelles opportunités.
 
---- Chapter ID: 9 --- Name: Mon activité actuelle --- Dad ID: this_is_a_root_chapter --- Indice: 5 --- Children Ref Id: 0290bb40-8202-4c32-84fe-83227df26c87 ---
+
+--- Chapter ID: 62 --- Name: Mon activité actuelle --- Dad ID: this_is_a_root_chapter --- Indice: 6 --- Children Ref Id: 0290bb40-8202-4c32-84fe-83227df26c87 ---
 Notre entreprise dispose de son propre réseau, doté d'équipements dédiés. Chacun de nos clients possède, chez lui, un système de télécommunication fonctionnant en partie sur Kubernetes et connecté à ce réseau.
 
 Une plateforme Kubernetes centrale permet de relier l'ensemble de ces systèmes et d'automatiser l'administration ainsi que l'allocation des ressources. C'est principalement sur cette plateforme centrale que j'interviens, où je développe des microservices en Python exposant une API pour les plateformes clientes.
 
---- Chapter ID: 10 --- Name: Un exemple de ce que j'ai accompli  --- Dad ID: this_is_a_root_chapter --- Indice: 6 --- Children Ref Id: 5e529325-bbf0-4cfe-92e5-aa704594ffdb ---
+
+--- Chapter ID: 63 --- Name: Un exemple de ce que j'ai accompli  --- Dad ID: this_is_a_root_chapter --- Indice: 7 --- Children Ref Id: 5e529325-bbf0-4cfe-92e5-aa704594ffdb ---
 L'automatisation de la création des private lines avec des micros services en Python qui tournent sur Kubernetes.
 
 Ce mécanisme permet à un utilisateur, depuis un site A, de faire une demande de ligne via son interface. Si cette demande est acceptée par le client à l'autre extrémité, la configuration et l'allocation des ressources sont automatisées, rendant la ligne fonctionnelle. Auparavant, cela nécessitait des opérations manuelles fastidieuses, à la fois sur le système des client et sur le réseau.
@@ -38,7 +40,8 @@ En parallèle, un microservice central configure un équipement du réseau, qui 
 Une fois toutes les configurations effectuées les utilisateurs peuvent désormais l'utiliser.
 
 
---- Chapter ID: 11 --- Name: Cette application --- Dad ID: this_is_a_root_chapter --- Indice: 11 --- Children Ref Id: bf2a9163-a13b-4f1b-bfaa-5fa1c56a2445 ---
+
+--- Chapter ID: 64 --- Name: Cette application --- Dad ID: this_is_a_root_chapter --- Indice: 12 --- Children Ref Id: bf2a9163-a13b-4f1b-bfaa-5fa1c56a2445 ---
 Bot Factory
 A full-stack AI bot creation and management platform that empowers users to create, customize, and deploy intelligent chatbots with advanced features like knowledge base management and token tracking.
 
@@ -81,7 +84,8 @@ Nginx as reverse proxy
 Alembic for database migrations
 pytest for backend testing
 
---- Chapter ID: 12 --- Name: Utilisation de l'IA --- Dad ID: this_is_a_root_chapter --- Indice: 10 --- Children Ref Id: 5f226ea6-df48-4c74-af05-313c0df1042b ---
+
+--- Chapter ID: 65 --- Name: Utilisation de l'IA --- Dad ID: this_is_a_root_chapter --- Indice: 11 --- Children Ref Id: 5f226ea6-df48-4c74-af05-313c0df1042b ---
 Je pense que l'IA donne de véritables super-pouvoirs aux développeurs, à condition de savoir où lui laisser la main et où la garder.
 
 Pour le code destiné à la production, je préfère aujourd'hui lui confier de petites tâches et travailler en binôme avec elle, afin de garder la maîtrise de ce qui est livré. Cette frontière évoluera sans doute : avec une bonne couverture de tests, des spécifications claires et une CI solide, on pourra lui confier des tâches plus larges. La maîtrise viendra alors moins de la taille des tâches que de la qualité des garde-fous qui les entourent.
@@ -92,10 +96,8 @@ Elle est aussi très efficace pour le débogage et l'analyse de problèmes, dès
 
 Enfin, elle excelle dans tout ce qui est répétitif et fastidieux. Mais il faut rester lucide : en nous reposant trop sur elle, nous risquons non seulement de perdre la maîtrise des outils que nous concevons, mais aussi, peu à peu, le réflexe de raisonner nous-mêmes sur nos systèmes.
 
---- Chapter ID: 14 --- Name: Les design Pattern --- Dad ID: this_is_a_root_chapter --- Indice: 12 --- Children Ref Id: a0ec6bac-93b8-4fbd-b007-4f4c9641c28a ---
-Il vaut  mieux régler un problème avec le design qu'avec des lignes de codes
 
---- Chapter ID: 15 --- Name: Un deuxième exemple de ce que j'ai accompli  --- Dad ID: this_is_a_root_chapter --- Indice: 7 --- Children Ref Id: 4d69591c-3fbe-42ac-ae54-3750b2baf5aa ---
+--- Chapter ID: 67 --- Name: Un deuxième exemple de ce que j'ai accompli  --- Dad ID: this_is_a_root_chapter --- Indice: 8 --- Children Ref Id: 4d69591c-3fbe-42ac-ae54-3750b2baf5aa ---
 L'automatisation de la création d'un OS custom
 
 Lors des augmentations des prix de VMware, nous avons décidé de nous tourner vers une autre technologie. Pour cela, j'ai automatisé la création d'un OS Linux customisé, afin qu'il puisse être installé sur des serveurs bare metal, avec tous les utilitaires nécessaires au déploiement de notre système basé sur Kubernetes.
@@ -113,12 +115,18 @@ Modification de certains fichiers d'installation
 Build de l'ISO custom à partir du répertoire
 Dépôt de l'ISO sur Artifactory
 
---- Chapter ID: 18 --- Name: Mes loisirs --- Dad ID: this_is_a_root_chapter --- Indice: 13 --- Children Ref Id: 6762060a-3b51-4c86-9c1d-d5cf33e0f6c6 ---
+
+--- Chapter ID: 68 --- Name: Mes loisirs --- Dad ID: this_is_a_root_chapter --- Indice: 13 --- Children Ref Id: 6762060a-3b51-4c86-9c1d-d5cf33e0f6c6 ---
 J'aime la musique, le cinéma, la randonné, les jeux videos
 
---- Chapter ID: 19 --- Name: Mon expertise Python --- Dad ID: this_is_a_root_chapter --- Indice: 8 --- Children Ref Id: c8c9b8e3-446d-4ebc-b641-3eb48af2c677 ---
 
+--- Chapter ID: 69 --- Name: Mon expertise Python --- Dad ID: this_is_a_root_chapter --- Indice: 9 --- Children Ref Id: c8c9b8e3-446d-4ebc-b641-3eb48af2c677 ---
+ Je travaille avec Python depuis 6 ans, principalement dans le développement d'API backend avec Flask et FastAPI. Au-delà de l'implémentation, je m'intéresse beaucoup à l'architecture logicielle et aux design patterns — j'aime réfléchir à comment structurer un projet pour qu'il reste maintenable et évolutif dans le temps, et pas seulement à faire fonctionner une fonctionnalité.
 
---- Chapter ID: 20 --- Name: Mon expertise Kubernetes --- Dad ID: this_is_a_root_chapter --- Indice: 9 --- Children Ref Id: b3b0b0c0-9af8-4d58-aef3-99672808e715 ---
+Avant de développer, je prends aussi le temps de réfléchir à la structure ou au composant natif Python le plus adapté au problème : est-ce qu'un simple dict suffit, ou est-ce qu'un dataclass, une classe avec des propriétés, un generator, ou une structure comme namedtuple ou Enum serait plus pertinent.
 
+Je me demande également si l'architecture de l'application permet d'éviter certains problèmes de concurrence en amont. Et si ce n'est pas possible, je réfléchis à quel type de concurrence est le plus adapté au cas — threading, multiprocessing, ou asynchrone avec asyncio, selon que le problème soit plutôt lié aux I/O ou au calcul (CPU-bound)
+
+--- Chapter ID: 70 --- Name: Mon expertise Kubernetes --- Dad ID: this_is_a_root_chapter --- Indice: 10 --- Children Ref Id: b3b0b0c0-9af8-4d58-aef3-99672808e715 ---
+J'utilise Kubernetes pour concevoir des applications scalables : je développe des microservices stateless en Python, déployés dans des pods derrière un load balancer. J'interviens à la fois sur les manifestes Kubernetes (déploiements, services, configuration) et sur le code applicatif Python. J'ai obtenu la certification Kubernetes Administrator (CKA) en 2021, aujourd'hui expirée.
 
