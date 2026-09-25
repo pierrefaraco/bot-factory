@@ -26,6 +26,7 @@ from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.token_tracking_svc import TokenTrackingService
+from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
     prefix="/api/token-stats",
@@ -35,6 +36,7 @@ router = APIRouter(
 
 logger = BotFactoryLogger()
 token_tracking_svc = TokenTrackingService()
+user_svc = UserAdminService()
 
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
@@ -158,6 +160,19 @@ async def get_tokens_last_24h_by_id(user_id: int, claims: dict = Depends(admin_o
     total = await token_tracking_svc.get_user_tokens_last_24h(user_id)
     logger.info(f"get_tokens_last_24h_by_id({user_id}) succeeded")
     return {"user_id": user_id, "total_tokens_last_24h": total}
+
+
+@router.get("/quota/me")
+async def get_token_quota_self(claims: dict = Depends(any_role)):
+    """Get the current user's 24h token quota (TOKEN_LIMIT_PER_USER_24H)"""
+    user_id = claims["sub"]
+    logger.info("GET /token-stats/quota/me - get_token_quota_self called")
+    user = await user_svc.get_user_dto_by_id(user_id)
+    if not user:
+        raise ApiError("User not found", status_code=401)
+    quota = await token_tracking_svc.get_token_quota(user)
+    logger.info(f"get_token_quota_self({user_id}) succeeded")
+    return quota
 
 
 @router.get("/stats-24h/me")

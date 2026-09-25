@@ -70,6 +70,7 @@ services:
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-123}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-a}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
+      TOKEN_LIMIT_PER_USER_24H: ${TOKEN_LIMIT_PER_USER_24H:-0}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com}
     ports:
       # Bound to loopback only: in prod, the "reverse-proxy" service

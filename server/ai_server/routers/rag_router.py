@@ -78,6 +78,7 @@ from ai_server.services.bot_parameters_svc import BotParametersService
 from ai_server.services.bot_svc import BotService
 from ai_server.services.knowledge_svc import KnowledgeSvc
 from ai_server.services.rag_svc import RagService, message_service
+from ai_server.services.token_tracking_svc import TokenTrackingService
 from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
@@ -93,6 +94,7 @@ bot_assignment_svc = BotAssignmentService()
 bot_svc = BotService()
 user_svc = UserAdminService()
 bot_parameters_svc = BotParametersService()
+token_tracking_svc = TokenTrackingService()
 
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
@@ -120,6 +122,23 @@ async def _check_bot_access_permission(user: UserDto, bot_id: int) -> bool:
     return False
 
 
+async def _enforce_token_quota(user: UserDto) -> None:
+    """Refuse the request with a 429 once the user's billed account has
+    reached TOKEN_LIMIT_PER_USER_24H (see TokenTrackingService.get_token_quota).
+    Checked before the LLM call, so the request that crosses the limit is
+    still served in full: this is a soft cap, not an exact one."""
+    quota = await token_tracking_svc.get_token_quota(user)
+    if quota["exceeded"]:
+        logger.warning(
+            f"LLM call rejected: user {user.id} (billed to {quota['billed_user_id']}) "
+            f"used {quota['used_24h']}/{quota['limit_24h']} tokens in the last 24h"
+        )
+        raise ApiError(
+            f"Token limit reached ({quota['limit_24h']} tokens per 24h). Please try again later.",
+            status_code=429,
+        )
+
+
 @router.post("/chat", dependencies=[Depends(require_json_body(ChatRequest))])
 async def chat(body: ChatRequest, claims: dict = Depends(any_role)):
     """Basic chat endpoint"""
@@ -138,6 +157,8 @@ async def chat(body: ChatRequest, claims: dict = Depends(any_role)):
     if not await _check_bot_access_permission(user, selected_bot_id):
         logger.warning(f"chat forbidden: user {user_id} has no access to bot {selected_bot_id}")
         raise ApiError(f"You don't have permission to access bot {selected_bot_id}", status_code=403)
+
+    await _enforce_token_quota(user)
 
     started_at = time.perf_counter()
     response = await rag_svc.ask(selected_bot_id, user_id, body.question)
@@ -176,6 +197,8 @@ async def trigfirstmessage(
     if not await _check_bot_access_permission(user, bot_id):
         logger.warning(f"trigfirstmessage forbidden: user {user_id} has no access to bot {bot_id}")
         raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
+
+    await _enforce_token_quota(user)
 
     question = await bot_parameters_svc.get_welcome_message(user.name, bot_id)
     stream_response = stream.upper() == "TRUE"
@@ -243,6 +266,8 @@ async def streamchat(
     if not await _check_bot_access_permission(user, bot_id):
         logger.warning(f"streamchat forbidden: user {user_id} has no access to bot {bot_id}")
         raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
+
+    await _enforce_token_quota(user)
 
     try:
         parsed_data = json.loads(data)

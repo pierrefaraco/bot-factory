@@ -1,6 +1,9 @@
 from typing import Optional, Dict, List
 from datetime import datetime, timezone, timedelta
+from ai_server.config.config import app_config
+from ai_server.config.constant import ADMIN_ROLE
 from ai_server.dao.database import TokenUsage, get_async_session
+from ai_server.dto.user_dto import UserDto
 from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from sqlalchemy import case, func, select
@@ -138,6 +141,33 @@ class TokenTrackingService:
             return 0
         finally:
             await session.close()
+
+    async def get_token_quota(self, user: UserDto) -> Dict:
+        """
+        Calcule le quota de tokens sur 24h glissantes d'un utilisateur
+        (TOKEN_LIMIT_PER_USER_24H).
+
+        Un guest est facturé sur le compte de son parent (cf.
+        TokenCountingCallback.on_llm_end dans llm_svc.py) : le quota est
+        donc celui du compte facturé, guests inclus.
+
+        Returns:
+            Dict {billed_user_id, limit_24h, used_24h, remaining_24h, exceeded}.
+            limit_24h/remaining_24h valent None si aucune limite ne s'applique
+            (limite désactivée ou Admin).
+        """
+        billed_user_id = user.parent_id if user.parent_id and user.parent_id > 0 else user.id
+        used = await self.get_user_tokens_last_24h(billed_user_id)
+        limit = app_config.TOKEN_LIMIT_PER_USER_24H
+        if limit <= 0 or user.roles == ADMIN_ROLE:
+            limit = None
+        return {
+            "billed_user_id": billed_user_id,
+            "limit_24h": limit,
+            "used_24h": int(used),
+            "remaining_24h": None if limit is None else max(limit - int(used), 0),
+            "exceeded": limit is not None and used >= limit,
+        }
 
     async def get_user_stats_last_24h(
         self, user_id: int, include_records: bool = False, records_limit: int = 100

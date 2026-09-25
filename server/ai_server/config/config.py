@@ -109,6 +109,19 @@ class AppConfig(BaseConfig):
     # was silently dropped every time.
     RAG_RETRIEVER_K = int(os.environ.get("RAG_RETRIEVER_K", 12))
 
+    # Max tokens an account (itself + its guests, who are billed to their
+    # parent -- see TokenCountingCallback in llm_svc.py) may consume over a
+    # rolling 24h window before chat requests are refused with a 429.
+    # 0 or unset = unlimited. Admins are never limited.
+    TOKEN_LIMIT_PER_USER_24H = 0
+    value = os.environ.get("TOKEN_LIMIT_PER_USER_24H", default="0")
+    try:
+        value = int(value)
+        if value > 0:
+            TOKEN_LIMIT_PER_USER_24H = value
+    except ValueError:
+        logger.warning(f"Invalid TOKEN_LIMIT_PER_USER_24H={value!r}, token limit disabled")
+
     SECRET_KEY = os.environ.get(
         "SECRET_KEY", "your-secret-key-change-this-in-production"
     )

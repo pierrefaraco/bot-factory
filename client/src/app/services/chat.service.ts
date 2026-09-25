@@ -146,7 +146,7 @@ export class ChatService {
         )
         .subscribe({
           next: (value) => { observer.next(value), chatServiceUser.update() },
-          error: (err) => { console.log(err); this.response = "error " + err.status; chatServiceUser.complete() },
+          error: (err) => { console.log(err); this.response = this.streamErrorMessage(err); chatServiceUser.complete() },
           complete: () => { observer.complete(), chatServiceUser.complete() }
         });
 
@@ -169,7 +169,7 @@ export class ChatService {
         )
         .subscribe({
           next: (value) => { observer.next(value), chatServiceUser.update() },
-          error: (err) => { console.log(err); this.response = "error " + err.status; chatServiceUser.complete() },
+          error: (err) => { console.log(err); this.response = this.streamErrorMessage(err); chatServiceUser.complete() },
           complete: () => { observer.complete(), chatServiceUser.complete() }
         });
 
@@ -178,5 +178,12 @@ export class ChatService {
       };
     });
   }
-}
 
+  // 429 = token limit (TOKEN_LIMIT_PER_USER_24H) reached server-side
+  private streamErrorMessage(err: any): string {
+    if (err.status === 429) {
+      return "Limite de tokens atteinte pour les dernières 24h. Réessayez plus tard.";
+    }
+    return "error " + err.status;
+  }
+}

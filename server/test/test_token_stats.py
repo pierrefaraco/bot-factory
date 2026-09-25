@@ -2,6 +2,8 @@
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from ai_server.config.constant import ADMIN_ROLE, USER_ROLE
 
 from .helpers import assert_error
@@ -403,3 +405,60 @@ def test_get_admin_summary_splits_24h_from_30d(
     account = response.json()["accounts"][str(user.id)]
     assert account["tokens_24h"] == 5
     assert account["tokens_30d"] == 25
+
+
+def test_quota_self_golden_path(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    create_token_usage(user.id, bot.id, total_tokens=42)
+    headers = login(user.mail, password)
+
+    response = http_client.get(f"{api_base_url}/token-stats/quota/me", headers=headers)
+
+    assert response.status_code == 200, response.text
+    quota = response.json()
+    assert quota["billed_user_id"] == user.id
+    assert quota["used_24h"] == 42
+
+
+def test_quota_guest_billed_to_parent(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login
+):
+    parent, _parent_password = create_user(role=USER_ROLE)
+    guest, guest_password = create_user(role="Guest", parent_id=parent.id)
+    bot = create_bot(parent.id)
+    create_token_usage(parent.id, bot.id, user_guest_id=guest.id, total_tokens=7)
+    headers = login(guest.mail, guest_password)
+
+    response = http_client.get(f"{api_base_url}/token-stats/quota/me", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["billed_user_id"] == parent.id
+    assert response.json()["used_24h"] == 7
+
+
+def test_chat_rejected_when_token_limit_reached(
+    http_client, api_base_url, create_user, create_bot, create_bot_parameters,
+    create_token_usage, login, db_session,
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    create_bot_parameters(bot.id, interlocutor_identity="USER")
+    user.selected_bot_id = bot.id
+    db_session.commit()
+    headers = login(user.mail, password)
+
+    limit = http_client.get(
+        f"{api_base_url}/token-stats/quota/me", headers=headers
+    ).json()["limit_24h"]
+    if limit is None:
+        pytest.skip("TOKEN_LIMIT_PER_USER_24H is disabled on the API under test")
+    create_token_usage(user.id, bot.id, total_tokens=limit)
+
+    response = http_client.post(
+        f"{api_base_url}/rag/chat", json={"question": "Hello?"}, headers=headers
+    )
+
+    assert_error(response, 429, "Token limit reached")
