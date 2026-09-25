@@ -428,7 +428,7 @@ class BotParametersService(BaseService[BotParametersDto]):
             "used_sources": "only context",
             "context_type": "what is needed to speak about Pierre's career",
             "answer_style": "simplified",
-            "answer_length": "adaptive",
+            "answer_length": "long",
             "interlocutor_type": "Un recruteur technique ou des ressources Humaines",
             "goal": "Add usefull responses to your interlocutor's question",
             "behaviour_when_ignore": "mention",
