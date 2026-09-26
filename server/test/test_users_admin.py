@@ -5,7 +5,7 @@ self/guest/admin role-matrix pattern reused by later blueprints.
 """
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.models import User
+from ai_server.models import BotAssignment, User
 
 from .helpers import assert_error, unique
 
@@ -848,3 +848,105 @@ def test_get_selected_bot_admin_golden_path(
     )
 
     assert response.status_code == 200, response.text
+
+
+def _guest_assignments(db_session, guest_id, track):
+    """Active+inactive BotAssignment rows of guest_id, as {bot_id: row};
+    registers every one of them for cleanup (they're created over HTTP)."""
+    db_session.expire_all()
+    rows = db_session.query(BotAssignment).filter_by(user_id=guest_id).all()
+    for row in rows:
+        track(BotAssignment, row.id)
+    return {row.bot_id: row for row in rows}
+
+
+def test_register_guest_with_assigned_bots(
+    http_client, api_base_url, create_user, create_bot, login, db_session, track
+):
+    parent, parent_password = create_user(role=USER_ROLE)
+    bot = create_bot(parent.id)
+    headers = login(parent.mail, parent_password)
+    email = unique("newguest") + "@example.com"
+
+    response = http_client.post(
+        f"{api_base_url}/users/guest",
+        json={
+            "name": "New Guest",
+            "email": email,
+            "password": "Passw0rd!23",
+            "assigned_bot_ids": [bot.id],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201, response.text
+    guest = db_session.query(User).filter_by(mail=email).first()
+    assignments = _guest_assignments(db_session, guest.id, track)
+    track(User, guest.id)
+    assert list(assignments) == [bot.id]
+    assert assignments[bot.id].assigned_by == parent.id
+    assert assignments[bot.id].is_active
+
+
+def test_patch_guest_replaces_assigned_bots(
+    http_client,
+    api_base_url,
+    create_user,
+    create_bot,
+    create_bot_assignment,
+    login,
+    db_session,
+    track,
+):
+    parent, parent_password = create_user(role=USER_ROLE)
+    guest, _guest_password = create_user(role=GUEST_ROLE, parent_id=parent.id)
+    old_bot = create_bot(parent.id)
+    kept_bot = create_bot(parent.id)
+    new_bot = create_bot(parent.id)
+    create_bot_assignment(old_bot.id, guest.id, parent.id)
+    create_bot_assignment(kept_bot.id, guest.id, parent.id, is_active=False)
+    headers = login(parent.mail, parent_password)
+
+    response = http_client.patch(
+        f"{api_base_url}/users/{guest.id}",
+        json={"assigned_bot_ids": [kept_bot.id, new_bot.id]},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert sorted(a["bot_id"] for a in response.json()["assigned_bots"]) == sorted(
+        [kept_bot.id, new_bot.id]
+    )
+    assignments = _guest_assignments(db_session, guest.id, track)
+    assert sorted(assignments) == sorted([kept_bot.id, new_bot.id])
+    assert all(row.is_active for row in assignments.values())
+
+
+def test_patch_guest_assigned_bots_rejects_foreign_bot_atomically(
+    http_client,
+    api_base_url,
+    create_user,
+    create_bot,
+    create_bot_assignment,
+    login,
+    db_session,
+    track,
+):
+    parent, parent_password = create_user(role=USER_ROLE)
+    stranger, _stranger_password = create_user(role=USER_ROLE)
+    guest, _guest_password = create_user(role=GUEST_ROLE, parent_id=parent.id)
+    own_bot = create_bot(parent.id)
+    foreign_bot = create_bot(stranger.id)
+    create_bot_assignment(own_bot.id, guest.id, parent.id)
+    headers = login(parent.mail, parent_password)
+
+    response = http_client.patch(
+        f"{api_base_url}/users/{guest.id}",
+        json={"assigned_bot_ids": [foreign_bot.id]},
+        headers=headers,
+    )
+
+    assert response.status_code == 500, response.text
+    # The rejected replacement must not have already dropped the guest's
+    # existing assignment.
+    assert list(_guest_assignments(db_session, guest.id, track)) == [own_bot.id]

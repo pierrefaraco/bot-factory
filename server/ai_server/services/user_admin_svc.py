@@ -1,9 +1,8 @@
 from http import HTTPStatus
 from sqlalchemy import delete, func, or_, select
 from werkzeug.security import generate_password_hash, check_password_hash
-from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.models import Bot, BotAssignment, Message, Session, TokenUsage, User
+from ai_server.models import Bot, Message, Session, User
 from ai_server.database.session import db, get_async_session
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.exceptions.api_error import ApiError
@@ -12,6 +11,7 @@ from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.services.bot_assignment_svc import BotAssignmentService
+from ai_server.repositories import BotAssignmentRepository, TokenUsageRepository
 from ai_server.services.bot_svc import BotService
 
 
@@ -21,10 +21,18 @@ logger = BotFactoryLogger()
 class UserAdminService(BaseService[UserDto]):
     """Service for managing user entities"""
 
-    def __init__(self, bot_assignment_svc: BotAssignmentService, bot_svc: BotService):
+    def __init__(
+        self,
+        bot_assignment_svc: BotAssignmentService,
+        bot_svc: BotService,
+        token_usage_repo: TokenUsageRepository,
+        bot_assignment_repo: BotAssignmentRepository,
+    ):
         super().__init__()
         self.bot_assignment_svc = bot_assignment_svc
         self.bot_svc = bot_svc
+        self.token_usage_repo = token_usage_repo
+        self.bot_assignment_repo = bot_assignment_repo
 
     def user_to_dto(self, user: User) -> UserDto:
         """
@@ -48,7 +56,7 @@ class UserAdminService(BaseService[UserDto]):
         )
 
     # register_new_user/register_new_guest/register_user/create/
-    # _perform_create/_perform_assign_bot all stay sync (db.session, not
+    # _perform_create all stay sync (db.session, not
     # get_async_session()): _perform_create does
     # werkzeug.security.generate_password_hash(), a deliberately CPU-heavy
     # hash -- run directly on the event loop (no FastAPI threadpool for an
@@ -157,10 +165,13 @@ class UserAdminService(BaseService[UserDto]):
         # user_dto : UserDto = self._safe_execute("_perform_create", self._perform_create, user_data)
         if user_dto is None:
             raise ServiceError("User creation failed, no UserDto returned.")
-        user_data["id"] = user_dto.id
-        bots_ass_dto: BotAssignmentDto = self._perform_assign_bot(user_data)
-        if bots_ass_dto:
-            user_dto.assigned_bots = bots_ass_dto
+        bot_ids = user_data.get("assigned_bot_ids") or []
+        if bot_ids:
+            user_dto.assigned_bots = (
+                self.bot_assignment_svc.replace_user_assignments_sync(
+                    user_dto.id, int(user_data["parent_id"]), bot_ids
+                )
+            )
 
         return user_dto
 
@@ -182,32 +193,6 @@ class UserAdminService(BaseService[UserDto]):
             f"User created id={new_user.id} email={data['email']} roles={data['roles']}"
         )
         return self.get_user_by_email(data["email"])
-
-    def _perform_assign_bot(self, user_data) -> list[BotAssignmentDto]:
-        user_id = int(user_data.get("id"))
-        actual_assigment_datalist: list[BotAssignmentDto] = (
-            self.bot_assignment_svc.get_assignments_by_user(user_id, all=True)
-        )
-        for assigment in actual_assigment_datalist:
-            self.bot_assignment_svc.remove_assignment(
-                assigment.bot_id, assigment.user_id
-            )
-
-        bot_ids: list[int] = user_data.get("assigned_bot_ids") or []
-        bots_ass_dto: list[BotAssignmentDto] = []
-        self.logger.debug(
-            f"Updating bot assignments for user {user_id} with {len(bot_ids)} bots"
-        )
-        self.bot_assignment_svc._perform_remove_bot_for_user(user_id)
-        for bot_id in bot_ids:
-            assigment_data = {}
-            assigment_data["bot_id"] = int(bot_id)
-            assigment_data["assigned_by"] = int(user_data.get("parent_id"))
-            assigment_data["user_id"] = user_id
-            assigment_data["is_active"] = True
-            bot_ass_dto = self.bot_assignment_svc._perform_create(assigment_data)
-            bots_ass_dto.append(bot_ass_dto)
-        return bots_ass_dto
 
     async def get_dto_by_id(self, entity_id: int) -> UserDto:
         """
@@ -431,15 +416,11 @@ class UserAdminService(BaseService[UserDto]):
         user_dto: UserDto = self.user_to_dto(parent_user)
 
         if "assigned_bot_ids" in data:
-            assigned_bot_ids = data.get("assigned_bot_ids")
-            user_data = {
-                "id": guest_id,
-                "parent_id": parent_id,
-                "assigned_bot_ids": assigned_bot_ids,
-            }
-            # _perform_assign_bot() stays sync (shared with the sync
-            # create()/register_* chain) -- called here as a plain sync call.
-            bots_ass_dto = self._perform_assign_bot(user_data)
+            # Part of this method's own transaction (committed below): a
+            # rejected bot leaves the previous assignments untouched.
+            bots_ass_dto = await self.bot_assignment_svc.replace_user_assignments(
+                guest_id, parent_id, data.get("assigned_bot_ids") or []
+            )
             if bots_ass_dto:
                 user_dto.assigned_bots = bots_ass_dto
         await session.commit()
@@ -504,13 +485,8 @@ class UserAdminService(BaseService[UserDto]):
                 delete(Message).where(Message.session_id.in_(session_ids))
             )
         await session.execute(delete(Session).where(Session.user_id == entity_id))
-        await session.execute(delete(TokenUsage).where(TokenUsage.user_id == entity_id))
-        await session.execute(
-            delete(BotAssignment).where(
-                (BotAssignment.user_id == entity_id)
-                | (BotAssignment.assigned_by == entity_id)
-            )
-        )
+        await self.token_usage_repo.delete_by_user_id(entity_id)
+        await self.bot_assignment_repo.delete_involving_user(entity_id)
         # Bot's own children (BotParameters/BotAvatar/Knowledge) do have
         # ondelete=CASCADE, so removing the Bot rows here is enough for them.
         await session.execute(delete(Bot).where(Bot.user_account_id == entity_id))
@@ -653,11 +629,8 @@ class UserAdminService(BaseService[UserDto]):
 
     async def _get_assignated_bots(self, user) -> List[UserDto]:
         user_dto = self.user_to_dto(user)
-        # bot_assignment_svc.get_assignments_by_user() stays sync (shared
-        # with BotService and BotAssignmentService's own router) -- called
-        # here as a plain sync call.
-        user_dto.assigned_bots = self.bot_assignment_svc.get_assignments_by_user(
-            user.id, all=True
+        user_dto.assigned_bots = await self.bot_assignment_svc.get_assignments_by_user(
+            user.id, include_inactive=True
         )
         return user_dto
 

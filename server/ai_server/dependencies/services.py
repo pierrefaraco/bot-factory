@@ -11,10 +11,13 @@ must outlive a request -- RagService.store (in-memory chat histories +
 its asyncio.Lock), ChromaDbService's FastEmbed model (slow to load),
 YamlSvc's parsed YAML, LlmService's ChatMistralAI client.
 
-Services get their collaborators through their constructors; the order
-below is the dependency order, and it has no cycle (PromptService reads
-and writes Bot.prompt itself instead of going through BotService for
-exactly that reason -- see prompt_svc.py).
+Services get their collaborators -- other services and repositories (see
+repositories/) -- through their constructors; the order below is the
+dependency order, and it has no cycle (PromptService reads and writes
+Bot.prompt itself instead of going through BotService for exactly that
+reason -- see prompt_svc.py). Repositories are stateless (the session
+comes from the request, see repositories/base.py), so one instance each
+is shared the same way.
 
 The providers are `async def` on purpose: FastAPI calls an async
 dependency inline, whereas a plain `def` one is dispatched to the
@@ -26,6 +29,12 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from ai_server.repositories import (
+    BotAssignmentRepository,
+    BotRepository,
+    TokenUsageRepository,
+    UserRepository,
+)
 from ai_server.services.authent_svc import AuthenticationService
 from ai_server.services.avatar_svc import AvatarService
 from ai_server.services.bot_assignment_svc import BotAssignmentService
@@ -65,9 +74,14 @@ class Services:
 
 
 def build_services() -> Services:
+    token_usage_repo = TokenUsageRepository()
+    bot_assignment_repo = BotAssignmentRepository()
+    bot_repo = BotRepository()
+    user_repo = UserRepository()
+
     avatar = AvatarService()
-    bot_assignment = BotAssignmentService()
-    token_tracking = TokenTrackingService()
+    bot_assignment = BotAssignmentService(bot_assignment_repo, bot_repo, user_repo)
+    token_tracking = TokenTrackingService(token_usage_repo)
     message = MessageService()
     yaml = YamlSvc()
     chroma_db = ChromaDbService()
@@ -76,7 +90,9 @@ def build_services() -> Services:
     template = TemplateSvc(knowledge)
     bot_parameters = BotParametersService(yaml, prompt)
     bot = BotService(avatar, bot_assignment, bot_parameters, knowledge, template)
-    user_admin = UserAdminService(bot_assignment, bot)
+    user_admin = UserAdminService(
+        bot_assignment, bot, token_usage_repo, bot_assignment_repo
+    )
     llm = LlmService(token_tracking, user_admin)
     rag = RagService(llm, chroma_db, prompt, message)
     return Services(

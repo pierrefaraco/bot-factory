@@ -1,12 +1,16 @@
 from typing import Optional, List, Dict, Any
 from ai_server.models import BotAssignment, Bot, User
-from ai_server.database.session import db, get_async_session
+from ai_server.database.session import db
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
+from ai_server.repositories import (
+    BotAssignmentRepository,
+    BotRepository,
+    UserRepository,
+)
 from ai_server.services.base_service import BaseService
 from ai_server.config.constant import GUEST_ROLE, USER_ROLE
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from sqlalchemy import select
 
 logger = BotFactoryLogger()
 
@@ -14,8 +18,16 @@ logger = BotFactoryLogger()
 class BotAssignmentService(BaseService[BotAssignmentDto]):
     """Service for managing bot user assignments"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        bot_assignment_repo: BotAssignmentRepository,
+        bot_repo: BotRepository,
+        user_repo: UserRepository,
+    ):
         super().__init__()
+        self.bot_assignment_repo = bot_assignment_repo
+        self.bot_repo = bot_repo
+        self.user_repo = user_repo
 
     def _assignment_to_dto(self, assignment: BotAssignment) -> BotAssignmentDto:
         """
@@ -36,14 +48,70 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             is_active=assignment.is_active,
         )
 
-    # create/_perform_create stay sync (db.session, not get_async_session()):
-    # _perform_create is called directly by UserAdminService
-    # (user_admin_svc.py, not migrated yet) in addition to
-    # bot_assignment_router.py -- see
-    # /root/.claude/plans/moonlit-leaping-salamander.md.
-    def create(self, data: Dict[str, Any]) -> BotAssignmentDto:
+    @staticmethod
+    def _check_assignable(
+        bot: Optional[Bot],
+        user: Optional[User],
+        bot_id: int,
+        user_id: int,
+        assigned_by: int,
+    ) -> None:
+        """Business rules for assigning bot_id to user_id on behalf of
+        assigned_by, given the already-loaded rows (None if not found).
+        Shared by the async path and the sync one below."""
+        if not bot:
+            logger.warning(f"assignment rejected: bot_id={bot_id} not found")
+            raise NotFoundError("Bot", str(bot_id))
+
+        if int(bot.user_account_id) != int(assigned_by):
+            logger.warning(
+                f"assignment rejected: bot_id={bot_id} owner={bot.user_account_id} "
+                f"does not match assigned_by={assigned_by}"
+            )
+            raise ServiceError(f"Bot {bot_id} does not belong to user {assigned_by}")
+
+        # Validate that user exists and can be assigned bots (GUEST or USER
+        # -- "My Bots" now shows assigned bots for Users too, and
+        # admin.component.ts's "Assign Bot" action is already offered for
+        # User rows in the Users tab, so this used to 500 for them).
+        if not user:
+            logger.warning(f"assignment rejected: user_id={user_id} not found")
+            raise NotFoundError("User", str(user_id))
+
+        if user.roles not in (GUEST_ROLE, USER_ROLE):
+            logger.warning(
+                f"assignment rejected: user_id={user_id} role={user.roles} "
+                "is not GUEST or USER"
+            )
+            raise ServiceError(f"User {user_id} is not a GUEST or USER account")
+        # Guests are only assignable by their own parent -- Users have no
+        # equivalent parent relationship to check here, and the calling
+        # route (PATCH /users/<id>) already ran authorize_user_scope, which
+        # is what actually gates who may reach this point for a User target
+        # (Admin, since a User has no guests of their own to assign bots
+        # through this same endpoint anyway).
+        if user.roles == GUEST_ROLE and int(user.parent_id) != int(assigned_by):
+            logger.warning(
+                f"assignment rejected: guest user_id={user_id} is not a child "
+                f"of assigned_by={assigned_by}"
+            )
+            raise ServiceError(
+                f"Guest user {user_id} is not a child of user {assigned_by}"
+            )
+
+    async def _validate(self, bot_id: int, user_id: int, assigned_by: int) -> None:
+        self._check_assignable(
+            await self.bot_repo.get(bot_id),
+            await self.user_repo.get(user_id),
+            bot_id,
+            user_id,
+            assigned_by,
+        )
+
+    async def create(self, data: Dict[str, Any]) -> BotAssignmentDto:
         """
-        Create a new bot user assignment.
+        Create a new bot user assignment, or reactivate/update the existing
+        one for the same bot and user.
 
         Args:
             data: Assignment creation data containing bot_id, user_id, assigned_by
@@ -52,160 +120,20 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             Created BotAssignmentDto instance
 
         Raises:
-            ServiceError: When assignment creation fails
+            NotFoundError/ServiceError: When the assignment is not allowed
         """
-        result = self._perform_create(data)
-        if result is None:
-            raise ServiceError(
-                "Assignment creation failed, no BotAssignmentDto returned."
-            )
-        return result
-
-    def _perform_create(self, data: Dict[str, Any]) -> BotAssignmentDto:
-        # Validate that bot exists and belongs to the assigner
         logger.debug(
             f"Creating bot assignment - bot_id: {data.get('bot_id')}, user_id: {data.get('user_id')}, assigned_by: {data.get('assigned_by')}"
         )
-        bot = Bot.query.get(data["bot_id"])
-        if not bot:
-            logger.warning(f"_perform_create rejected: bot_id={data['bot_id']} not found")
-            raise NotFoundError("Bot", str(data["bot_id"]))
+        await self._validate(data["bot_id"], data["user_id"], data["assigned_by"])
 
-        if int(bot.user_account_id) != int(data["assigned_by"]):
-            logger.warning(
-                f"_perform_create rejected: bot_id={data['bot_id']} owner={bot.user_account_id} "
-                f"does not match assigned_by={data['assigned_by']}"
-            )
-            raise ServiceError(
-                f"Bot {data['bot_id']} does not belong to user {data['assigned_by']}"
-            )
-
-        # Validate that user exists and can be assigned bots (GUEST or USER
-        # -- "My Bots" now shows assigned bots for Users too, and
-        # admin.component.ts's "Assign Bot" action is already offered for
-        # User rows in the Users tab, so this used to 500 for them).
-        user: User = User.query.get(data["user_id"])
-        if not user:
-            logger.warning(f"_perform_create rejected: user_id={data['user_id']} not found")
-            raise NotFoundError("User", str(data["user_id"]))
-
-        if user.roles not in (GUEST_ROLE, USER_ROLE):
-            logger.warning(
-                f"_perform_create rejected: user_id={data['user_id']} role={user.roles} "
-                "is not GUEST or USER"
-            )
-            raise ServiceError(f"User {data['user_id']} is not a GUEST or USER account")
-        # Guests are only assignable by their own parent -- Users have no
-        # equivalent parent relationship to check here, and the calling
-        # route (PATCH /users/<id>) already ran authorize_user_scope, which
-        # is what actually gates who may reach this point for a User target
-        # (Admin, since a User has no guests of their own to assign bots
-        # through this same endpoint anyway).
-        if user.roles == GUEST_ROLE and int(user.parent_id) != int(data["assigned_by"]):
-            logger.warning(
-                f"_perform_create rejected: guest user_id={data['user_id']} is not a child "
-                f"of assigned_by={data['assigned_by']}"
-            )
-            raise ServiceError(
-                f"Guest user {data['user_id']} is not a child of user {data['assigned_by']}"
-            )
-
-        # Check if assignment already exists
-        existing_assignment = BotAssignment.query.filter_by(
-            bot_id=data["bot_id"], user_id=data["user_id"]
-        ).first()
-
-        if existing_assignment:
-            # Update existing assignment
-            existing_assignment.is_active = data.get("is_active", True)
-            existing_assignment.assigned_by = data["assigned_by"]
-            db.session.commit()
-            logger.info(
-                f"Bot assignment reactivated/updated: assignment_id={existing_assignment.id} "
-                f"bot_id={data['bot_id']} user_id={data['user_id']} is_active={existing_assignment.is_active}"
-            )
-            return self._assignment_to_dto(existing_assignment)
-
-        # Create new assignment
-        assignment = BotAssignment(
-            bot_id=data["bot_id"],
-            user_id=data["user_id"],
-            assigned_by=data["assigned_by"],
-            is_active=data.get("is_active", True),
+        existing_assignment = await self.bot_assignment_repo.find(
+            data["bot_id"], data["user_id"]
         )
-
-        db.session.add(assignment)
-        db.session.commit()
-        logger.info(
-            f"Bot assignment created: assignment_id={assignment.id} "
-            f"bot_id={data['bot_id']} user_id={data['user_id']}"
-        )
-        return self._assignment_to_dto(assignment)
-
-    # Async counterpart of create/_perform_create, for
-    # bot_assignment_router.py's now-async create_assignment route.
-    # create/_perform_create themselves stay sync: _perform_create is also
-    # called directly by UserAdminService (user_admin_svc.py, not
-    # migrated yet).
-    async def create_async(self, data: Dict[str, Any]) -> BotAssignmentDto:
-        result = await self._perform_create_async(data)
-        if result is None:
-            raise ServiceError(
-                "Assignment creation failed, no BotAssignmentDto returned."
-            )
-        return result
-
-    async def _perform_create_async(self, data: Dict[str, Any]) -> BotAssignmentDto:
-        logger.debug(
-            f"Creating bot assignment - bot_id: {data.get('bot_id')}, user_id: {data.get('user_id')}, assigned_by: {data.get('assigned_by')}"
-        )
-        session = get_async_session()
-        bot = await session.get(Bot, data["bot_id"])
-        if not bot:
-            logger.warning(f"_perform_create_async rejected: bot_id={data['bot_id']} not found")
-            raise NotFoundError("Bot", str(data["bot_id"]))
-
-        if int(bot.user_account_id) != int(data["assigned_by"]):
-            logger.warning(
-                f"_perform_create_async rejected: bot_id={data['bot_id']} owner={bot.user_account_id} "
-                f"does not match assigned_by={data['assigned_by']}"
-            )
-            raise ServiceError(
-                f"Bot {data['bot_id']} does not belong to user {data['assigned_by']}"
-            )
-
-        user = await session.get(User, data["user_id"])
-        if not user:
-            logger.warning(f"_perform_create_async rejected: user_id={data['user_id']} not found")
-            raise NotFoundError("User", str(data["user_id"]))
-
-        if user.roles not in (GUEST_ROLE, USER_ROLE):
-            logger.warning(
-                f"_perform_create_async rejected: user_id={data['user_id']} role={user.roles} "
-                "is not GUEST or USER"
-            )
-            raise ServiceError(f"User {data['user_id']} is not a GUEST or USER account")
-        if user.roles == GUEST_ROLE and int(user.parent_id) != int(data["assigned_by"]):
-            logger.warning(
-                f"_perform_create_async rejected: guest user_id={data['user_id']} is not a child "
-                f"of assigned_by={data['assigned_by']}"
-            )
-            raise ServiceError(
-                f"Guest user {data['user_id']} is not a child of user {data['assigned_by']}"
-            )
-
-        existing_result = await session.execute(
-            select(BotAssignment).where(
-                BotAssignment.bot_id == data["bot_id"],
-                BotAssignment.user_id == data["user_id"],
-            )
-        )
-        existing_assignment = existing_result.scalar_one_or_none()
-
         if existing_assignment:
             existing_assignment.is_active = data.get("is_active", True)
             existing_assignment.assigned_by = data["assigned_by"]
-            await session.commit()
+            await self.bot_assignment_repo.commit()
             logger.info(
                 f"Bot assignment reactivated/updated: assignment_id={existing_assignment.id} "
                 f"bot_id={data['bot_id']} user_id={data['user_id']} is_active={existing_assignment.is_active}"
@@ -218,17 +146,14 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             assigned_by=data["assigned_by"],
             is_active=data.get("is_active", True),
         )
-        session.add(assignment)
-        await session.commit()
+        self.bot_assignment_repo.add(assignment)
+        await self.bot_assignment_repo.commit()
         logger.info(
             f"Bot assignment created: assignment_id={assignment.id} "
             f"bot_id={data['bot_id']} user_id={data['user_id']}"
         )
         return self._assignment_to_dto(assignment)
 
-    # Migrated to async: no caller left besides bot_assignment_router.py's
-    # update_assignment (already async) and delete_assignment (now async
-    # too).
     async def get_dto_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
         """
         Retrieve an assignment by its ID.
@@ -239,121 +164,49 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             BotAssignmentDto instance if found, None otherwise
         """
-        return await self._perform_get_by_id(entity_id)
-
-    async def _perform_get_by_id(self, entity_id: int) -> Optional[BotAssignmentDto]:
-        session = get_async_session()
-        assignment = await session.get(BotAssignment, entity_id)
+        assignment = await self.bot_assignment_repo.get(entity_id)
         if not assignment:
             return None
         return self._assignment_to_dto(assignment)
 
-    def get_all(self) -> List[BotAssignmentDto]:
+    async def get_assignments_by_parent(
+        self, parent_user_id: int
+    ) -> List[BotAssignmentDto]:
         """
-        Retrieve all assignments.
-
-        Returns:
-            List of BotAssignmentDto instances
-
-        Raises:
-            ServiceError: When assignment retrieval fails
-        """
-        result = self._perform_get_all()
-        if result is None:
-            raise ServiceError("Assignment get_all failed, no list returned.")
-        return result
-
-    def _perform_get_all(self) -> List[BotAssignmentDto]:
-        assignments: List[BotAssignment] = BotAssignment.query.filter_by(
-            is_active=True
-        ).all()
-        return [self._assignment_to_dto(assignment) for assignment in assignments]
-
-    async def get_assignments_by_parent(self, parent_user_id: int) -> List[BotAssignmentDto]:
-        """
-        Get all assignments created by a parent user.
+        Get all active assignments created by a parent user.
 
         Args:
             parent_user_id: ID of the parent user
 
         Returns:
             List of BotAssignmentDto instances
-
-        Raises:
-            ServiceError: When assignment retrieval fails
         """
-        result = await self._perform_get_by_parent(parent_user_id)
-        if result is None:
-            raise ServiceError("Get assignments by parent failed.")
-        return result
-
-    async def _perform_get_by_parent(self, parent_user_id: int) -> List[BotAssignmentDto]:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotAssignment).where(
-                BotAssignment.assigned_by == parent_user_id,
-                BotAssignment.is_active.is_(True),
-            )
+        assignments = await self.bot_assignment_repo.list_active_by_assigner(
+            parent_user_id
         )
-        assignments = result.scalars().all()
         return [self._assignment_to_dto(assignment) for assignment in assignments]
 
-    # Stays sync: also called from BotService (bot_svc.py) and
-    # UserAdminService (user_admin_svc.py), neither migrated yet.
-    def get_assignments_by_user(
-        self, user_id: int, all: bool = False
+    async def get_assignments_by_user(
+        self, user_id: int, include_inactive: bool = False
     ) -> List[BotAssignmentDto]:
         """
-        Get all assignments for a user.
+        Get the assignments of a user -- active ones only, unless
+        include_inactive.
 
         Args:
             user_id: ID of the user
 
         Returns:
             List of BotAssignmentDto instances
-
-        Raises:
-            ServiceError: When assignment retrieval fails
         """
-        if all:
-            result = self._perform_get_all_by_user(user_id)
-        else:
-            result = self._perform_get_by_user(user_id)
-        if result is None:
-            raise ServiceError("Get assignments by user failed.")
-        return result
-
-    def _perform_get_all_by_user(self, user_id: int) -> List[BotAssignmentDto]:
-        assignments: List[BotAssignment] = BotAssignment.query.filter_by(
-            user_id=user_id,
-        ).all()
-        return [self._assignment_to_dto(assignment) for assignment in assignments]
-
-    def _perform_get_by_user(self, user_id: int) -> List[BotAssignmentDto]:
-        assignments: List[BotAssignment] = BotAssignment.query.filter_by(
-            user_id=user_id, is_active=True
-        ).all()
-        return [self._assignment_to_dto(assignment) for assignment in assignments]
-
-    # Async counterpart of get_assignments_by_user(user_id) (the
-    # all=False/default path only -- the only one bot_assignment_router.py's
-    # get_assignments_by_guest needs), for that now-async route.
-    # get_assignments_by_user itself stays sync: still called from
-    # BotService (bot_svc.py) and UserAdminService (user_admin_svc.py,
-    # including its all=True path), neither migrated.
-    async def get_assignments_by_user_async(self, user_id: int) -> List[BotAssignmentDto]:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotAssignment).where(
-                BotAssignment.user_id == user_id, BotAssignment.is_active.is_(True)
-            )
+        assignments = await self.bot_assignment_repo.list_for_user(
+            user_id, active_only=not include_inactive
         )
-        assignments = result.scalars().all()
         return [self._assignment_to_dto(assignment) for assignment in assignments]
 
     async def get_assigned_bot_ids_for_user(self, user_id: int) -> List[int]:
         """
-        Get list of bot IDs assigned to a user.
+        Get list of bot IDs actively assigned to a user.
 
         Args:
             user_id: ID of the user
@@ -361,27 +214,12 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             List of bot IDs
         """
-        result = await self._perform_get_bot_ids(user_id)
-        if result is None:
-            return []
-        return result
-
-    async def _perform_get_bot_ids(self, user_id: int) -> List[int]:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotAssignment).where(
-                BotAssignment.user_id == user_id, BotAssignment.is_active.is_(True)
-            )
-        )
-        assignments = result.scalars().all()
+        assignments = await self.bot_assignment_repo.list_for_user(user_id)
         return [assignment.bot_id for assignment in assignments]
 
-    # Stays sync: also called from BotService (bot_svc.py, itself called from
-    # bot_router.py's get_bot) and bot_assignment_router.py's check_assignment,
-    # neither migrated.
-    def is_bot_assigned_to_user(self, bot_id: int, user_id: int) -> bool:
+    async def is_bot_assigned_to_user(self, bot_id: int, user_id: int) -> bool:
         """
-        Check if a bot is assigned to a user.
+        Check if a bot is actively assigned to a user.
 
         Args:
             bot_id: ID of the bot
@@ -390,34 +228,14 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         Returns:
             True if the bot is assigned to the user, False otherwise
         """
-        result = self._perform_check_assignment(
-            bot_id,
-            user_id,
+        assignment = await self.bot_assignment_repo.find(
+            bot_id, user_id, active_only=True
         )
-        return bool(result)
-
-    def _perform_check_assignment(self, bot_id: int, user_id: int) -> bool:
-        assignment = BotAssignment.query.filter_by(
-            bot_id=bot_id, user_id=user_id, is_active=True
-        ).first()
         return assignment is not None
-
-    # Async counterpart of is_bot_assigned_to_user, for rag_router.py's
-    # now-async routes.
-    async def is_bot_assigned_to_user_async(self, bot_id: int, user_id: int) -> bool:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotAssignment).where(
-                BotAssignment.bot_id == bot_id,
-                BotAssignment.user_id == user_id,
-                BotAssignment.is_active.is_(True),
-            )
-        )
-        return result.scalar_one_or_none() is not None
 
     async def update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
         """
-        Update assignment information.
+        Update assignment information (only is_active can change).
 
         Args:
             entity_id: ID of the assignment to update
@@ -427,53 +245,25 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             Updated BotAssignmentDto instance
 
         Raises:
-            ServiceError: When assignment update fails
+            NotFoundError: When the assignment does not exist
         """
-        result = await self._perform_update(
-            entity_id,
-            data,
-        )
-        if result is None:
-            raise ServiceError(
-                "Assignment update failed, no BotAssignmentDto returned."
-            )
-        return result
-
-    async def _perform_update(self, entity_id: int, data: Dict[str, Any]) -> BotAssignmentDto:
-        session = get_async_session()
-        assignment = await session.get(BotAssignment, entity_id)
+        assignment = await self.bot_assignment_repo.get(entity_id)
         if not assignment:
-            logger.warning(f"_perform_update rejected: assignment_id={entity_id} not found")
+            logger.warning(f"update rejected: assignment_id={entity_id} not found")
             raise NotFoundError("Assignment", str(entity_id))
 
-        # Only allow updating is_active field
         if "is_active" in data:
             assignment.is_active = data["is_active"]
 
-        await session.commit()
+        await self.bot_assignment_repo.commit()
         logger.info(
             f"Bot assignment updated: assignment_id={entity_id} is_active={assignment.is_active}"
         )
         return self._assignment_to_dto(assignment)
 
-    def delete_all_bot_assignments(self, bot_id) -> bool:
-
-        assignments: list[BotAssignment] = BotAssignment.query.filter_by(
-            bot_id=bot_id
-        ).all()
-        for assignment in assignments:
-            self.delete(assignment.id)
-        logger.info(
-            f"Deleted all bot assignments for bot_id={bot_id}: count={len(assignments)}"
-        )
-        return True
-
-    # Stays sync: called by delete_all_bot_assignments above (itself called
-    # from BotService.delete_all_bot_assignments, bot_svc.py, not migrated
-    # yet), in addition to bot_assignment_router.py's delete_assignment.
-    def delete(self, entity_id: int) -> bool:
+    async def delete(self, entity_id: int) -> bool:
         """
-        Delete an assignment (soft delete by setting is_active to False).
+        Delete an assignment.
 
         Args:
             entity_id: ID of the assignment to delete
@@ -482,127 +272,93 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
             True if deletion was successful
 
         Raises:
-            ServiceError: When assignment deletion fails
+            NotFoundError: When the assignment does not exist
         """
-        result = self._perform_delete(entity_id)
-        if result is None:
-            raise ServiceError("Assignment delete failed, no assignment deleted.")
-        return result
-
-    def _perform_delete(self, entity_id: int) -> bool:
-        assignment = BotAssignment.query.get(entity_id)
+        assignment = await self.bot_assignment_repo.get(entity_id)
         if not assignment:
-            logger.warning(f"_perform_delete rejected: assignment_id={entity_id} not found")
+            logger.warning(f"delete rejected: assignment_id={entity_id} not found")
             raise NotFoundError("Assignment", str(entity_id))
 
         bot_id, user_id = assignment.bot_id, assignment.user_id
-        db.session.delete(assignment)
-        db.session.commit()
+        await self.bot_assignment_repo.delete(assignment)
+        await self.bot_assignment_repo.commit()
         logger.info(
             f"Bot assignment deleted: assignment_id={entity_id} bot_id={bot_id} user_id={user_id}"
         )
         return True
 
-    # Async counterpart of delete/_perform_delete, for
-    # bot_assignment_router.py's now-async delete_assignment route.
-    # delete/_perform_delete themselves stay sync: still called from
-    # delete_all_bot_assignments above (itself called from
-    # BotService.delete_all_bot_assignments, bot_svc.py, not migrated yet).
-    async def delete_async(self, entity_id: int) -> bool:
-        result = await self._perform_delete_async(entity_id)
-        if result is None:
-            raise ServiceError("Assignment delete failed, no assignment deleted.")
-        return result
-
-    async def _perform_delete_async(self, entity_id: int) -> bool:
-        session = get_async_session()
-        assignment = await session.get(BotAssignment, entity_id)
-        if not assignment:
-            logger.warning(f"_perform_delete_async rejected: assignment_id={entity_id} not found")
-            raise NotFoundError("Assignment", str(entity_id))
-
-        bot_id, user_id = assignment.bot_id, assignment.user_id
-        await session.delete(assignment)
-        await session.commit()
-        logger.info(
-            f"Bot assignment deleted: assignment_id={entity_id} bot_id={bot_id} user_id={user_id}"
-        )
-        return True
-
-    # Stays sync: also called from UserAdminService (user_admin_svc.py, not
-    # migrated yet) in addition to bot_assignment_router.py.
-    def remove_assignment(self, bot_id: int, user_id: int) -> bool:
+    async def remove_assignment(self, bot_id: int, user_id: int) -> bool:
         """
-        Remove assignment between a bot and user.
-
-        Args:
-            bot_id: ID of the bot
-            user_id: ID of the user
+        Remove the assignment between a bot and user, active or not.
 
         Returns:
-            True if removal was successful
+            True if an assignment was removed, False if there was none
         """
-        result = self._perform_remove_assignment(
-            bot_id,
-            user_id,
-        )
-        return bool(result)
-
-    def _perform_remove_assignment(self, bot_id: int, user_id: int) -> bool:
-        assignment = BotAssignment.query.filter_by(
-            bot_id=bot_id, user_id=user_id
-        ).first()
-
+        assignment = await self.bot_assignment_repo.find(bot_id, user_id)
         if not assignment:
             return False
 
         assignment_id = assignment.id
-        db.session.delete(assignment)
-        db.session.commit()
+        await self.bot_assignment_repo.delete(assignment)
+        await self.bot_assignment_repo.commit()
         logger.info(
             f"Bot assignment removed: assignment_id={assignment_id} bot_id={bot_id} user_id={user_id}"
         )
         return True
 
-    # Async counterpart of remove_assignment, for bot_assignment_router.py's
-    # now-async remove_assignment route. remove_assignment itself stays
-    # sync: still called from UserAdminService (user_admin_svc.py, not
-    # migrated yet).
-    async def remove_assignment_async(self, bot_id: int, user_id: int) -> bool:
-        result = await self._perform_remove_assignment_async(bot_id, user_id)
-        return bool(result)
+    async def replace_user_assignments(
+        self, user_id: int, assigned_by: int, bot_ids: List[int]
+    ) -> List[BotAssignmentDto]:
+        """Make bot_ids the exact set of (active) assignments of user_id.
 
-    async def _perform_remove_assignment_async(self, bot_id: int, user_id: int) -> bool:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotAssignment).where(
-                BotAssignment.bot_id == bot_id, BotAssignment.user_id == user_id
+        Does not commit: the caller owns the transaction, so a rejected bot
+        leaves the user's previous assignments untouched instead of already
+        having deleted them."""
+        logger.debug(
+            f"Replacing bot assignments for user {user_id} with {len(bot_ids)} bots"
+        )
+        for bot_id in bot_ids:
+            await self._validate(int(bot_id), user_id, assigned_by)
+
+        await self.bot_assignment_repo.delete_for_user(user_id)
+        assignments = [
+            BotAssignment(
+                bot_id=int(bot_id), user_id=user_id, assigned_by=int(assigned_by)
             )
-        )
-        assignment = result.scalar_one_or_none()
-
-        if not assignment:
-            return False
-
-        assignment_id = assignment.id
-        await session.delete(assignment)
-        await session.commit()
-        logger.info(
-            f"Bot assignment removed: assignment_id={assignment_id} bot_id={bot_id} user_id={user_id}"
-        )
-        return True
-
-    def _perform_remove_bot_for_user(self, user_id: int) -> bool:
-        assignments = BotAssignment.query.filter_by(user_id=user_id).all()
-
-        if not assignments:
-            logger.debug(f"No bot assignments to remove for user_id={user_id}")
-            return False
-
+            for bot_id in bot_ids
+        ]
         for assignment in assignments:
-            db.session.delete(assignment)
-        db.session.commit()
-        logger.info(
-            f"Removed all bot assignments for user_id={user_id}: count={len(assignments)}"
+            self.bot_assignment_repo.add(assignment)
+        await self.bot_assignment_repo.flush()
+        return [self._assignment_to_dto(assignment) for assignment in assignments]
+
+    # Transitional sync twin of replace_user_assignments(), for
+    # UserAdminService.create()'s still-sync register_* chain (run in a
+    # threadpool for its CPU-heavy password hashing, see user_admin_svc.py).
+    # Goes away once that chain -- the User aggregate -- is migrated to
+    # repositories. Commits itself: that chain has no async unit of work.
+    def replace_user_assignments_sync(
+        self, user_id: int, assigned_by: int, bot_ids: List[int]
+    ) -> List[BotAssignmentDto]:
+        logger.debug(
+            f"Replacing bot assignments for user {user_id} with {len(bot_ids)} bots"
         )
-        return True
+        for bot_id in bot_ids:
+            self._check_assignable(
+                Bot.query.get(int(bot_id)),
+                User.query.get(user_id),
+                int(bot_id),
+                user_id,
+                assigned_by,
+            )
+
+        BotAssignment.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+        assignments = [
+            BotAssignment(
+                bot_id=int(bot_id), user_id=user_id, assigned_by=int(assigned_by)
+            )
+            for bot_id in bot_ids
+        ]
+        db.session.add_all(assignments)
+        db.session.commit()
+        return [self._assignment_to_dto(assignment) for assignment in assignments]

@@ -33,7 +33,7 @@ work at all (pure in-memory YAML lookup, bot_parameters_svc.py); select_bot
 does its own small async User update directly (no service method existed
 for it, sync or async, so there was nothing to duplicate); get_bot/
 update_bot_admin call a dedicated `_async` twin
-(get_dto_by_id_async/is_bot_assigned_to_user_async, update_async) added
+(get_dto_by_id_async, update_async) added
 alongside the original sync BotService method -- that one is still
 shared with UserAdminService/bot_router.py's own still-sync routes, so it
 couldn't be converted in place without either breaking those callers or
@@ -216,7 +216,7 @@ async def get_bot(
         logger.info(f"get_bot({bot_id}) succeeded")
         return bot_dto.to_dict()
     elif user.roles in (USER_ROLE, GUEST_ROLE):
-        if int(bot_dto.user_account_id) == int(user_id) or await bot_svc.is_bot_assigned_to_user_async(bot_id, user_id):
+        if int(bot_dto.user_account_id) == int(user_id) or await bot_svc.is_bot_assigned_to_user(bot_id, user_id):
             logger.info(f"get_bot({bot_id}) succeeded")
             return bot_dto.to_dict()
 

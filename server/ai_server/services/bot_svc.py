@@ -378,10 +378,9 @@ class BotService(BaseService[BotDto]):
     # get_bots_by_user/get_assigned_bots/get_owned_and_assigned_bots (and
     # their _perform_* helpers) are migrated as one cluster: none has any
     # caller besides each other and bot_router.py (get_all_owned_bots,
-    # get_user_bots). self.avatar_svc.get_avatar_by_bot_id() and
-    # self.bot_assignment_svc.get_assignments_by_user() stay plain sync
-    # calls inside them -- both still-sync methods themselves (shared with
-    # other not-yet-migrated callers), same pattern as elsewhere in this
+    # get_user_bots). self.avatar_svc.get_avatar_by_bot_id() stays a plain
+    # sync call inside them -- still-sync itself (shared with other
+    # not-yet-migrated callers), same pattern as elsewhere in this
     # migration.
     async def get_bots_by_user(self, user_account_id: int) -> List[BotDto]:
         """
@@ -419,9 +418,9 @@ class BotService(BaseService[BotDto]):
         Returns:
             List of Bot instances
         """
-        bots_assigments: List[BotAssignmentDto] = (
-            self.bot_assignment_svc.get_assignments_by_user(user_id)
-        )
+        bots_assigments: List[
+            BotAssignmentDto
+        ] = await self.bot_assignment_svc.get_assignments_by_user(user_id)
         bots_dto: List[BotDto] = await self._perform_get_assigned_bots(bots_assigments)
         if bots_dto is None:
             raise ServiceError("Bot get_all failed, no list returned.")
@@ -487,12 +486,5 @@ class BotService(BaseService[BotDto]):
     def get_bot_parameters_description(self) -> dict:
         return self.bot_parameters_svc.get_bot_parameters_description()
 
-    def is_bot_assigned_to_user(self, bot_id, user_id):
-        return self.bot_assignment_svc.is_bot_assigned_to_user(bot_id, user_id)
-
-    # Async counterpart, for bot_router.py's now-async get_bot.
-    async def is_bot_assigned_to_user_async(self, bot_id, user_id):
-        return await self.bot_assignment_svc.is_bot_assigned_to_user_async(bot_id, user_id)
-
-    def delete_all_bot_assignments(self, bot_id):
-        return self.bot_assignment_svc.delete_all_bot_assignments(bot_id)
+    async def is_bot_assigned_to_user(self, bot_id, user_id):
+        return await self.bot_assignment_svc.is_bot_assigned_to_user(bot_id, user_id)

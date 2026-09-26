@@ -15,24 +15,11 @@ body missing either field before the handler runs). This port skips
 reproducing that unreachable code and reads straight off the validated
 body model instead.
 
-Every route here is `async def`. get_assignments_by_parent/
-get_assigned_bot_ids/update_assignment call their BotAssignmentService
-method directly (no caller outside this router). The other five routes
-instead call a dedicated `_async` twin (create_async/
-get_assignments_by_user_async/delete_async/remove_assignment_async) --
-or, for check_assignment, the is_bot_assigned_to_user_async twin already
-added for rag_router.py -- added alongside the original sync method:
-that one is still shared with BotService/UserAdminService (neither
-migrated), so it couldn't be converted in place without either breaking
-those callers or duplicating their logic. get_dto_by_id was the one
-exception migrated in place: its only two callers were both inside this
-router (update_assignment, already async; delete_assignment, now async
-too), so there was no sync caller left to preserve. DB session scoping
-doesn't care about any of this either way: it's wired once, at the
-router level, via Depends(async_db_session_dependency) -- see that
-dependency's own docstring for why an async-generator Depends works for
-both a sync and an async route (no per-route decorator needed for
-either).
+Every route here is `async def`, as is every BotAssignmentService method
+it calls (the service sits on repositories/bot_assignment_repository.py).
+DB session scoping is wired once, at the router level, via
+Depends(async_db_session_dependency) -- see that dependency's own
+docstring.
 """
 
 from fastapi import APIRouter, Depends, Response
@@ -110,7 +97,7 @@ async def create_assignment(
     validated_data["assigned_by"] = user_id
     validated_data["user_id"] = validated_data["guest_user_id"]
 
-    assignment_dto = await bot_assignment_svc.create_async(validated_data)
+    assignment_dto = await bot_assignment_svc.create(validated_data)
     if not assignment_dto:
         logger.warning(f"create_assignment failed for assigned_by={user_id}")
         raise ApiError("Failed to create assignment", status_code=500)
@@ -169,7 +156,7 @@ async def get_assignments_by_guest(
         logger.warning(f"get_assignments_by_guest({guest_user_id}) forbidden for user_id={user_id}")
         raise
 
-    assignments = await bot_assignment_svc.get_assignments_by_user_async(guest_user_id)
+    assignments = await bot_assignment_svc.get_assignments_by_user(guest_user_id)
     logger.info(f"get_assignments_by_guest({guest_user_id}) succeeded count={len(assignments)}")
     return [assignment.to_dict() for assignment in assignments]
 
@@ -242,7 +229,7 @@ async def delete_assignment(
         logger.warning(f"delete_assignment({assignment_id}) forbidden for user_id={user_id}")
         raise ApiError("Forbidden", status_code=403)
 
-    if not await bot_assignment_svc.delete_async(assignment_id):
+    if not await bot_assignment_svc.delete(assignment_id):
         logger.warning(f"delete_assignment({assignment_id}) not found on delete")
         raise ApiError("Assignment not found", status_code=404)
 
@@ -263,7 +250,7 @@ async def remove_assignment(
     _current_user(claims["sub"])
 
     logger.debug(f"remove_assignment payload: bot_id={body.bot_id} guest_user_id={body.guest_user_id}")
-    if not await bot_assignment_svc.remove_assignment_async(body.bot_id, body.guest_user_id):
+    if not await bot_assignment_svc.remove_assignment(body.bot_id, body.guest_user_id):
         logger.warning(f"remove_assignment not found for bot_id={body.bot_id} guest_user_id={body.guest_user_id}")
         raise ApiError("Assignment not found", status_code=404)
 
@@ -282,6 +269,8 @@ async def check_assignment(
     """Check if a bot is assigned to a guest user"""
     logger.info("POST /bot-guest-assignment/check - check_assignment called")
     logger.debug(f"check_assignment payload: bot_id={body.bot_id} guest_user_id={body.guest_user_id}")
-    is_assigned = await bot_assignment_svc.is_bot_assigned_to_user_async(body.bot_id, body.guest_user_id)
+    is_assigned = await bot_assignment_svc.is_bot_assigned_to_user(
+        body.bot_id, body.guest_user_id
+    )
     logger.info(f"check_assignment succeeded is_assigned={is_assigned}")
     return {"is_assigned": is_assigned}
