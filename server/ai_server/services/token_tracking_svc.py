@@ -4,7 +4,6 @@ from ai_server.config.config import app_config
 from ai_server.config.constant import ADMIN_ROLE
 from ai_server.dao.database import TokenUsage, get_async_session
 from ai_server.dto.user_dto import UserDto
-from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -12,7 +11,6 @@ from sqlalchemy.exc import SQLAlchemyError
 logger = BotFactoryLogger()
 
 
-@singleton
 class TokenTrackingService:
     """Service pour traquer et gérer la consommation de tokens par utilisateur"""
 

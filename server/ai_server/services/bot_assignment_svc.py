@@ -5,13 +5,11 @@ from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.config.constant import GUEST_ROLE, USER_ROLE
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.decorators.singleton import singleton
 from sqlalchemy import select
 
 logger = BotFactoryLogger()
 
 
-@singleton
 class BotAssignmentService(BaseService[BotAssignmentDto]):
     """Service for managing bot user assignments"""
 

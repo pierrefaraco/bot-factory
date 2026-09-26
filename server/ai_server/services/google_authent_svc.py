@@ -8,16 +8,14 @@ from ai_server.dependencies.auth import create_access_token
 from ai_server.services.user_admin_svc import UserAdminService
 from ai_server.dao.database import User
 from ai_server.dto.user_dto import UserDto
-from ai_server.decorators.singleton import singleton
 
 
-@singleton
 class GoogleAuthentSvc(BaseService):
     """Service for handling Google OAuth operations"""
 
-    def __init__(self):
+    def __init__(self, user_admin_svc: UserAdminService):
         super().__init__()
-        self.user_admin_svc = UserAdminService()
+        self.user_admin_svc = user_admin_svc
 
     def verify_google_token(self, credential):
         try:

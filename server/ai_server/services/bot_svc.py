@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Optional, List, Dict, Any
 from ai_server.dao.database import Bot, User, db, get_async_session
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.dto.bot_parameters_dto import BotParametersDto
@@ -7,45 +7,33 @@ from ai_server.dto.avatar_dto import AvatarDto
 from ai_server.exceptions.service_exceptions import ServiceError
 from ai_server.services.base_service import BaseService
 from ai_server.services.avatar_svc import AvatarService
-from ai_server.decorators.singleton import singleton
 from ai_server.services.bot_parameters_svc import BotParametersService
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.template_svc import TemplateSvc
 from ai_server.services.knowledge_svc import KnowledgeSvc
-from ai_server.services.rag_svc import RagService
 from sqlalchemy import select
 
-# Lazy import to avoid circular dependency
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 
-if TYPE_CHECKING:
-    from ai_server.services.knowledge_svc import KnowledgeSvc
 
-
-@singleton
 class BotService(BaseService[BotDto]):
     """Service for managing bot entities"""
 
-    def __init__(self):
+    def __init__(
+        self,
+        avatar_svc: AvatarService,
+        bot_assignment_svc: BotAssignmentService,
+        bot_parameters_svc: BotParametersService,
+        knowledge_svc: KnowledgeSvc,
+        template_svc: TemplateSvc,
+    ):
         super().__init__()
-        self.avatar_svc = AvatarService()
-        self.bot_assignment_svc = BotAssignmentService()
-        self.bot_parameters_svc = BotParametersService()
-        self.knowledge_svc = KnowledgeSvc(RagService())
-        self.template_svc = TemplateSvc()
-        self._context_svc = None
+        self.avatar_svc = avatar_svc
+        self.bot_assignment_svc = bot_assignment_svc
+        self.bot_parameters_svc = bot_parameters_svc
+        self.knowledge_svc = knowledge_svc
+        self.template_svc = template_svc
         self.logger = BotFactoryLogger()
-
-    @property
-    def context_svc(self):
-        """Lazy load ContextSvc to avoid circular import."""
-        if self._context_svc is None:
-            from ai_server.services.knowledge_svc import KnowledgeSvc
-            from ai_server.services.rag_svc import RagService
-
-            rag_svc = RagService()
-            self._context_svc = KnowledgeSvc(rag_svc)
-        return self._context_svc
 
     def _big_bot_to_dto(
         self, bot: Bot, avatar_dto: AvatarDto, bot_parameters_dto: BotParametersDto
@@ -168,12 +156,6 @@ class BotService(BaseService[BotDto]):
         )
         return self._bot_to_dto(bot, None)
 
-    # Stays sync: called from PromptService.get_qa_prompt() (prompt_svc.py),
-    # itself called from rag_svc.py's still-sync LCEL chain.
-    def get_prompt(self, entity_id: int):
-        bot: Bot = Bot.query.filter_by(id=entity_id).first()
-        return bot.prompt
-
     # Stays sync: also called from UserAdminService (user_admin_svc.py, not
     # migrated yet) in addition to bot_router.py.
     def get_dto_by_id(self, entity_id: int, view="minimal") -> Optional[BotDto]:
@@ -272,11 +254,9 @@ class BotService(BaseService[BotDto]):
         self.logger.debug(f"get_all fetched {len(bots)} bots")
         return [self._bot_to_dto(bot, None) for bot in bots]
 
-    # Stays sync: still called from bot_router.py's update_bot_admin (not
-    # migrated -- also shared with create_bot/delete_bot there).
-    # PromptService.update_prompt() used to be the other sync caller;
-    # it now has an async twin (update_prompt_async, see prompt_svc.py)
-    # that calls update_async below instead.
+    # Sync implementation of BaseService.update(); no caller left in this
+    # codebase (bot_router.py uses update_async, and PromptService now writes
+    # Bot.prompt itself -- see prompt_svc.py).
     def update(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
         """
         Update a bot's information.
@@ -306,9 +286,7 @@ class BotService(BaseService[BotDto]):
         self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
         return self._bot_to_dto(bot, None)
 
-    # Async counterpart of update, for PromptService.update_prompt_async()
-    # (prompt_svc.py), itself used by bot_parameters_svc.py's now-async
-    # create_bot_parameters_async/patch_bot_parameters_async.
+    # Async counterpart of update, for bot_router.py's update_bot_admin.
     async def update_async(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
         result = await self._perform_update_async(entity_id, data)
         if result is None:
@@ -326,8 +304,8 @@ class BotService(BaseService[BotDto]):
         self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
         return self._bot_to_dto(bot, None)
 
-    # Stays sync: calls self.context_svc.delete_all() (KnowledgeSvc, which
-    # touches ChromaDB and rag_svc.py -- a much bigger, still fully sync
+    # Stays sync: calls self.knowledge_svc.delete_all() (KnowledgeSvc, which
+    # touches ChromaDB -- a much bigger, still fully sync
     # subsystem) before deleting the Bot row itself. Left for a dedicated
     # RAG-phase pass rather than migrated piecemeal here.
     def delete(self, entity_id: int) -> bool:
@@ -351,7 +329,7 @@ class BotService(BaseService[BotDto]):
 
         self.logger.info(f"delete bot_id={entity_id} starting")
         # Delete context manually (not managed by database CASCADE)
-        self.context_svc.delete_all(entity_id)
+        self.knowledge_svc.delete_all(entity_id)
 
         result = self._perform_delete(entity_id)
         if result is None:

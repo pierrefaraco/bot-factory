@@ -5,13 +5,11 @@ from sqlalchemy import delete, select
 
 from ai_server.dao.database import Session, Message, get_async_session
 from ai_server.dto.message_dto import MessageDto
-from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 logger = BotFactoryLogger()
 
 
-@singleton
 class MessageService:
     """Async throughout: the only callers (rag_svc.py, rag_router.py) are
     both migrated together. No manual rollback/close here -- same convention

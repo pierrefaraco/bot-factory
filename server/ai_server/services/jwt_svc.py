@@ -1,9 +1,6 @@
 """Wrapper for JWT function"""
 
-from ai_server.decorators.singleton import singleton
 
-
-@singleton
 class JWTTools:
     """Wrapper main class"""
 

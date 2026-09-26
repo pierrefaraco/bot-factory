@@ -43,9 +43,9 @@ from ai_server.dao.database import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency
+from ai_server.dependencies.services import BotAssignmentServiceDep
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.services.bot_assignment_svc import BotAssignmentService
 
 router = APIRouter(
     prefix="/api/bot-guest-assignment",
@@ -54,7 +54,6 @@ router = APIRouter(
 )
 
 logger = BotFactoryLogger()
-bot_assignment_svc = BotAssignmentService()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
@@ -91,7 +90,11 @@ def _current_user(user_id) -> User:
 @router.post(
     "", status_code=201, dependencies=[Depends(require_json_body(BotGuestAssignmentRequest))]
 )
-async def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depends(admin_or_user)):
+async def create_assignment(
+    body: BotGuestAssignmentRequest,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Create a new bot guest assignment"""
     logger.info("POST /bot-guest-assignment - create_assignment called")
     user_id = claims["sub"]
@@ -117,7 +120,11 @@ async def create_assignment(body: BotGuestAssignmentRequest, claims: dict = Depe
 
 
 @router.get("/parent/{parent_user_id:int}", dependencies=[Depends(admin_or_user)])
-async def get_assignments_by_parent(parent_user_id: int, claims: dict = Depends(admin_or_user)):
+async def get_assignments_by_parent(
+    parent_user_id: int,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Get all assignments created by a parent user"""
     logger.info(f"GET /bot-guest-assignment/parent/{parent_user_id} - get_assignments_by_parent called")
     user_id = claims["sub"]
@@ -147,7 +154,11 @@ def _authorize_guest_scope(user: User, user_id, guest_user_id: int) -> None:
 
 
 @router.get("/guest/{guest_user_id:int}", dependencies=[Depends(any_role)])
-async def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(any_role)):
+async def get_assignments_by_guest(
+    guest_user_id: int,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Get all assignments for a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id} - get_assignments_by_guest called")
     user_id = claims["sub"]
@@ -164,7 +175,11 @@ async def get_assignments_by_guest(guest_user_id: int, claims: dict = Depends(an
 
 
 @router.get("/guest/{guest_user_id:int}/bot-ids", dependencies=[Depends(any_role)])
-async def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_role)):
+async def get_assigned_bot_ids(
+    guest_user_id: int,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Get list of bot IDs assigned to a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id}/bot-ids - get_assigned_bot_ids called")
     user_id = claims["sub"]
@@ -185,7 +200,10 @@ async def get_assigned_bot_ids(guest_user_id: int, claims: dict = Depends(any_ro
     dependencies=[Depends(require_json_body(BotGuestAssignmentUpdateRequest))],
 )
 async def update_assignment(
-    assignment_id: int, body: BotGuestAssignmentUpdateRequest, claims: dict = Depends(admin_or_user)
+    assignment_id: int,
+    body: BotGuestAssignmentUpdateRequest,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(admin_or_user),
 ):
     """Update a bot guest assignment"""
     logger.info(f"PUT /bot-guest-assignment/{assignment_id} - update_assignment called")
@@ -206,7 +224,11 @@ async def update_assignment(
 
 
 @router.delete("/{assignment_id:int}", status_code=204, dependencies=[Depends(admin_or_user)])
-async def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_user)):
+async def delete_assignment(
+    assignment_id: int,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Delete a bot guest assignment"""
     logger.info(f"DELETE /bot-guest-assignment/{assignment_id} - delete_assignment called")
     user_id = claims["sub"]
@@ -231,7 +253,11 @@ async def delete_assignment(assignment_id: int, claims: dict = Depends(admin_or_
 @router.delete(
     "/remove", dependencies=[Depends(require_json_body(BotGuestAssignmentRefRequest))]
 )
-async def remove_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(admin_or_user)):
+async def remove_assignment(
+    body: BotGuestAssignmentRefRequest,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Remove assignment between a bot and guest user"""
     logger.info("DELETE /bot-guest-assignment/remove - remove_assignment called")
     _current_user(claims["sub"])
@@ -248,7 +274,11 @@ async def remove_assignment(body: BotGuestAssignmentRefRequest, claims: dict = D
 @router.post(
     "/check", dependencies=[Depends(require_json_body(BotGuestAssignmentRefRequest))]
 )
-async def check_assignment(body: BotGuestAssignmentRefRequest, claims: dict = Depends(any_role)):
+async def check_assignment(
+    body: BotGuestAssignmentRefRequest,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Check if a bot is assigned to a guest user"""
     logger.info("POST /bot-guest-assignment/check - check_assignment called")
     logger.debug(f"check_assignment payload: bot_id={body.bot_id} guest_user_id={body.guest_user_id}")

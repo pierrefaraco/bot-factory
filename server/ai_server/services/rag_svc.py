@@ -6,7 +6,6 @@ from ai_server.config.config import app_config
 from ai_server.services.prompt_svc import PromptService
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable, RunnableLambda, RunnablePassthrough
-from ai_server.decorators.singleton import singleton
 from typing import AsyncIterator, Callable
 from ai_server.services.message_svc import MessageService
 from ai_server.dto.message_dto import MessageDto
@@ -29,15 +28,21 @@ MAX_CACHED_SESSIONS = 500
 # ===== LOGGERS INIT =====
 logger = BotFactoryLogger()
 prompt_debug_logger = PromptDebugLogger()
-message_service = MessageService()
 
 
-@singleton
 class RagService:
-    def __init__(self):
-        self._llm_service = None
-        self._db_service = None
-        self._prompt_service = None
+
+    def __init__(
+        self,
+        llm_service: LlmService,
+        db_service: ChromaDbService,
+        prompt_service: PromptService,
+        message_service: MessageService,
+    ):
+        self.llm_service = llm_service
+        self.db_service = db_service
+        self.prompt_service = prompt_service
+        self.message_service = message_service
         self.language = "french"
         self.config = app_config
         # LRU-ish cache of in-memory chat histories, keyed by "bot_id_user_id".
@@ -47,27 +52,9 @@ class RagService:
         # Guards the check-then-load-then-insert below: two concurrent
         # requests for the same new key would otherwise both miss the cache
         # and both hit the DB, with the second load silently discarding the
-        # first (RagService is a singleton, so self.store is shared by every
-        # in-flight request).
+        # first (one RagService per app -- see dependencies/services.py -- so
+        # self.store is shared by every in-flight request).
         self._store_lock = asyncio.Lock()
-
-    @property
-    def llm_service(self):
-        if self._llm_service is None:
-            self._llm_service = LlmService()
-        return self._llm_service
-
-    @property
-    def db_service(self):
-        if self._db_service is None:
-            self._db_service = ChromaDbService()
-        return self._db_service
-
-    @property
-    def prompt_service(self):
-        if self._prompt_service is None:
-            self._prompt_service = PromptService()
-        return self._prompt_service
 
     def _label_documents_with_source(self, docs):
         """Prefix each retrieved chunk's page_content with its source
@@ -88,7 +75,7 @@ class RagService:
 
         Rebuilt on every call rather than cached on `self`: each call needs
         its own TokenCountingCallback (tied to this user_id/bot_id/session_id)
-        and the singleton RagService is shared across concurrent requests, so
+        and the app-wide RagService is shared across concurrent requests, so
         the built chain is returned instead of stored as instance state.
 
         Genuinely blocking under the hood, with no async equivalent for
@@ -124,7 +111,7 @@ class RagService:
             user_id=user_id, bot_id=bot_id, session_id=session_id
         )
         # build_retriever() (not build()+get_retriever()): ChromaDbService is
-        # itself a singleton shared across every concurrent request, and the
+        # itself one app-wide instance shared by every concurrent request, and the
         # two-call form only communicates the built retriever back via
         # self.retriever -- two bots' requests can interleave in between and
         # steal each other's retriever. build_retriever() returns it directly
@@ -301,7 +288,7 @@ class RagService:
         logger.debug(
             f"RAG streaming query for bot {bot_id}, user {user_id}, session {session_id}"
         )
-        await message_service.save_message(bot_id, user_id, "user", query, hide)
+        await self.message_service.save_message(bot_id, user_id, "user", query, hide)
         rag_chain = await run_in_threadpool(
             self.build, bot_id, user_id, session_id
         )
@@ -321,7 +308,9 @@ class RagService:
                 self._log_llm_answer(answer_str)
                 history.add_user_message(query)
                 history.add_ai_message(answer_str)
-                await message_service.save_message(bot_id, user_id, "assistant", answer_str)
+                await self.message_service.save_message(
+                    bot_id, user_id, "assistant", answer_str
+                )
                 elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
                 logger.info(
                     f"RAG streaming completed for bot_id={bot_id} user_id={user_id} "
@@ -345,7 +334,9 @@ class RagService:
         self, rag_chain: Runnable, bot_id, user_id, input_text, hide: bool = False
     ) -> str:
         # Save the user question with role "human"
-        await message_service.save_message(bot_id, user_id, "user", input_text, hide)
+        await self.message_service.save_message(
+            bot_id, user_id, "user", input_text, hide
+        )
 
         # Get the AI response
         logger.debug(f"Invoking RAG chain for bot_id={bot_id} user_id={user_id}")
@@ -364,7 +355,7 @@ class RagService:
         history.add_ai_message(result)
 
         # Save the AI answer with role "ai"
-        await message_service.save_message(bot_id, user_id, "assistant", result)
+        await self.message_service.save_message(bot_id, user_id, "assistant", result)
         return result
 
     # Function to load chat history
@@ -376,11 +367,13 @@ class RagService:
         passing a synthetic key straight to `message_service.load_session_history`
         would silently never match and always come back empty."""
         chat_history = ChatMessageHistory()
-        session = await message_service.get_session(bot_id, user_id)
+        session = await self.message_service.get_session(bot_id, user_id)
         if session is None:
             logger.debug(f"No DB session yet for bot_id={bot_id} user_id={user_id}")
             return chat_history
-        messages: list[MessageDto] = await message_service.load_session_history(session.id)
+        messages: list[MessageDto] = await self.message_service.load_session_history(
+            session.id
+        )
         if messages:
             logger.debug(
                 f"Loaded {len(messages)} messages for bot_id={bot_id} "

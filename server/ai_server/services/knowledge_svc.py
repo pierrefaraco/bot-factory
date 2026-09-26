@@ -3,13 +3,12 @@ import time
 import uuid
 from ai_server.config.config import app_config
 from abc import ABCMeta
-from ai_server.services.rag_svc import RagService
+from ai_server.services.chroma_db_svc import ChromaDbService
 from ai_server.dao.database import Knowledge, User, db
 from ai_server.dto.knowledge_dto import KnowledgeDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
-from ai_server.decorators.singleton import singleton
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from werkzeug.utils import secure_filename
@@ -20,15 +19,14 @@ logger = BotFactoryLogger()
 ENUMERATIONS = {"CHAPTER_DAD_ID": -1, "CHILDREN_REF_ID": uuid.uuid4(), "INDICE": 0}
 
 
-@singleton
 class KnowledgeSvc(BaseService[KnowledgeDto]):
     """Service for managing knowledge/context entities"""
 
-    def __init__(self, rag_svc: RagService):
+    def __init__(self, chroma_db_svc: ChromaDbService):
         super().__init__()
         self.upload_folder = app_config.UPLOAD_FOLDER
         self.config = app_config
-        self.rag_svc = rag_svc
+        self.chroma_db_svc = chroma_db_svc
         os.makedirs(self.upload_folder, exist_ok=True)
 
     def _knowledge_to_dto(self, knowledge: Knowledge) -> KnowledgeDto:
@@ -748,7 +746,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         try:
             # Delete associated collection from vector database
             start = time.perf_counter()
-            self.rag_svc.db_service.delete_all(f"Collection{bot_id}")
+            self.chroma_db_svc.delete_all(f"Collection{bot_id}")
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.debug(
                 f"delete_all: vector DB collection Collection{bot_id} deleted in {elapsed_ms:.1f}ms"
@@ -780,10 +778,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         metadata = {"knowledge_id": knowledge.id, "bot_id": knowledge.bot_id, "name": knowledge.name}
         text = f"{knowledge.name}\n{knowledge.content}".strip()
         if text:
-            self.rag_svc.db_service.ingest_text(text, collection_name, metadata=metadata)
+            self.chroma_db_svc.ingest_text(text, collection_name, metadata=metadata)
         if knowledge.pdf_file:
             pdf_path = os.path.join(self.upload_folder, knowledge.pdf_file)
-            self.rag_svc.db_service.ingest_pdf(
+            self.chroma_db_svc.ingest_pdf(
                 pdf_path, collection_name=collection_name, metadata=metadata
             )
         knowledge.vector_synced_at = datetime.now(timezone.utc)
@@ -791,7 +789,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
 
     def _remove_knowledge_from_vector_db(self, bot_id: int, knowledge_id: int) -> None:
         collection_name = f"Collection{bot_id}"
-        self.rag_svc.db_service.delete_documents_by_metadata(
+        self.chroma_db_svc.delete_documents_by_metadata(
             collection_name, {"knowledge_id": knowledge_id}
         )
 
@@ -821,7 +819,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             f"for bot_id={bot_id}"
         )
 
-        self.rag_svc.db_service.delete_all(f"Collection{bot_id}")
+        self.chroma_db_svc.delete_all(f"Collection{bot_id}")
         for knowledge in knowledges:
             self._ingest_knowledge_node(knowledge)
 

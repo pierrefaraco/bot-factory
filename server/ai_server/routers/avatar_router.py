@@ -34,9 +34,9 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency
+from ai_server.dependencies.services import AvatarServiceDep
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.services.avatar_svc import AvatarService
 from pydantic import BaseModel
 
 router = APIRouter(
@@ -46,7 +46,6 @@ router = APIRouter(
 )
 
 logger = BotFactoryLogger()
-avatar_service = AvatarService()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
@@ -93,7 +92,10 @@ class AvatarRequest(BaseModel):
     status_code=201,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRandomRequest))],
 )
-async def create_random_avatar(body: AvatarRandomRequest):
+async def create_random_avatar(
+    body: AvatarRandomRequest,
+    avatar_service: AvatarServiceDep,
+):
     """Create a random avatar for a bot"""
     logger.info("POST /avatar/random - create_random_avatar called")
     avatar_dto = await avatar_service.create_random_avatar_async(body.bot_id)
@@ -106,7 +108,7 @@ async def create_random_avatar(body: AvatarRandomRequest):
     status_code=204,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarPatchRequest))],
 )
-async def patch_avatar(body: AvatarPatchRequest):
+async def patch_avatar(body: AvatarPatchRequest, avatar_service: AvatarServiceDep):
     """Partially update an avatar"""
     logger.info("PATCH /avatar - patch_avatar called")
     await avatar_service.patch_avatar(body.model_dump(exclude_unset=True))
@@ -119,7 +121,7 @@ async def patch_avatar(body: AvatarPatchRequest):
     status_code=201,
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRequest))],
 )
-async def create_avatar(body: AvatarRequest):
+async def create_avatar(body: AvatarRequest, avatar_service: AvatarServiceDep):
     """Create an avatar"""
     logger.info("POST /avatar - create_avatar called")
     avatar_dto = await avatar_service.create_async(body.model_dump(exclude_unset=True))
@@ -131,7 +133,7 @@ async def create_avatar(body: AvatarRequest):
     "",
     dependencies=[Depends(admin_or_user), Depends(require_json_body(AvatarRequest))],
 )
-async def update_avatar(body: AvatarRequest):
+async def update_avatar(body: AvatarRequest, avatar_service: AvatarServiceDep):
     """Update an avatar"""
     logger.info("PUT /avatar - update_avatar called")
     avatar_dto = await avatar_service.update_and_return_datat(body.model_dump(exclude_unset=True))
@@ -140,7 +142,7 @@ async def update_avatar(body: AvatarRequest):
 
 
 @router.get("/{bot_id}", dependencies=[Depends(any_role)])
-async def get_avatar_by_bot_id(bot_id: int):
+async def get_avatar_by_bot_id(bot_id: int, avatar_service: AvatarServiceDep):
     """Get avatar by bot ID"""
     logger.info(f"GET /avatar/{bot_id} - get_avatar_by_bot_id called")
     avatar_dto = await avatar_service.get_avatar_by_bot_id_async(bot_id)
@@ -152,7 +154,7 @@ async def get_avatar_by_bot_id(bot_id: int):
 
 
 @router.delete("/{bot_id}", status_code=204, dependencies=[Depends(admin_or_user)])
-async def delete_avatar(bot_id: int):
+async def delete_avatar(bot_id: int, avatar_service: AvatarServiceDep):
     """Delete avatar by bot ID"""
     logger.info(f"DELETE /avatar/{bot_id} - delete_avatar called")
     if not await avatar_service.delete_avatar_by_bot_id(bot_id):

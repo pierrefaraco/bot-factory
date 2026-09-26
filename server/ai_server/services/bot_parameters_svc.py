@@ -5,21 +5,16 @@ from ai_server.services.yaml_svc import YamlSvc
 from ai_server.dao.database import BotParameters, InterlocutorIdentity, db, get_async_session
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
-from ai_server.decorators.singleton import singleton
-from ai_server.services.llm_svc import LlmService
 from sqlalchemy import select
 
-yaml_svc = YamlSvc()
-prompt_svc = PromptService()
 
-
-@singleton
 class BotParametersService(BaseService[BotParametersDto]):
     """Service for managing bot parameters entities"""
 
-    def __init__(self):
-        self.llm_svc = LlmService()
+    def __init__(self, yaml_svc: YamlSvc, prompt_svc: PromptService):
         super().__init__()
+        self.yaml_svc = yaml_svc
+        self.prompt_svc = prompt_svc
 
     def _bot_parameters_to_dto(self, bot_parameters: BotParameters) -> BotParametersDto:
         """
@@ -54,13 +49,12 @@ class BotParametersService(BaseService[BotParametersDto]):
             persona_description=bot_parameters.persona_description,
         )
 
-    @staticmethod
-    def get_bot_parameters_description() -> dict:
+    def get_bot_parameters_description(self) -> dict:
         """get_bot_parameters_description"""
         return (
-            yaml_svc.answer_dict
-            | yaml_svc.behaviour_dict
-            | yaml_svc.qualities_flaws_dict
+            self.yaml_svc.answer_dict
+            | self.yaml_svc.behaviour_dict
+            | self.yaml_svc.qualities_flaws_dict
         )
 
     # create_bot_parameters/create/_perform_create/update_prompt all stay
@@ -69,9 +63,8 @@ class BotParametersService(BaseService[BotParametersDto]):
     # sync work -- create()/_perform_create() is also called directly by
     # create_random_parameters (called from BotService.create_random_bot,
     # bot_svc.py, not migrated), and update_prompt() calls
-    # prompt_svc.update_prompt() (prompt_svc.py) which itself calls
-    # BotService.update() (bot_svc.py) to persist the regenerated prompt --
-    # another still-sync call chain through bot_svc.py. Converting either
+    # prompt_svc.update_prompt() (prompt_svc.py), which persists the
+    # regenerated prompt via sync Bot.query/db.session. Converting either
     # method now would add an `async def` with zero actual async work
     # inside, or require migrating bot_svc.py first -- see
     # /root/.claude/plans/moonlit-leaping-salamander.md.
@@ -619,13 +612,15 @@ class BotParametersService(BaseService[BotParametersDto]):
 
     async def _perform_get_welcome_message(self, user_name: str, bot_id: int) -> str:
         self.logger.debug(f"get_welcome_message bot_id={bot_id} user_name={user_name}")
-        behaviour_dict = yaml_svc.behaviour_dict
+        behaviour_dict = self.yaml_svc.behaviour_dict
         session = get_async_session()
         result = await session.execute(
             select(BotParameters).where(BotParameters.bot_id == bot_id)
         )
         params = result.scalar_one_or_none()
-        question = prompt_svc.welcome_message_trigger(user_name, params, behaviour_dict)
+        question = self.prompt_svc.welcome_message_trigger(
+            user_name, params, behaviour_dict
+        )
         return question
 
     # Stays sync: also called from BotService (bot_svc.py, not migrated
@@ -816,11 +811,11 @@ class BotParametersService(BaseService[BotParametersDto]):
         )
 
     def _perform_update_prompt(self, user_name: str, bot_id: int):
-        behaviour_dict = yaml_svc.behaviour_dict
-        answer_dict = yaml_svc.answer_dict
+        behaviour_dict = self.yaml_svc.behaviour_dict
+        answer_dict = self.yaml_svc.answer_dict
         params = BotParameters.query.filter_by(bot_id=bot_id).first()
         if params:
-            prompt_svc.update_prompt(
+            self.prompt_svc.update_prompt(
                 user_name, bot_id, params, behaviour_dict, answer_dict
             )
             self.logger.debug(f"Prompt updated for bot_id={bot_id} by user_name={user_name}")
@@ -838,15 +833,15 @@ class BotParametersService(BaseService[BotParametersDto]):
         await self._perform_update_prompt_async(user_name, bot_id)
 
     async def _perform_update_prompt_async(self, user_name: str, bot_id: int):
-        behaviour_dict = yaml_svc.behaviour_dict
-        answer_dict = yaml_svc.answer_dict
+        behaviour_dict = self.yaml_svc.behaviour_dict
+        answer_dict = self.yaml_svc.answer_dict
         session = get_async_session()
         result = await session.execute(
             select(BotParameters).where(BotParameters.bot_id == bot_id)
         )
         params = result.scalar_one_or_none()
         if params:
-            await prompt_svc.update_prompt_async(
+            await self.prompt_svc.update_prompt_async(
                 user_name, bot_id, params, behaviour_dict, answer_dict
             )
             self.logger.debug(f"Prompt updated for bot_id={bot_id} by user_name={user_name}")

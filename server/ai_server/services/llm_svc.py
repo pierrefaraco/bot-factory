@@ -3,14 +3,13 @@ from langchain_community.llms import Ollama
 # from langchain.embeddings.ollama import OllamaEmbeddings
 from langchain_mistralai.chat_models import ChatMistralAI
 from ai_server.config.config import app_config
-from ai_server.decorators.singleton import singleton
 from langchain_core.callbacks.base import AsyncCallbackHandler
 from typing import Any, Optional, Dict
 from ai_server.services.token_tracking_svc import TokenTrackingService
+from ai_server.services.user_admin_svc import UserAdminService
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 import json
 import time
-
 
 
 class TokenCountingCallback(AsyncCallbackHandler):
@@ -28,19 +27,23 @@ class TokenCountingCallback(AsyncCallbackHandler):
     longer needs the sync db_session_scope() dependencies/db_session.py's
     stream_with_async_db_session used to open alongside the async one."""
 
-    def __init__(self, user_id: int, bot_id: int, session_id: Optional[int] = None):
-        # Import lazy pour éviter l'importation circulaire
-        from ai_server.services.user_admin_svc import UserAdminService
-
+    def __init__(
+        self,
+        token_tracking_service: TokenTrackingService,
+        user_svc: UserAdminService,
+        user_id: int,
+        bot_id: int,
+        session_id: Optional[int] = None,
+    ):
         self.user_id = user_id
         self.bot_id = bot_id
         self.session_id = session_id
-        self.token_tracking_service = TokenTrackingService()
+        self.token_tracking_service = token_tracking_service
         self.prompt_tokens = 0
         self.completion_tokens = 0
         self.total_tokens = 0
         self.model_name = None
-        self.user_svc = UserAdminService()
+        self.user_svc = user_svc
         self.logger = BotFactoryLogger()
 
     async def on_llm_end(self, response: Any, **kwargs) -> None:
@@ -128,14 +131,17 @@ class TokenCountingCallback(AsyncCallbackHandler):
             )
 
 
-@singleton
 class LlmService:
-    def __init__(self):    
+
+    def __init__(
+        self, token_tracking_svc: TokenTrackingService, user_admin_svc: UserAdminService
+    ):
         self.logger = BotFactoryLogger()
+        self.token_tracking_svc = token_tracking_svc
+        self.user_admin_svc = user_admin_svc
         # assuming you have Ollama installed and have llama3 model pulled with `ollama pull llama3 `
         # embeddings = MistralAIEmbeddings(model="mistral-embed", mistral_api_key=api_key)
         self.llm = ChatMistralAI(mistral_api_key=app_config.MISTRAL_API_KEY, model_name=app_config.MISTRAL_MODEL)
-
 
     def get_llm(
         self,
@@ -161,7 +167,11 @@ class LlmService:
                 f"bot_id={bot_id} session_id={session_id}"
             )
             callback = TokenCountingCallback(
-                user_id=user_id, bot_id=bot_id, session_id=session_id
+                token_tracking_service=self.token_tracking_svc,
+                user_svc=self.user_admin_svc,
+                user_id=user_id,
+                bot_id=bot_id,
+                session_id=session_id,
             )
             # Créer une nouvelle instance avec le callback
             return ChatMistralAI(

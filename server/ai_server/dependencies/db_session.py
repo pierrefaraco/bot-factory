@@ -63,9 +63,10 @@ async def stream_with_async_db_session(async_iterator):
     get_async_session(), with no remaining sync Model.query/db.session
     call reachable from here. (async_db_session_dependency itself still
     needs both: rag_svc.py's build(), called from ask()/ask_with_stream()
-    *before* this generator starts, still reads bot_svc.get_prompt() via
-    plain sync Bot.query -- and every router using that same dependency
-    for its own still-sync routes needs it regardless.)
+    *before* this generator starts, still reads the bot prompt
+    (prompt_svc.py's get_qa_prompt()) via plain sync Bot.query -- and
+    every router using that same dependency for its own still-sync
+    routes needs it regardless.)
 
     A single scope opened once here, around the whole generator, is
     enough (no per-chunk push/pop needed): starlette.responses.

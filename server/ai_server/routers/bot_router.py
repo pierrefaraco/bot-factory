@@ -59,11 +59,11 @@ from ai_server.dao.database import User, get_async_session
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_content_type
 from ai_server.dependencies.db_session import async_db_session_dependency
+from ai_server.dependencies.services import BotServiceDep, UserAdminServiceDep
 from ai_server.dto.bot_dto import BotDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_svc import BotService
-from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
     prefix="/api/bot",
@@ -72,8 +72,6 @@ router = APIRouter(
 )
 
 logger = BotFactoryLogger()
-bot_svc = BotService()
-user_svc = UserAdminService()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
@@ -96,14 +94,14 @@ class BotUpdateRequest(BaseModel):
         return value
 
 
-def _can_modify_bot(user: User, bot_id: int) -> bool:
+def _can_modify_bot(user: User, bot_id: int, bot_svc: BotService) -> bool:
     if user.roles == ADMIN_ROLE:
         return True
     bot_dto: BotDto = bot_svc.get_dto_by_id(bot_id)
     return bot_dto and bot_dto.user_account_id == user.id
 
 
-async def _can_modify_bot_async(user, bot_id: int) -> bool:
+async def _can_modify_bot_async(user, bot_id: int, bot_svc: BotService) -> bool:
     if user.roles == ADMIN_ROLE:
         return True
     bot_dto: BotDto = await bot_svc.get_dto_by_id_async(bot_id)
@@ -111,7 +109,7 @@ async def _can_modify_bot_async(user, bot_id: int) -> bool:
 
 
 @router.post("", status_code=201, dependencies=[Depends(require_json_content_type)])
-def create_bot(claims: dict = Depends(admin_or_user)):
+def create_bot(bot_svc: BotServiceDep, claims: dict = Depends(admin_or_user)):
     """Create a new bot with random parameters for the authenticated user.
 
     Stays sync: bot_svc.create_random_bot() funnels into TemplateSvc/
@@ -133,7 +131,7 @@ def create_bot(claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/me", dependencies=[Depends(any_role)])
-async def get_user_bots(claims: dict = Depends(any_role)):
+async def get_user_bots(bot_svc: BotServiceDep, claims: dict = Depends(any_role)):
     """Récupère tous les bots d'un utilisateur"""
     logger.info("GET /bot/me - get_user_bots called")
     user_id = claims["sub"]
@@ -148,7 +146,7 @@ async def get_user_bots(claims: dict = Depends(any_role)):
 
 
 @router.get("", dependencies=[Depends(admin_or_user)])
-async def get_all_bots():
+async def get_all_bots(bot_svc: BotServiceDep):
     """Récupère tous les bots"""
     logger.info("GET /bot - get_all_bots called")
     bots_dto: List[BotDto] = await bot_svc.get_all()
@@ -157,7 +155,7 @@ async def get_all_bots():
 
 
 @router.get("/owned", dependencies=[Depends(any_role)])
-async def get_all_owned_bots(claims: dict = Depends(any_role)):
+async def get_all_owned_bots(bot_svc: BotServiceDep, claims: dict = Depends(any_role)):
     """Récupère tous les bots"""
     user_id = claims["sub"]
     logger.info(f"GET /bot/owned - get_all_owned_bots called for user_id={user_id}")
@@ -167,7 +165,7 @@ async def get_all_owned_bots(claims: dict = Depends(any_role)):
 
 
 @router.get("/parameters-description", dependencies=[Depends(admin_or_user)])
-async def get_bot_parameters_description():
+async def get_bot_parameters_description(bot_svc: BotServiceDep):
     logger.info("GET /bot/parameters-description - get_bot_parameters_description called")
     result = bot_svc.get_bot_parameters_description()
     logger.info("get_bot_parameters_description succeeded")
@@ -192,7 +190,13 @@ async def select_bot(bot_id: int, claims: dict = Depends(any_role)):
 
 
 @router.get("/{bot_id:int}", dependencies=[Depends(any_role)])
-async def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Query(default="minimal")):
+async def get_bot(
+    bot_id: int,
+    bot_svc: BotServiceDep,
+    user_svc: UserAdminServiceDep,
+    claims: dict = Depends(any_role),
+    view: str = Query(default="minimal"),
+):
     """Get a bot by its ID."""
     logger.info(f"GET /bot/{bot_id} - get_bot called")
     user_id = claims["sub"]
@@ -224,7 +228,13 @@ async def get_bot(bot_id: int, claims: dict = Depends(any_role), view: str = Que
 
 
 @router.put("/{bot_id:int}", dependencies=[Depends(require_json_content_type)])
-async def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = Depends(admin_or_user)):
+async def update_bot_admin(
+    bot_id: int,
+    body: BotUpdateRequest,
+    bot_svc: BotServiceDep,
+    user_svc: UserAdminServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Met à jour un bot existant"""
     logger.info(f"PUT /bot/{bot_id} - update_bot_admin called")
     user_id = claims["sub"]
@@ -233,7 +243,7 @@ async def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = D
         logger.warning(f"update_bot_admin({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    if not await _can_modify_bot_async(user, bot_id):
+    if not await _can_modify_bot_async(user, bot_id, bot_svc):
         logger.warning(f"update_bot_admin({bot_id}) forbidden for user_id={user_id}")
         raise ApiError(f"You don't have rights to update bot {bot_id}.", status_code=403)
 
@@ -248,7 +258,11 @@ async def update_bot_admin(bot_id: int, body: BotUpdateRequest, claims: dict = D
 
 
 @router.delete("/{bot_id:int}", status_code=204, dependencies=[Depends(admin_or_user)])
-def delete_bot(bot_id: int, claims: dict = Depends(admin_or_user)):
+def delete_bot(
+    bot_id: int,
+    bot_svc: BotServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Supprime un bot.
 
     Stays sync: bot_svc.delete() calls context_svc.delete_all()
@@ -262,7 +276,7 @@ def delete_bot(bot_id: int, claims: dict = Depends(admin_or_user)):
         logger.warning(f"delete_bot({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    if not _can_modify_bot(user, bot_id):
+    if not _can_modify_bot(user, bot_id, bot_svc):
         logger.warning(f"delete_bot({bot_id}) forbidden for user_id={user_id}")
         raise ApiError(f"You don't have rights to delete bot {bot_id}", status_code=403)
 

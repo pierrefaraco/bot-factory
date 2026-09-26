@@ -4,11 +4,9 @@ from ai_server.dao.database import Bot, BotAvatar, db, get_async_session
 from ai_server.dto.avatar_dto import AvatarDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
-from ai_server.decorators.singleton import singleton
 from sqlalchemy import select
 
 
-@singleton
 class AvatarService(BaseService[AvatarDto]):
     """Service for managing avatar entities"""
 

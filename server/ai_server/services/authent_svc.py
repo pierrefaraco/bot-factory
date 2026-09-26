@@ -12,20 +12,18 @@ from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.base_service import BaseService
 from ai_server.services.jwt_svc import JWTTools
 from ai_server.services.user_admin_svc import UserAdminService
-from ai_server.decorators.singleton import singleton
 
 
 REVOKED_JWT_LIST = []
 
 
-@singleton
 class AuthenticationService(BaseService):
     """Authentication service implementation class"""
 
-    def __init__(self):
+    def __init__(self, user_admin_svc: UserAdminService):
         super().__init__()
         self.logger = BotFactoryLogger()
-        self.user_admin_svc = UserAdminService()
+        self.user_admin_svc = user_admin_svc
 
     def login(self, mail: str, password: str) -> Optional[str]:
         """

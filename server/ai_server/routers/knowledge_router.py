@@ -50,12 +50,13 @@ from ai_server.dao.database import ROOT_CHAPTER_ID
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency
+from ai_server.dependencies.services import (
+    BotServiceDep,
+    KnowledgeServiceDep,
+    TemplateServiceDep,
+)
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.services.bot_svc import BotService
-from ai_server.services.knowledge_svc import KnowledgeSvc
-from ai_server.services.rag_svc import RagService
-from ai_server.services.template_svc import TemplateSvc
 
 router = APIRouter(
     prefix="/api/knowledge",
@@ -64,9 +65,6 @@ router = APIRouter(
 )
 
 logger = BotFactoryLogger()
-knowledge_svc = KnowledgeSvc(RagService())
-template_svc = TemplateSvc()
-bot_svc = BotService()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 
@@ -107,7 +105,11 @@ class _FlaskFileStorageAdapter:
 
 @router.post("/save/{bot_id:int}/{knowledge_dad_id}", dependencies=[Depends(admin_or_user)])
 @router.put("/save/{bot_id:int}/{knowledge_dad_id}", dependencies=[Depends(admin_or_user)])
-async def create_empty_knowledge(bot_id: int, knowledge_dad_id: str):
+async def create_empty_knowledge(
+    bot_id: int,
+    knowledge_dad_id: str,
+    knowledge_svc: KnowledgeServiceDep,
+):
     """Save or update a knowledge"""
     logger.info(f"POST/PUT /knowledge/save/{bot_id}/{knowledge_dad_id} - create_empty_knowledge called")
     knowledge = await run_in_threadpool(
@@ -121,6 +123,7 @@ async def create_empty_knowledge(bot_id: int, knowledge_dad_id: str):
 @router.put("/save/{bot_id:int}", dependencies=[Depends(admin_or_user)])
 async def save_knowledge(
     bot_id: int,
+    knowledge_svc: KnowledgeServiceDep,
     pdf: Optional[UploadFile] = File(default=None),
     data: Optional[str] = Form(default=None),
 ):
@@ -174,7 +177,11 @@ async def patch_knowledge_admin(knowledge_id: int):
     dependencies=[Depends(require_json_body(ImportedChaptersRequest))],
 )
 async def save_imported_knowledges(
-    bot_id: int, body: ImportedChaptersRequest, claims: dict = Depends(admin_or_user)
+    bot_id: int,
+    body: ImportedChaptersRequest,
+    knowledge_svc: KnowledgeServiceDep,
+    bot_svc: BotServiceDep,
+    claims: dict = Depends(admin_or_user),
 ):
     """Save imported knowledges"""
     logger.info(f"POST/PUT /knowledge/save_knowledges/{bot_id} - save_imported_knowledges called")
@@ -199,7 +206,11 @@ async def save_imported_knowledges(
 
 
 @router.get("/{bot_id:int}", dependencies=[Depends(admin_or_user)])
-async def get_knowledges(bot_id: int, claims: dict = Depends(admin_or_user)):
+async def get_knowledges(
+    bot_id: int,
+    knowledge_svc: KnowledgeServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Get all knowledges for a bot"""
     logger.info(f"GET /knowledge/{bot_id} - get_knowledges called")
     user_id = claims["sub"]
@@ -210,7 +221,12 @@ async def get_knowledges(bot_id: int, claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/{bot_id:int}/{knowledge_id:int}", dependencies=[Depends(admin_or_user)])
-async def get_knowledge(bot_id: int, knowledge_id: int, claims: dict = Depends(admin_or_user)):
+async def get_knowledge(
+    bot_id: int,
+    knowledge_id: int,
+    knowledge_svc: KnowledgeServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Get a specific knowledge"""
     logger.info(f"GET /knowledge/{bot_id}/{knowledge_id} - get_knowledge called")
     user_id = claims["sub"]
@@ -223,7 +239,11 @@ async def get_knowledge(bot_id: int, knowledge_id: int, claims: dict = Depends(a
 
 
 @router.delete("/{knowledge_id:int}", dependencies=[Depends(admin_or_user)])
-async def delete_knowledge(knowledge_id: int, claims: dict = Depends(admin_or_user)):
+async def delete_knowledge(
+    knowledge_id: int,
+    knowledge_svc: KnowledgeServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Delete a specific knowledge"""
     logger.info(f"DELETE /knowledge/{knowledge_id} - delete_knowledge called")
     user_id = claims["sub"]
@@ -238,7 +258,11 @@ async def delete_knowledge(knowledge_id: int, claims: dict = Depends(admin_or_us
 
 
 @router.delete("/all/{bot_id:int}", dependencies=[Depends(admin_or_user)])
-async def delete_all_knowledges(bot_id: int, claims: dict = Depends(admin_or_user)):
+async def delete_all_knowledges(
+    bot_id: int,
+    knowledge_svc: KnowledgeServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Delete all knowledges for a bot"""
     logger.info(f"DELETE /knowledge/all/{bot_id} - delete_all_knowledges called")
     user_id = claims["sub"]
@@ -253,7 +277,12 @@ async def delete_all_knowledges(bot_id: int, claims: dict = Depends(admin_or_use
 
 
 @router.get("/load_template/{bot_id:int}/{template_name}", dependencies=[Depends(admin_or_user)])
-async def load_template(bot_id: int, template_name: str, claims: dict = Depends(admin_or_user)):
+async def load_template(
+    bot_id: int,
+    template_name: str,
+    template_svc: TemplateServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Load a template into the database for a bot"""
     logger.info(f"GET /knowledge/load_template/{bot_id}/{template_name} - load_template called")
     user_id = claims["sub"]

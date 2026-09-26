@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 from ai_server.config.config import AppConfig
 from ai_server.config.constant import ADMIN_ROLE
 from ai_server.dao.database import db_session_scope
+from ai_server.dependencies.services import build_services
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.log.log_config import LogManager
@@ -45,8 +46,6 @@ from ai_server.routers import (
     token_stats_router,
     users_admin_router,
 )
-from ai_server.services.chroma_db_svc import ChromaDbService
-from ai_server.services.user_admin_svc import UserAdminService
 
 LogManager().setup_logger(AppConfig.LOGGER_LVL, AppConfig.PROMPT_DEBUG_LVL)
 logger = BotFactoryLogger()
@@ -56,12 +55,18 @@ logger = BotFactoryLogger()
 async def lifespan(app: FastAPI):
     logger.info(f"{AppConfig.APP_NAME} version {AppConfig.APP_VERSION} starting...")
 
+    # Built before serving so routes' Depends(get_*_service) (see
+    # dependencies/services.py) always find them, and so a broken service
+    # constructor fails startup instead of the first request.
+    services = build_services()
+    app.state.services = services
+
     with db_session_scope():
         # Fail fast if the vector store RAG depends on isn't reachable,
         # instead of starting up and only failing later on the first chat.
-        ChromaDbService().check_connection()
+        services.chroma_db.check_connection()
 
-        user_admin_svc = UserAdminService()
+        user_admin_svc = services.user_admin
         super_admin_login = os.getenv("SUPER_ADMIN_LOGIN")
         if super_admin_login and not user_admin_svc.get_user_by_email(super_admin_login):
             logger.info(f"Creating super admin user: {super_admin_login}")

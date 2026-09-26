@@ -70,16 +70,23 @@ from ai_server.dependencies.db_session import (
     async_db_session_dependency,
     stream_with_async_db_session,
 )
+from ai_server.dependencies.services import (
+    BotAssignmentServiceDep,
+    BotParametersServiceDep,
+    BotServiceDep,
+    KnowledgeServiceDep,
+    MessageServiceDep,
+    RagServiceDep,
+    TokenTrackingServiceDep,
+    UserAdminServiceDep,
+)
 from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.bot_assignment_svc import BotAssignmentService
-from ai_server.services.bot_parameters_svc import BotParametersService
 from ai_server.services.bot_svc import BotService
-from ai_server.services.knowledge_svc import KnowledgeSvc
-from ai_server.services.rag_svc import RagService, message_service
+from ai_server.services.message_svc import MessageService
 from ai_server.services.token_tracking_svc import TokenTrackingService
-from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
     prefix="/api/rag",
@@ -88,13 +95,6 @@ router = APIRouter(
 )
 
 logger = BotFactoryLogger()
-rag_svc = RagService()
-knowledge_svc = KnowledgeSvc(rag_svc)
-bot_assignment_svc = BotAssignmentService()
-bot_svc = BotService()
-user_svc = UserAdminService()
-bot_parameters_svc = BotParametersService()
-token_tracking_svc = TokenTrackingService()
 
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
@@ -112,7 +112,12 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1)
 
 
-async def _check_bot_access_permission(user: UserDto, bot_id: int) -> bool:
+async def _check_bot_access_permission(
+    user: UserDto,
+    bot_id: int,
+    bot_assignment_svc: BotAssignmentService,
+    bot_svc: BotService,
+) -> bool:
     if user.roles == ADMIN_ROLE:
         return True
     elif user.roles == USER_ROLE:
@@ -122,7 +127,9 @@ async def _check_bot_access_permission(user: UserDto, bot_id: int) -> bool:
     return False
 
 
-async def _enforce_token_quota(user: UserDto) -> None:
+async def _enforce_token_quota(
+    user: UserDto, token_tracking_svc: TokenTrackingService
+) -> None:
     """Refuse the request with a 429 once the user's billed account has
     reached TOKEN_LIMIT_PER_USER_24H (see TokenTrackingService.get_token_quota).
     Checked before the LLM call, so the request that crosses the limit is
@@ -140,7 +147,15 @@ async def _enforce_token_quota(user: UserDto) -> None:
 
 
 @router.post("/chat", dependencies=[Depends(require_json_body(ChatRequest))])
-async def chat(body: ChatRequest, claims: dict = Depends(any_role)):
+async def chat(
+    body: ChatRequest,
+    rag_svc: RagServiceDep,
+    user_svc: UserAdminServiceDep,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    bot_svc: BotServiceDep,
+    token_tracking_svc: TokenTrackingServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Basic chat endpoint"""
     logger.info("POST /rag/chat - chat called")
     user_id = claims["sub"]
@@ -154,11 +169,13 @@ async def chat(body: ChatRequest, claims: dict = Depends(any_role)):
         logger.warning(f"chat rejected: user {user_id} has no selected bot")
         raise ApiError("You have to select a bot on the app", status_code=409)
 
-    if not await _check_bot_access_permission(user, selected_bot_id):
+    if not await _check_bot_access_permission(
+        user, selected_bot_id, bot_assignment_svc, bot_svc
+    ):
         logger.warning(f"chat forbidden: user {user_id} has no access to bot {selected_bot_id}")
         raise ApiError(f"You don't have permission to access bot {selected_bot_id}", status_code=403)
 
-    await _enforce_token_quota(user)
+    await _enforce_token_quota(user, token_tracking_svc)
 
     started_at = time.perf_counter()
     response = await rag_svc.ask(selected_bot_id, user_id, body.question)
@@ -171,6 +188,13 @@ async def chat(body: ChatRequest, claims: dict = Depends(any_role)):
 
 @router.get("/trigfirstmessage")
 async def trigfirstmessage(
+    rag_svc: RagServiceDep,
+    user_svc: UserAdminServiceDep,
+    bot_parameters_svc: BotParametersServiceDep,
+    message_service: MessageServiceDep,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    bot_svc: BotServiceDep,
+    token_tracking_svc: TokenTrackingServiceDep,
     claims: dict = Depends(any_role),
     stream: str = Query(default="TRUE"),
     data: str = Query(default="{}"),
@@ -194,11 +218,13 @@ async def trigfirstmessage(
         logger.warning(f"trigfirstmessage rejected: invalid bot_id format {bot_id!r}")
         raise ApiError("Invalid bot_id format", status_code=400)
 
-    if not await _check_bot_access_permission(user, bot_id):
+    if not await _check_bot_access_permission(
+        user, bot_id, bot_assignment_svc, bot_svc
+    ):
         logger.warning(f"trigfirstmessage forbidden: user {user_id} has no access to bot {bot_id}")
         raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
 
-    await _enforce_token_quota(user)
+    await _enforce_token_quota(user, token_tracking_svc)
 
     question = await bot_parameters_svc.get_welcome_message(user.name, bot_id)
     stream_response = stream.upper() == "TRUE"
@@ -225,7 +251,7 @@ async def trigfirstmessage(
             headers=SSE_HEADERS,
         )
     else:
-        await _delete_session_history(bot_id, user_id)
+        await _delete_session_history(bot_id, user_id, message_service)
         started_at = time.perf_counter()
         response = await rag_svc.ask(bot_id, user_id, question, hide=True)
         elapsed_ms = (time.perf_counter() - started_at) * 1000
@@ -237,6 +263,12 @@ async def trigfirstmessage(
 
 @router.get("/streamchat")
 async def streamchat(
+    rag_svc: RagServiceDep,
+    user_svc: UserAdminServiceDep,
+    message_service: MessageServiceDep,
+    bot_assignment_svc: BotAssignmentServiceDep,
+    bot_svc: BotServiceDep,
+    token_tracking_svc: TokenTrackingServiceDep,
     claims: dict = Depends(any_role),
     question: str = Query(default=None),
     bot_id: str = Query(default=None),
@@ -263,11 +295,13 @@ async def streamchat(
         logger.warning(f"streamchat rejected: invalid bot_id format {bot_id!r}")
         raise ApiError("Invalid bot_id format", status_code=400)
 
-    if not await _check_bot_access_permission(user, bot_id):
+    if not await _check_bot_access_permission(
+        user, bot_id, bot_assignment_svc, bot_svc
+    ):
         logger.warning(f"streamchat forbidden: user {user_id} has no access to bot {bot_id}")
         raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
 
-    await _enforce_token_quota(user)
+    await _enforce_token_quota(user, token_tracking_svc)
 
     try:
         parsed_data = json.loads(data)
@@ -291,7 +325,11 @@ async def streamchat(
 
 
 @router.post("/transmit_to_alfred/{bot_id:int}")
-async def transmit_to_alfred(bot_id: int, claims: dict = Depends(admin_or_user)):
+async def transmit_to_alfred(
+    bot_id: int,
+    knowledge_svc: KnowledgeServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Transmit chapters to vector database.
 
     knowledge_svc.recordChaptersToVectorDB() itself stays fully sync: it
@@ -318,7 +356,11 @@ async def transmit_to_alfred(bot_id: int, claims: dict = Depends(admin_or_user))
 
 
 @router.get("/{bot_id:int}")
-async def get_session_history(bot_id: int, claims: dict = Depends(any_role)):
+async def get_session_history(
+    bot_id: int,
+    message_service: MessageServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Get session history for a bot"""
     logger.info(f"GET /rag/{bot_id} - get_session_history called")
     user_id = claims["sub"]
@@ -336,7 +378,11 @@ async def get_session_history(bot_id: int, claims: dict = Depends(any_role)):
 
 
 @router.delete("")
-async def delete_selected_bot_session_history(claims: dict = Depends(any_role)):
+async def delete_selected_bot_session_history(
+    user_svc: UserAdminServiceDep,
+    message_service: MessageServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Delete session history for the selected bot"""
     logger.info("DELETE /rag - delete_selected_bot_session_history called")
     user_id = claims["sub"]
@@ -350,17 +396,23 @@ async def delete_selected_bot_session_history(claims: dict = Depends(any_role)):
         logger.warning(f"delete_selected_bot_session_history rejected: user {user_id} has no selected bot")
         raise ApiError("Bot_id is required", status_code=400)
 
-    return await _delete_session_history(int(bot_id), user_id)
+    return await _delete_session_history(int(bot_id), user_id, message_service)
 
 
 @router.delete("/{bot_id:int}")
-async def delete_session_history(bot_id: int, claims: dict = Depends(any_role)):
+async def delete_session_history(
+    bot_id: int,
+    message_service: MessageServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Delete session history for a bot"""
     logger.info(f"DELETE /rag/{bot_id} - delete_session_history called")
-    return await _delete_session_history(bot_id, claims["sub"])
+    return await _delete_session_history(bot_id, claims["sub"], message_service)
 
 
-async def _delete_session_history(bot_id: int, user_id):
+async def _delete_session_history(
+    bot_id: int, user_id, message_service: MessageService
+):
     logger.info(f"User {user_id} deleting session history for bot {bot_id}")
     session = await message_service.get_session(bot_id, user_id)
     if session is None:

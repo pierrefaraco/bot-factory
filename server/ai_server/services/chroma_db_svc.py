@@ -19,7 +19,6 @@ from ai_server.config.config import app_config
 from ai_server.dto.document_dto import DocumentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
-from ai_server.decorators.singleton import singleton
 from typing import List, Optional, Dict, Any
 import chromadb
 import os
@@ -28,7 +27,6 @@ import time
 logger = BotFactoryLogger()
 
 
-@singleton
 class ChromaDbService(BaseService[DocumentDto]):
     """Service for managing vector database operations"""
 
@@ -38,7 +36,7 @@ class ChromaDbService(BaseService[DocumentDto]):
         if self.config.CHROMA_CONTAINER:
             logger.info(f"Chromadb start in a container, and persist data in dir: {self.config.PERSIST_DIRECTORY}")
         else:
-             logger.info(f"Chromadb persist data in dir:  {self.config.PERSIST_DIRECTORY}")
+            logger.info(f"Chromadb persist data in dir:  {self.config.PERSIST_DIRECTORY}")
         self.embedding_function = FastEmbedEmbeddings(
             model_name="BAAI/bge-small-en-v1.5"
         )
@@ -169,7 +167,7 @@ class ChromaDbService(BaseService[DocumentDto]):
 
     def build_retriever(self, collection_name: str) -> VectorStoreRetriever:
         """Atomic, concurrency-safe counterpart of
-        build_collection()+get_retriever(): this class is a singleton
+        build_collection()+get_retriever(): one instance of this class is
         shared by every concurrent request, and build_collection()/
         get_retriever() communicate only through self.client/self.db/
         self.retriever -- two requests for two different bots (different

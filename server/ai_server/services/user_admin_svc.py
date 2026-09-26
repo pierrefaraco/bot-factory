@@ -19,7 +19,6 @@ from typing import List, Optional, Dict, Any
 from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
-from ai_server.decorators.singleton import singleton
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.bot_svc import BotService
 
@@ -27,14 +26,13 @@ from ai_server.services.bot_svc import BotService
 logger = BotFactoryLogger()
 
 
-@singleton
 class UserAdminService(BaseService[UserDto]):
     """Service for managing user entities"""
 
-    def __init__(self):
+    def __init__(self, bot_assignment_svc: BotAssignmentService, bot_svc: BotService):
         super().__init__()
-        self.bot_assignment_svc = BotAssignmentService()
-        self.bot_svc = BotService()
+        self.bot_assignment_svc = bot_assignment_svc
+        self.bot_svc = bot_svc
 
     def user_to_dto(self, user: User) -> UserDto:
         """

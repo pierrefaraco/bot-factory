@@ -1,5 +1,4 @@
 import yaml
-from ai_server.decorators.singleton import singleton
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 
@@ -11,7 +10,6 @@ QUALITIES_FLAWS = f"{YAML_DIRECTORY}/qualities_flaws.yaml"
 PROMPTS = f"{YAML_DIRECTORY}/prompts.yaml"
 
 
-@singleton
 class YamlSvc:
     def __init__(self):
         self.logger = BotFactoryLogger()

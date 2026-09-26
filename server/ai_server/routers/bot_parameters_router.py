@@ -47,10 +47,9 @@ from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency
+from ai_server.dependencies.services import BotParametersServiceDep, UserAdminServiceDep
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.services.bot_parameters_svc import BotParametersService
-from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
     prefix="/api/bot-parameters",
@@ -59,8 +58,6 @@ router = APIRouter(
 )
 
 logger = BotFactoryLogger()
-bot_parameters_svc = BotParametersService()
-user_svc = UserAdminService()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
@@ -104,7 +101,10 @@ class BotParametersPatchRequest(BaseModel):
     dependencies=[Depends(require_json_body(BotParametersRequest))],
 )
 async def create_or_update_bot_parameters(
-    body: BotParametersRequest, claims: dict = Depends(admin_or_user)
+    body: BotParametersRequest,
+    bot_parameters_svc: BotParametersServiceDep,
+    user_svc: UserAdminServiceDep,
+    claims: dict = Depends(admin_or_user),
 ):
     """Create bot parameters and regenerate the bot's system prompt."""
     logger.info("POST/PUT /bot-parameters - create_or_update_bot_parameters called")
@@ -131,7 +131,11 @@ async def create_or_update_bot_parameters(
     dependencies=[Depends(require_json_body(BotParametersPatchRequest))],
 )
 async def patch_bot_parameters_admin(
-    bot_id: int, body: BotParametersPatchRequest, claims: dict = Depends(admin_or_user)
+    bot_id: int,
+    body: BotParametersPatchRequest,
+    bot_parameters_svc: BotParametersServiceDep,
+    user_svc: UserAdminServiceDep,
+    claims: dict = Depends(admin_or_user),
 ):
     """Partially update bot parameters and regenerate the bot's system prompt.
 
@@ -156,7 +160,10 @@ async def patch_bot_parameters_admin(
 
 
 @router.get("/{bot_id}", dependencies=[Depends(any_role)])
-async def get_bot_parameters_by_bot_id(bot_id: int):
+async def get_bot_parameters_by_bot_id(
+    bot_id: int,
+    bot_parameters_svc: BotParametersServiceDep,
+):
     """Get bot parameters by bot ID"""
     logger.info(f"GET /bot-parameters/{bot_id} - get_bot_parameters_by_bot_id called")
     bot_parameters_dto = await bot_parameters_svc.get_by_bot_id_async(bot_id)
@@ -168,7 +175,10 @@ async def get_bot_parameters_by_bot_id(bot_id: int):
 
 
 @router.delete("/{bot_id}", status_code=204, dependencies=[Depends(admin_or_user)])
-async def delete_bot_parameters(bot_id: int):
+async def delete_bot_parameters(
+    bot_id: int,
+    bot_parameters_svc: BotParametersServiceDep,
+):
     """Delete bot parameters by bot ID"""
     logger.info(f"DELETE /bot-parameters/{bot_id} - delete_bot_parameters called")
     if not await bot_parameters_svc.delete_by_bot_id(bot_id):
