@@ -3,10 +3,10 @@
 Every REST endpoint that used to live in Flask blueprints under
 ai_server/rest/*.py has been ported to a native FastAPI router in
 ai_server/routers/*.py, registered below. There is no Flask app left
-anywhere in this process: the last two things that needed one --
-Model.query/db.session (see ai_server/database/session.py) and JWT issuing
-(see ai_server/dependencies/auth.py's create_access_token) -- have both
-been moved onto framework-independent replacements.
+anywhere in this process: the last two things that needed one -- DB
+session scoping (see ai_server/database/session.py) and JWT issuing (see
+ai_server/dependencies/auth.py's create_access_token) -- have both been
+moved onto framework-independent replacements.
 
 CORS used to be handled twice on the old Flask side (Flask-CORS's
 CORS(app, ...) plus a manual after_request adding a second, wider set of

@@ -20,12 +20,10 @@ class TokenCountingCallback(AsyncCallbackHandler):
     awaits an async handler's on_llm_end directly -- same task, no thread
     hop (see langchain_core.callbacks.manager._ahandle_event_for_handler's
     `if inspect.iscoroutinefunction(event)` branch) -- so this can use
-    get_async_session()-based calls (user_svc.get_user_dto_by_id,
-    token_tracking_service.record_token_usage) instead of the sync
-    Model.query ones a plain BaseCallbackHandler would have been limited
-    to. That in turn means the DB write this callback does mid-stream no
-    longer needs the sync db_session_scope() dependencies/db_session.py's
-    stream_with_async_db_session used to open alongside the async one."""
+    async service calls (user_svc.get_user_dto_by_id,
+    token_tracking_service.record_token_usage), inside the scope
+    dependencies/db_session.py's stream_with_async_db_session opens around
+    a streamed response."""
 
     def __init__(
         self,
