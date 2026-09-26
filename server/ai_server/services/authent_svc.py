@@ -5,7 +5,8 @@ from typing import Optional
 
 from werkzeug.security import check_password_hash
 
-from ai_server.dao.database import Bot, User, db
+from ai_server.models import Bot, User
+from ai_server.database.session import db
 from ai_server.dependencies.auth import create_access_token
 from ai_server.exceptions.service_exceptions import AuthenticationError, NotFoundError
 from ai_server.log.bot_factory_logger import BotFactoryLogger

@@ -3,7 +3,8 @@ from langchain_core.prompts import (
     MessagesPlaceholder,
 )
 
-from ai_server.dao.database import Bot, db, get_async_session
+from ai_server.models import Bot
+from ai_server.database.session import db, get_async_session
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.config.prompt_constants import (
     LABEL,

@@ -11,7 +11,7 @@ import json
 import pytest
 
 from ai_server.config.constant import ADMIN_ROLE, USER_ROLE
-from ai_server.dao.database import Message, Session as SessionModel, TokenUsage
+from ai_server.models import Message, Session as SessionModel, TokenUsage
 
 from .helpers import assert_error, read_sse
 

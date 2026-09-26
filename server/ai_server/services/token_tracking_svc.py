@@ -2,7 +2,8 @@ from typing import Optional, Dict, List
 from datetime import datetime, timezone, timedelta
 from ai_server.config.config import app_config
 from ai_server.config.constant import ADMIN_ROLE
-from ai_server.dao.database import TokenUsage, get_async_session
+from ai_server.models import TokenUsage
+from ai_server.database.session import get_async_session
 from ai_server.dto.user_dto import UserDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from sqlalchemy import case, func, select

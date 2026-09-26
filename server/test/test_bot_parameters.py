@@ -1,7 +1,7 @@
 """HTTP regression tests for /api/bot-parameters/* (rest_bot_parameters.py)."""
 
 from ai_server.config.constant import GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import BotParameters
+from ai_server.models import BotParameters
 
 from .helpers import assert_error
 

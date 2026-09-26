@@ -4,7 +4,7 @@ Every REST endpoint that used to live in Flask blueprints under
 ai_server/rest/*.py has been ported to a native FastAPI router in
 ai_server/routers/*.py, registered below. There is no Flask app left
 anywhere in this process: the last two things that needed one --
-Model.query/db.session (see ai_server/dao/database.py) and JWT issuing
+Model.query/db.session (see ai_server/database/session.py) and JWT issuing
 (see ai_server/dependencies/auth.py's create_access_token) -- have both
 been moved onto framework-independent replacements.
 
@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse
 
 from ai_server.config.config import AppConfig
 from ai_server.config.constant import ADMIN_ROLE
-from ai_server.dao.database import db_session_scope
+from ai_server.database.session import db_session_scope
 from ai_server.dependencies.services import build_services
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger

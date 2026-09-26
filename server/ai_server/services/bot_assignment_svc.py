@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Any
-from ai_server.dao.database import BotAssignment, Bot, User, db, get_async_session
+from ai_server.models import BotAssignment, Bot, User
+from ai_server.database.session import db, get_async_session
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService

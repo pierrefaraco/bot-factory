@@ -269,7 +269,8 @@ bot-factory/
 │   ├── ai_server/
 │   │   ├── routers/             # REST endpoints
 │   │   ├── services/            # Business logic
-│   │   ├── dao/                 # Database models
+│   │   ├── models/              # SQLAlchemy ORM models (one module per aggregate)
+│   │   ├── database/            # DB engines + per-request session scoping
 │   │   ├── config/              # Configuration
 │   │   ├── decorators/          # Custom decorators
 │   │   ├── dto/                 # Data transfer objects

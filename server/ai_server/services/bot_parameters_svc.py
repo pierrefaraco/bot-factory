@@ -2,7 +2,8 @@ from typing import List, Dict, Any, Optional
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.services.prompt_svc import PromptService
 from ai_server.services.yaml_svc import YamlSvc
-from ai_server.dao.database import BotParameters, InterlocutorIdentity, db, get_async_session
+from ai_server.models import BotParameters, InterlocutorIdentity
+from ai_server.database.session import db, get_async_session
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.services.base_service import BaseService
 from sqlalchemy import select

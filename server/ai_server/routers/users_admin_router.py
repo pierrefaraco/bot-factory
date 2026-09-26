@@ -64,7 +64,8 @@ from pydantic import BaseModel, EmailStr, Field
 from starlette.concurrency import run_in_threadpool
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import Bot, User, get_async_session
+from ai_server.models import Bot, User
+from ai_server.database.session import get_async_session
 from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body

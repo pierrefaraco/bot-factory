@@ -4,7 +4,8 @@ import uuid
 from ai_server.config.config import app_config
 from abc import ABCMeta
 from ai_server.services.chroma_db_svc import ChromaDbService
-from ai_server.dao.database import Knowledge, User, db
+from ai_server.models import Knowledge, User
+from ai_server.database.session import db
 from ai_server.dto.knowledge_dto import KnowledgeDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError

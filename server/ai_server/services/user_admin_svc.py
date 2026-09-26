@@ -3,16 +3,8 @@ from sqlalchemy import delete, func, or_, select
 from werkzeug.security import generate_password_hash, check_password_hash
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.dao.database import (
-    Bot,
-    BotAssignment,
-    Message,
-    Session,
-    TokenUsage,
-    User,
-    db,
-    get_async_session,
-)
+from ai_server.models import Bot, BotAssignment, Message, Session, TokenUsage, User
+from ai_server.database.session import db, get_async_session
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.exceptions.api_error import ApiError
 from typing import List, Optional, Dict, Any

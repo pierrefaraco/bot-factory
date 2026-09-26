@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Importer la configuration et les modèles
 from ai_server.config.config import app_config
-from ai_server.dao.database import Base
+from ai_server.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

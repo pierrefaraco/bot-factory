@@ -5,7 +5,7 @@ self/guest/admin role-matrix pattern reused by later blueprints.
 """
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import User
+from ai_server.models import User
 
 from .helpers import assert_error, unique
 

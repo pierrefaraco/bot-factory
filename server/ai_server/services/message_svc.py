@@ -3,7 +3,8 @@ from typing import Optional
 
 from sqlalchemy import delete, select
 
-from ai_server.dao.database import Session, Message, get_async_session
+from ai_server.models import Session, Message
+from ai_server.database.session import get_async_session
 from ai_server.dto.message_dto import MessageDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 

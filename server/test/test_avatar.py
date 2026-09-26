@@ -1,7 +1,7 @@
 """HTTP regression tests for /api/avatar/* (rest_avatar.py)."""
 
 from ai_server.config.constant import GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import BotAvatar
+from ai_server.models import BotAvatar
 
 from .helpers import assert_error
 

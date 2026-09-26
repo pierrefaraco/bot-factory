@@ -46,7 +46,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ai_server.config.constant import ADMIN_ROLE, USER_ROLE
 from ai_server.config.validation import pydantic_error_messages
-from ai_server.dao.database import ROOT_CHAPTER_ID
+from ai_server.models import ROOT_CHAPTER_ID
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency

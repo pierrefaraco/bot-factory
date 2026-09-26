@@ -65,7 +65,7 @@ def check_models():
         server_dir = str(Path(__file__).resolve().parent.parent)
         if server_dir not in sys.path:
             sys.path.insert(0, server_dir)
-        from ai_server.dao.database import Base
+        from ai_server.models import Base
 
         tables = Base.metadata.tables
         print(f"  ✅ {len(tables)} tables détectées:")

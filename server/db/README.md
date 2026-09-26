@@ -55,7 +55,7 @@ A diagnostic script is provided:
 cd server && uv run db/check_alembic.py
 ```
 
-It checks: `DATABASE_URL`, presence of Alembic files, the `alembic` command, SQLAlchemy models import (`ai_server.dao.database.Base`) and existing migrations.
+It checks: `DATABASE_URL`, presence of Alembic files, the `alembic` command, SQLAlchemy models import (`ai_server.models.Base`) and existing migrations.
 
 ## 5. First run — apply migrations
 
@@ -79,7 +79,7 @@ make db-stamp REV=head
 
 ## 6. Creating a new migration
 
-After modifying a model in `server/ai_server/dao/database.py`:
+After modifying a model in `server/ai_server/models/`:
 
 ```bash
 make db-create MSG="Description of the change"

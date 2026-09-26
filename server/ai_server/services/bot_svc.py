@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Any
-from ai_server.dao.database import Bot, User, db, get_async_session
+from ai_server.models import Bot, User
+from ai_server.database.session import db, get_async_session
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.dto.bot_dto import BotDto

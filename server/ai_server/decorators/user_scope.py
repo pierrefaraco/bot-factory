@@ -14,7 +14,7 @@ from http import HTTPStatus
 from typing import Optional, Tuple
 
 from ai_server.config.constant import ADMIN_ROLE
-from ai_server.dao.database import User
+from ai_server.models import User
 
 
 def authorize_user_scope(

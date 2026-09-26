@@ -39,7 +39,7 @@ from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import User
+from ai_server.models import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency

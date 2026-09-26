@@ -1,6 +1,6 @@
 """Per-request DB session scoping for native FastAPI routes.
 
-Model.query/db.session (see ai_server/dao/database.py's own module
+Model.query/db.session (see ai_server/database/session.py's own module
 docstring) get a fresh SQLAlchemy Session for the duration of one
 request -- or one streamed chunk, for a long-lived streaming response --
 released back to the pool when that unit of work ends.
@@ -33,7 +33,7 @@ AppConfig directly instead -- see ai_server/dependencies/auth.py -- so
 there's no Flask app left anywhere in the process to push a context for.)
 """
 
-from ai_server.dao.database import async_db_session_scope, db_session_scope
+from ai_server.database.session import async_db_session_scope, db_session_scope
 
 
 async def async_db_session_dependency():

@@ -6,7 +6,7 @@ from google.auth.transport import requests
 from ai_server.config.config import app_config
 from ai_server.dependencies.auth import create_access_token
 from ai_server.services.user_admin_svc import UserAdminService
-from ai_server.dao.database import User
+from ai_server.models import User
 from ai_server.dto.user_dto import UserDto
 
 

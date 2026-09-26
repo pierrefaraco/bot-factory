@@ -7,7 +7,7 @@ cleanup is enough.
 """
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dao.database import Bot, User
+from ai_server.models import Bot, User
 
 from .helpers import assert_error
 
