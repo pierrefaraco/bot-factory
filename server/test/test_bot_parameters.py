@@ -1,7 +1,7 @@
 """HTTP regression tests for /api/bot-parameters/* (rest_bot_parameters.py)."""
 
 from ai_server.config.constant import GUEST_ROLE, USER_ROLE
-from ai_server.models import BotParameters
+from ai_server.models import Bot, BotParameters
 
 from .helpers import assert_error
 
@@ -23,6 +23,25 @@ def test_create_golden_path(
     body = response.json()
     assert body["bot_id"] == bot.id
     track(BotParameters, body["id"])
+
+
+def test_create_regenerates_bot_prompt(
+    http_client, api_base_url, create_user, create_bot, login, db_session, track
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id, prompt="")
+    headers = login(user.mail, password)
+
+    response = http_client.post(
+        f"{api_base_url}/bot-parameters",
+        json={"bot_id": bot.id, "bot_name": "Prompted Bot", "goal": "help"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201, response.text
+    track(BotParameters, response.json()["id"])
+    db_session.expire_all()
+    assert "Prompted Bot" in db_session.get(Bot, bot.id).prompt
 
 
 def test_create_without_interlocutor_identity_defaults_to_user(

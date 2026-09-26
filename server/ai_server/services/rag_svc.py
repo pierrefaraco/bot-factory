@@ -68,7 +68,7 @@ class RagService:
                 doc.page_content = f"Source: {name}\n{doc.page_content}"
         return docs
 
-    def build(self, bot_id, user_id=None, session_id=None) -> Runnable:
+    def build(self, bot_id, bot_prompt: str, user_id=None, session_id=None) -> Runnable:
         """Assemble a fresh single-call RAG pipeline for one question, as a
         plain LCEL chain (no create_history_aware_retriever /
         create_retrieval_chain / RunnableWithMessageHistory indirection).
@@ -78,11 +78,11 @@ class RagService:
         and the app-wide RagService is shared across concurrent requests, so
         the built chain is returned instead of stored as instance state.
 
-        Genuinely blocking under the hood, with no async equivalent for
-        either step: db_service.build_retriever() (a real ChromaDB client
-        init) and prompt_service.get_qa_prompt() (a sync Bot.query read).
-        Callers (ask()/ask_with_stream()) run this via run_in_threadpool so
-        it doesn't block the event loop.
+        Genuinely blocking under the hood, with no async equivalent:
+        db_service.build_retriever() (a real ChromaDB client init). Callers
+        (ask()/ask_with_stream()) read bot_prompt on the async session
+        first, then run this via run_in_threadpool so it doesn't block the
+        event loop.
 
         Retrieval runs directly on the raw question (no LLM reformulation
         pass) — one LLM call per question instead of two. The trade-off:
@@ -117,7 +117,7 @@ class RagService:
         # steal each other's retriever. build_retriever() returns it directly
         # instead, from purely local values -- see its own docstring.
         retriever = self.db_service.build_retriever(f"Collection{bot_id}")
-        qa_prompt = self.prompt_service.get_qa_prompt(bot_id)
+        qa_prompt = self.prompt_service.get_qa_prompt(bot_id, bot_prompt)
 
         return (
             RunnableLambda(self._log_initial_input)
@@ -257,11 +257,11 @@ class RagService:
         try:
             # build() is called via run_in_threadpool, not awaited directly:
             # it's still genuinely blocking under the hood (ChromaDB client
-            # init in db_service.build_retriever(), a sync Bot.query read in
-            # prompt_service.get_qa_prompt()), with no async equivalent for
-            # either -- see build()'s own docstring. run_in_threadpool keeps
-            # that off the event loop.
-            rag_chain = await run_in_threadpool(self.build, bot_id, user_id)
+            # init in db_service.build_retriever()), with no async
+            # equivalent -- see build()'s own docstring. The bot prompt is
+            # read beforehand, on the async session.
+            bot_prompt = await self.prompt_service.get_bot_prompt(bot_id)
+            rag_chain = await run_in_threadpool(self.build, bot_id, bot_prompt, user_id)
             result = await self.invoke_and_save(rag_chain, bot_id, user_id, query, hide)
         except Exception as e:
             elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
@@ -289,8 +289,9 @@ class RagService:
             f"RAG streaming query for bot {bot_id}, user {user_id}, session {session_id}"
         )
         await self.message_service.save_message(bot_id, user_id, "user", query, hide)
+        bot_prompt = await self.prompt_service.get_bot_prompt(bot_id)
         rag_chain = await run_in_threadpool(
-            self.build, bot_id, user_id, session_id
+            self.build, bot_id, bot_prompt, user_id, session_id
         )
         history = await self.get_session_history(bot_id, user_id)
 

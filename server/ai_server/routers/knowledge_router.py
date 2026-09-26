@@ -30,9 +30,8 @@ hand back objects bound to a different session than the one the commit
 runs on, silently losing that write. Every call into either service is
 therefore pushed onto run_in_threadpool so these routes can still be
 `async def` (and share the router's Depends-based session scoping) without
-blocking the event loop for the call's duration. bot_svc.py's
-is_bot_belong_to_user_async (already migrated) is used directly instead,
-where applicable.
+blocking the event loop for the call's duration. BotService (async) is
+awaited directly instead, where applicable.
 """
 
 import json
@@ -191,7 +190,7 @@ async def save_imported_knowledges(
         f"save_imported_knowledges(bot_id={bot_id}) params: "
         f"count={len(imported_knowledges)} user_id={user_id}"
     )
-    if imported_knowledges and not await bot_svc.is_bot_belong_to_user_async(bot_id, user_id):
+    if imported_knowledges and not await bot_svc.is_bot_belong_to_user(bot_id, user_id):
         logger.warning(f"save_imported_knowledges(bot_id={bot_id}) forbidden for user_id={user_id}")
         raise ApiError(
             f"User {user_id} is not allowed to save knowledges for bot {bot_id}",

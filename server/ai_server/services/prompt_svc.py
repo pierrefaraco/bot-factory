@@ -3,9 +3,8 @@ from langchain_core.prompts import (
     MessagesPlaceholder,
 )
 
-from ai_server.models import Bot
-from ai_server.database.session import db, get_async_session
 from ai_server.log.bot_factory_logger import BotFactoryLogger
+from ai_server.repositories import BotRepository
 from ai_server.config.prompt_constants import (
     LABEL,
     DESCRIPTION,
@@ -25,16 +24,19 @@ from ai_server.config.prompt_constants import (
 
 class PromptService:
     """Builds bot prompts and owns the Bot.prompt column. Reads/writes it
-    straight through the DAO rather than via BotService: BotService
-    (indirectly, through BotParametersService and RagService) depends on
-    this service, so going back through it would be a dependency cycle."""
+    through BotRepository rather than via BotService: BotService
+    (through BotParametersService) depends on this service, so going back
+    through it would be a dependency cycle."""
 
-    def __init__(self):
+    def __init__(self, bot_repo: BotRepository):
         self.logger = BotFactoryLogger()
+        self.bot_repo = bot_repo
 
-    def get_qa_prompt(self, bot_id):
-        bot = Bot.query.filter_by(id=bot_id).first()
-        prompt = bot.prompt or ""
+    async def get_bot_prompt(self, bot_id) -> str:
+        bot = await self.bot_repo.get(bot_id)
+        return bot.prompt or ""
+
+    def get_qa_prompt(self, bot_id, prompt: str):
         # The stored prompt contains user-provided text (bot name, goal, ...):
         # escape braces so LangChain does not treat them as template variables.
         escaped_prompt = prompt.replace("{", "{{").replace("}", "}}")
@@ -114,27 +116,13 @@ class PromptService:
         self.logger.debug(f"New prompt for bot_id {bot_id}: {prompt}")
         return prompt
 
-    def update_prompt(
+    async def update_prompt(
         self, user_name: str, bot_id, params, behaviour_dict, answer_dict
     ):
         prompt = self._build_prompt(user_name, bot_id, params, behaviour_dict, answer_dict)
-        bot = Bot.query.get(bot_id)
+        bot = await self.bot_repo.get(bot_id)
         bot.prompt = prompt
-        db.session.commit()
-
-    # Async counterpart of update_prompt, for bot_parameters_svc.py's
-    # now-async create_bot_parameters_async/patch_bot_parameters_async.
-    # update_prompt itself stays sync: still called from
-    # BotParametersService's still-sync create_bot_parameters/
-    # create_random_parameters/patch_bot_parameters.
-    async def update_prompt_async(
-        self, user_name: str, bot_id, params, behaviour_dict, answer_dict
-    ):
-        prompt = self._build_prompt(user_name, bot_id, params, behaviour_dict, answer_dict)
-        session = get_async_session()
-        bot = await session.get(Bot, bot_id)
-        bot.prompt = prompt
-        await session.commit()
+        await self.bot_repo.commit()
 
     def make_interlocutor_sentence(self, user_name, params):
         interlocutor_sentence = f'Your interlocutor is "{params.interlocutor_type}".'

@@ -1,24 +1,28 @@
 from typing import Optional, List, Dict, Any
-from ai_server.models import Bot, User
-from ai_server.database.session import db, get_async_session
-from ai_server.dto.bot_assignment_dto import BotAssignmentDto
+
+from starlette.concurrency import run_in_threadpool
+
+from ai_server.models import Bot
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.dto.bot_dto import BotDto
 from ai_server.dto.avatar_dto import AvatarDto
-from ai_server.exceptions.service_exceptions import ServiceError
+from ai_server.log.bot_factory_logger import BotFactoryLogger
+from ai_server.repositories import BotRepository, UserRepository
 from ai_server.services.base_service import BaseService
 from ai_server.services.avatar_svc import AvatarService
 from ai_server.services.bot_parameters_svc import BotParametersService
 from ai_server.services.bot_assignment_svc import BotAssignmentService
 from ai_server.services.template_svc import TemplateSvc
 from ai_server.services.knowledge_svc import KnowledgeSvc
-from sqlalchemy import select
-
-from ai_server.log.bot_factory_logger import BotFactoryLogger
 
 
 class BotService(BaseService[BotDto]):
-    """Service for managing bot entities"""
+    """Service for managing bot entities.
+
+    Async throughout. The only sync work left is KnowledgeSvc/TemplateSvc
+    (knowledge chapters + their ChromaDB vectors -- ChromaDB has no async
+    client), which create_random_bot()/delete() run through
+    run_in_threadpool, off the event loop."""
 
     def __init__(
         self,
@@ -27,6 +31,8 @@ class BotService(BaseService[BotDto]):
         bot_parameters_svc: BotParametersService,
         knowledge_svc: KnowledgeSvc,
         template_svc: TemplateSvc,
+        bot_repo: BotRepository,
+        user_repo: UserRepository,
     ):
         super().__init__()
         self.avatar_svc = avatar_svc
@@ -34,6 +40,8 @@ class BotService(BaseService[BotDto]):
         self.bot_parameters_svc = bot_parameters_svc
         self.knowledge_svc = knowledge_svc
         self.template_svc = template_svc
+        self.bot_repo = bot_repo
+        self.user_repo = user_repo
         self.logger = BotFactoryLogger()
 
     def _big_bot_to_dto(
@@ -69,255 +77,105 @@ class BotService(BaseService[BotDto]):
         """
         return BotDto(bot.id, bot.user_account_id, avatar_dto)
 
-    def is_bot_belong_to_user(self, bot_id: int, user_account_id: int) -> bool:
+    async def is_bot_belong_to_user(self, bot_id: int, user_account_id: int) -> bool:
         """
         Check if a bot belongs to a specific user.
-
-        Args:
-            bot_id: ID of the bot
-            user_account_id: ID of the user account
-
-        Returns:
-            True if the bot belongs to the user, False otherwise
         """
-        result = self._check_bot_ownership(
-            bot_id,
-            user_account_id,
+        bot = await self.bot_repo.get(bot_id)
+        return bot is not None and int(bot.user_account_id) == int(user_account_id)
+
+    async def create_random_bot(self, user_account_id) -> BotDto:
+        """Create a bot for user_account_id with a random avatar, a random
+        persona (bot parameters + generated prompt) and the "start"
+        template's knowledge chapters, indexed in ChromaDB."""
+        self.logger.info(
+            f"create_random_bot starting for user_account_id={user_account_id}"
         )
-        return bool(result)
-
-    def _check_bot_ownership(self, bot_id: int, user_account_id: int) -> bool:
-        bot: Bot = Bot.query.get(bot_id)
-        return bot is not None and int(bot.user_account_id) == int(user_account_id)
-
-    # Async counterpart of is_bot_belong_to_user, for rag_router.py's now-async
-    # routes. is_bot_belong_to_user itself stays sync: still shared with
-    # knowledge_router.py's save_imported_knowledges, not migrated.
-    async def is_bot_belong_to_user_async(self, bot_id: int, user_account_id: int) -> bool:
-        session = get_async_session()
-        result = await session.execute(select(Bot).where(Bot.id == bot_id))
-        bot = result.scalar_one_or_none()
-        return bot is not None and int(bot.user_account_id) == int(user_account_id)
-
-    # Stays sync: self.template_svc.importTemplateInDB() below funnels
-    # into KnowledgeSvc.save_knowledges_dto() (knowledge_svc.py), which
-    # drives ChromaDB writes with no async client at all (chroma_db_svc.py)
-    # -- same class of blocker as rag_router.py's transmit_to_alfred,
-    # which stays sync for exactly this reason. bot_router.py's create_bot
-    # route stays sync accordingly.
-    def create_random_bot(self, user_account_id) -> BotDto:
-        self.logger.info(f"create_random_bot starting for user_account_id={user_account_id}")
-        bot = Bot(user_account_id=user_account_id, prompt="")
-        db.session.add(bot)
-
-        user: User = User.query.filter_by(id=user_account_id).first()
+        # JWT "sub" is a string: the sync session used to hand back the int
+        # column value on reload after commit, the async one (with
+        # expire_on_commit=False) would keep the string as given.
+        user_account_id = int(user_account_id)
+        user = await self.user_repo.get(user_account_id)
         if not user:
             self.logger.warning(
                 f"create_random_bot rejected: user_account_id={user_account_id} not found"
             )
             raise Exception("User not found")
-        db.session.commit()
-        avatar_dto = self.avatar_svc.create_random_avatar(bot.id)
-        parameters_dto = self.bot_parameters_svc.create_random_parameters(
+        bot = Bot(user_account_id=user_account_id, prompt="")
+        self.bot_repo.add(bot)
+        await self.bot_repo.commit()
+
+        avatar_dto = await self.avatar_svc.create_random_avatar(bot.id)
+        parameters_dto = await self.bot_parameters_svc.create_random_parameters(
             user.name, bot.id
         )
-        self.template_svc.importTemplateInDB(bot.id, "start")
-        self.knowledge_svc.recordChaptersToVectorDB(bot.id)
+        # Sync (Knowledge rows on the sync session + ChromaDB writes):
+        # off the event loop. The bot row is already committed above, so
+        # the sync session's own connection sees it.
+        await run_in_threadpool(self.template_svc.importTemplateInDB, bot.id, "start")
+        await run_in_threadpool(self.knowledge_svc.recordChaptersToVectorDB, bot.id)
         self.logger.info(
             f"create_random_bot succeeded bot_id={bot.id} user_account_id={user_account_id}"
         )
         return self._big_bot_to_dto(bot, avatar_dto, parameters_dto)
 
-    def create(self, data: Dict[str, Any]) -> BotDto:
+    async def get_dto_by_id(self, entity_id: int, view="minimal") -> Optional[BotDto]:
         """
-        Create a new bot.
-
-        Args:
-            data: Bot creation data containing user_account_id and optional prompt
-
-        Returns:
-            Created BotDto instance
-
-        Raises:
-            ServiceError: When bot creation fails
+        Retrieve a bot by its ID, with its avatar -- and its parameters too
+        when view == "full". None if not found.
         """
-        result = self._perform_create(data)
-        if result is None:
-            raise ServiceError("Bot creation failed, no BotDto returned.")
-        return result
-
-    def _perform_create(self, data: Dict[str, Any]) -> BotDto:
-        bot = Bot(
-            user_account_id=data["user_account_id"], prompt=data.get("prompt", "")
-        )
-        db.session.add(bot)
-        db.session.commit()
-        self.logger.info(
-            f"Bot created bot_id={bot.id} user_account_id={data['user_account_id']}"
-        )
-        return self._bot_to_dto(bot, None)
-
-    # Stays sync: also called from UserAdminService (user_admin_svc.py, not
-    # migrated yet) in addition to bot_router.py.
-    def get_dto_by_id(self, entity_id: int, view="minimal") -> Optional[BotDto]:
-        """
-        Retrieve a bot by its ID.
-
-        Args:
-            entity_id: ID of the bot to retrieve
-
-        Returns:
-            Bot instance if found, None otherwise
-        """
-        result = self._perform_get_by_id(
-            entity_id,
-            view,
-        )
-        self.logger.debug(
-            f"get_dto_by_id bot_id={entity_id} view={view} found={result is not None}"
-        )
-        return result
-
-    def _perform_get_by_id(self, entity_id: int, view: str) -> Optional[BotDto]:
-        bot = Bot.query.filter_by(id=entity_id).first()
+        bot = await self.bot_repo.get(entity_id)
         if bot is None:
+            self.logger.debug(
+                f"get_dto_by_id bot_id={entity_id} view={view} found=False"
+            )
             return None
-        avatar = self.avatar_svc.get_avatar_by_bot_id(entity_id)
+        avatar = await self.avatar_svc.get_avatar_by_bot_id(entity_id)
         avatar = avatar if avatar is not None else AvatarDto()
-        if view == "full":
-            try:
-                bot_parameters = self.bot_parameters_svc.get_by_bot_id(entity_id)
-                return self._big_bot_to_dto(bot, avatar, bot_parameters)
-            except Exception as e:
-                # Handled fallback: full view degrades to minimal rather than
-                # failing the request, so this is a warning, not an error.
-                self.logger.warning(
-                    f"get_dto_by_id({entity_id}) full view failed, falling back "
-                    f"to minimal: {str(e)}"
-                )
-                return self._bot_to_dto(bot, avatar)
-        else:
+        self.logger.debug(f"get_dto_by_id bot_id={entity_id} view={view} found=True")
+        if view != "full":
             return self._bot_to_dto(bot, avatar)
-
-    # Async counterpart of get_dto_by_id/_perform_get_by_id, for
-    # bot_router.py's now-async get_bot/update_bot_admin (via
-    # _can_modify_bot_async). get_dto_by_id/_perform_get_by_id themselves
-    # stay sync: still called as a plain sync call from
-    # UserAdminService._perform_patch_user (user_admin_svc.py, itself
-    # already async) and from bot_router.py's delete_bot (via the sync
-    # _can_modify_bot, kept for that one still-sync route -- see
-    # bot_svc.py's own delete() comment for why it stays sync).
-    async def get_dto_by_id_async(self, entity_id: int, view="minimal") -> Optional[BotDto]:
-        result = await self._perform_get_by_id_async(entity_id, view)
-        self.logger.debug(
-            f"get_dto_by_id_async bot_id={entity_id} view={view} found={result is not None}"
-        )
-        return result
-
-    async def _perform_get_by_id_async(self, entity_id: int, view: str) -> Optional[BotDto]:
-        session = get_async_session()
-        bot = await session.get(Bot, entity_id)
-        if bot is None:
-            return None
-        avatar = await self.avatar_svc.get_avatar_by_bot_id_async(entity_id)
-        avatar = avatar if avatar is not None else AvatarDto()
-        if view == "full":
-            try:
-                bot_parameters = await self.bot_parameters_svc.get_by_bot_id_async(entity_id)
-                return self._big_bot_to_dto(bot, avatar, bot_parameters)
-            except Exception as e:
-                # Handled fallback: full view degrades to minimal rather than
-                # failing the request, so this is a warning, not an error.
-                self.logger.warning(
-                    f"get_dto_by_id_async({entity_id}) full view failed, falling back "
-                    f"to minimal: {str(e)}"
-                )
-                return self._bot_to_dto(bot, avatar)
-        else:
+        try:
+            bot_parameters = await self.bot_parameters_svc.get_by_bot_id(entity_id)
+            return self._big_bot_to_dto(bot, avatar, bot_parameters)
+        except Exception as e:
+            # Handled fallback: full view degrades to minimal rather than
+            # failing the request, so this is a warning, not an error.
+            self.logger.warning(
+                f"get_dto_by_id({entity_id}) full view failed, falling back "
+                f"to minimal: {str(e)}"
+            )
             return self._bot_to_dto(bot, avatar)
 
     async def get_all(self) -> List[BotDto]:
         """
-        Retrieve all bots .
-
-        Returns:
-            List of Bot instances
+        Retrieve all bots (without avatars).
         """
-        result = await self._perform_get_all()
-        if result is None:
-            raise ServiceError("Bot get_all failed, no list returned.")
-        return result
-
-    async def _perform_get_all(self) -> List[BotDto]:
-        session = get_async_session()
-        result = await session.execute(select(Bot))
-        bots = result.scalars().all()
+        bots = await self.bot_repo.list_all()
         self.logger.debug(f"get_all fetched {len(bots)} bots")
         return [self._bot_to_dto(bot, None) for bot in bots]
 
-    # Sync implementation of BaseService.update(); no caller left in this
-    # codebase (bot_router.py uses update_async, and PromptService now writes
-    # Bot.prompt itself -- see prompt_svc.py).
-    def update(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
+    async def update(self, entity_id: int, data: Dict[str, Any]) -> Optional[BotDto]:
         """
-        Update a bot's information.
-
-        Args:
-            entity_id: ID of the bot to update
-            data: Fields to update (e.g., prompt)
-
-        Returns:
-            Updated BotDto instance or None if update fails
+        Update a bot's fields present in data. None if the bot does not exist.
         """
-        result = self._perform_update(
-            entity_id,
-            data,
-        )
-        if result is None:
-            raise ServiceError("Update Bot failed, no list returned.")
-        return result
-
-    def _perform_update(self, entity_id, data) -> BotDto:
-        bot = Bot.query.get(entity_id)
+        bot = await self.bot_repo.get(entity_id)
+        if not bot:
+            return None
         for key, value in data.items():
             if hasattr(bot, key):
                 setattr(bot, key, value)
 
-        db.session.commit()
+        await self.bot_repo.commit()
         self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
         return self._bot_to_dto(bot, None)
 
-    # Async counterpart of update, for bot_router.py's update_bot_admin.
-    async def update_async(self, entity_id: int, data: Dict[str, Any]) -> BotDto:
-        result = await self._perform_update_async(entity_id, data)
-        if result is None:
-            raise ServiceError("Update Bot failed, no list returned.")
-        return result
-
-    async def _perform_update_async(self, entity_id, data) -> BotDto:
-        session = get_async_session()
-        bot = await session.get(Bot, entity_id)
-        for key, value in data.items():
-            if hasattr(bot, key):
-                setattr(bot, key, value)
-
-        await session.commit()
-        self.logger.info(f"Bot updated bot_id={entity_id} fields={list(data.keys())}")
-        return self._bot_to_dto(bot, None)
-
-    # Stays sync: calls self.knowledge_svc.delete_all() (KnowledgeSvc, which
-    # touches ChromaDB -- a much bigger, still fully sync
-    # subsystem) before deleting the Bot row itself. Left for a dedicated
-    # RAG-phase pass rather than migrated piecemeal here.
-    def delete(self, entity_id: int) -> bool:
+    async def delete(self, entity_id: int) -> bool:
         """
-        Delete a bot.
-
-        Args:
-            entity_id: ID of the bot to delete
+        Delete a bot and everything attached to it.
 
         Returns:
-            True if deletion was successful, False otherwise
+            True if deletion was successful, False if the bot does not exist
 
         Note:
             Thanks to CASCADE delete on foreign keys, the following will be automatically deleted:
@@ -327,120 +185,50 @@ class BotService(BaseService[BotDto]):
             - Session
             - BotAssignment
         """
-
         self.logger.info(f"delete bot_id={entity_id} starting")
-        # Delete context manually (not managed by database CASCADE)
-        self.knowledge_svc.delete_all(entity_id)
+        # Knowledge's ChromaDB vectors aren't covered by any DB CASCADE --
+        # sync (ChromaDB), so off the event loop.
+        await run_in_threadpool(self.knowledge_svc.delete_all, entity_id)
 
-        result = self._perform_delete(entity_id)
-        if result is None:
-            raise ServiceError("Bot delete failed, no bot deleted.")
-        return result
-
-    def _perform_delete(self, entity_id) -> bool:
-        bot = Bot.query.get(entity_id)
+        bot = await self.bot_repo.get(entity_id)
         if not bot:
             self.logger.warning(f"delete bot_id={entity_id} not found")
             return False
 
-        # Cleared explicitly rather than left to the FK's ON DELETE SET NULL:
-        # user_account.selected_bot_id references bot.id via a use_alter FK
-        # created inside the same op.create_table as user_account (before
-        # the bot table exists), which MySQL cannot apply as a real DB-level
-        # constraint — so it can't be trusted to null this out on its own.
-        User.query.filter_by(selected_bot_id=entity_id).update(
-            {"selected_bot_id": None}
-        )
-
-        db.session.delete(bot)
-        db.session.commit()
+        await self.user_repo.clear_selected_bot(entity_id)
+        await self.bot_repo.delete(bot)
+        await self.bot_repo.commit()
         self.logger.info(f"Bot deleted bot_id={entity_id}")
         return True
 
-    def get_bot_owner(self, bot_id: int) -> Optional[User]:
-        """
-        Retrieve the owner of a specific bot.
-
-        Args:
-            bot_id: ID of the bot
-
-        Returns:
-            User instance if found, None otherwise
-        """
-        return self._perform_get_bot_owner(bot_id)
-
-    def _perform_get_bot_owner(self, bot_id: int) -> Optional[User]:
-        bot = Bot.query.get(bot_id)
-        if not bot:
-            return None
-        return User.query.get(bot.user_account_id)
-
-    # get_bots_by_user/get_assigned_bots/get_owned_and_assigned_bots (and
-    # their _perform_* helpers) are migrated as one cluster: none has any
-    # caller besides each other and bot_router.py (get_all_owned_bots,
-    # get_user_bots). self.avatar_svc.get_avatar_by_bot_id() stays a plain
-    # sync call inside them -- still-sync itself (shared with other
-    # not-yet-migrated callers), same pattern as elsewhere in this
-    # migration.
     async def get_bots_by_user(self, user_account_id: int) -> List[BotDto]:
         """
-        Retrieve all bots belonging to a specific user.
-
-        Args:
-            user_account_id: ID of the user account
-
-        Returns:
-            List of Bot instances belonging to the user
+        Retrieve all bots belonging to a specific user, with their avatars.
         """
-        result = await self._perform_get_by_user(user_account_id)
-        if result is None:
-            raise ServiceError("Bot delete failed, no bot deleted.")
-        return result
-
-    async def _perform_get_by_user(self, user_account_id: int) -> list[BotDto]:
-        session = get_async_session()
-        result = await session.execute(
-            select(Bot).where(Bot.user_account_id == user_account_id)
-        )
-        bots = result.scalars().all()
+        bots = await self.bot_repo.list_by_owner(user_account_id)
         self.logger.debug(
             f"get_bots_by_user user_account_id={user_account_id} count={len(bots)}"
         )
         return [
-            self._bot_to_dto(bot, self.avatar_svc.get_avatar_by_bot_id(bot.id))
+            self._bot_to_dto(bot, await self.avatar_svc.get_avatar_by_bot_id(bot.id))
             for bot in bots
         ]
 
     async def get_assigned_bots(self, user_id) -> List[BotDto]:
         """
-        Retrieve all assigned bots .
-
-        Returns:
-            List of Bot instances
+        Retrieve the bots actively assigned to user_id, with their avatars.
         """
-        bots_assigments: List[
-            BotAssignmentDto
-        ] = await self.bot_assignment_svc.get_assignments_by_user(user_id)
-        bots_dto: List[BotDto] = await self._perform_get_assigned_bots(bots_assigments)
-        if bots_dto is None:
-            raise ServiceError("Bot get_all failed, no list returned.")
-        return bots_dto
-
-    async def _perform_get_assigned_bots(
-        self, bots_assigments: List[BotAssignmentDto]
-    ) -> list[BotDto]:
-        session = get_async_session()
+        assignments = await self.bot_assignment_svc.get_assignments_by_user(user_id)
         bots_dto = []
-        for bot_assigment in bots_assigments:
-            result = await session.execute(
-                select(Bot).where(Bot.id == bot_assigment.bot_id)
-            )
-            bot: Bot = result.scalar_one_or_none()
+        for assignment in assignments:
+            bot = await self.bot_repo.get(assignment.bot_id)
             bots_dto.append(
-                self._bot_to_dto(bot, self.avatar_svc.get_avatar_by_bot_id(bot.id))
+                self._bot_to_dto(
+                    bot, await self.avatar_svc.get_avatar_by_bot_id(bot.id)
+                )
             )
         self.logger.debug(
-            f"_perform_get_assigned_bots processed {len(bots_assigments)} assignments "
+            f"get_assigned_bots processed {len(assignments)} assignments "
             f"-> {len(bots_dto)} bots"
         )
         return bots_dto
@@ -467,21 +255,6 @@ class BotService(BaseService[BotDto]):
             f"assigned={len(assigned)} merged={len(merged)}"
         )
         return merged
-
-    def get_bot_count_by_user(self, user_account_id: int) -> int:
-        """
-        Retrieve the count of bots belonging to a specific user.
-
-        Args:
-            user_account_id: ID of the user account
-
-        Returns:
-            Count of bots belonging to the user
-        """
-        return self._count_bots_by_user(user_account_id)
-
-    def _count_bots_by_user(self, user_account_id: int) -> int:
-        return Bot.query.filter_by(user_account_id=user_account_id).count()
 
     def get_bot_parameters_description(self) -> dict:
         return self.bot_parameters_svc.get_bot_parameters_description()

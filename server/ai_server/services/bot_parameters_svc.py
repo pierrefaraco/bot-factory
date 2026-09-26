@@ -3,19 +3,23 @@ from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.services.prompt_svc import PromptService
 from ai_server.services.yaml_svc import YamlSvc
 from ai_server.models import BotParameters, InterlocutorIdentity
-from ai_server.database.session import db, get_async_session
-from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
+from ai_server.repositories import BotParametersRepository
 from ai_server.services.base_service import BaseService
-from sqlalchemy import select
 
 
 class BotParametersService(BaseService[BotParametersDto]):
     """Service for managing bot parameters entities"""
 
-    def __init__(self, yaml_svc: YamlSvc, prompt_svc: PromptService):
+    def __init__(
+        self,
+        yaml_svc: YamlSvc,
+        prompt_svc: PromptService,
+        bot_parameters_repo: BotParametersRepository,
+    ):
         super().__init__()
         self.yaml_svc = yaml_svc
         self.prompt_svc = prompt_svc
+        self.bot_parameters_repo = bot_parameters_repo
 
     def _bot_parameters_to_dto(self, bot_parameters: BotParameters) -> BotParametersDto:
         """
@@ -58,17 +62,6 @@ class BotParametersService(BaseService[BotParametersDto]):
             | self.yaml_svc.qualities_flaws_dict
         )
 
-    # create_bot_parameters/create/_perform_create/update_prompt all stay
-    # sync (db.session, not get_async_session()): create_bot_parameters
-    # calls self.create() and self.update_prompt() below, both entirely
-    # sync work -- create()/_perform_create() is also called directly by
-    # create_random_parameters (called from BotService.create_random_bot,
-    # bot_svc.py, not migrated), and update_prompt() calls
-    # prompt_svc.update_prompt() (prompt_svc.py), which persists the
-    # regenerated prompt via sync Bot.query/db.session. Converting either
-    # method now would add an `async def` with zero actual async work
-    # inside, or require migrating bot_svc.py first -- see
-    # /root/.claude/plans/moonlit-leaping-salamander.md.
     def _bot_parameters_creation_data(self, bot_id: int, params: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "bot_id": bot_id,
@@ -100,48 +93,25 @@ class BotParametersService(BaseService[BotParametersDto]):
             "persona_description": str(params.get("persona_description") or ""),
         }
 
-    def create_bot_parameters(
+    async def create_bot_parameters(
         self, user_name: str, bot_id: int, params: Dict[str, Any]
     ) -> BotParametersDto:
         """
-        Create new bot parameters with additional logic.
-
-        Args:
-            user_name: Name of the user creating the parameters
-            bot_id: The ID of the bot to which parameters belong
-            params: Dictionary containing parameter values
+        Create the parameters of bot_id from params, then regenerate the
+        bot's prompt from them.
 
         Returns:
             Created BotParametersDto instance
-
-        Raises:
-            ServiceError: When bot parameters creation fails
         """
         self.logger.info(
             f"create_bot_parameters bot_id={bot_id} requested by user_name={user_name}"
         )
         data = self._bot_parameters_creation_data(bot_id, params)
-        result = self.create(data)
-        self.update_prompt(user_name, data["bot_id"])
+        result = await self.create(data)
+        await self.update_prompt(user_name, data["bot_id"])
         return result
 
-    # Async counterpart of create_bot_parameters, for
-    # bot_parameters_router.py's now-async create_or_update_bot_parameters
-    # route. create_bot_parameters itself stays sync: create_random_parameters
-    # below (called from BotService.create_random_bot, bot_svc.py, not
-    # migrated) shares its _perform_create/update_prompt call chain.
-    async def create_bot_parameters_async(
-        self, user_name: str, bot_id: int, params: Dict[str, Any]
-    ) -> BotParametersDto:
-        self.logger.info(
-            f"create_bot_parameters bot_id={bot_id} requested by user_name={user_name}"
-        )
-        data = self._bot_parameters_creation_data(bot_id, params)
-        result = await self.create_async(data)
-        await self.update_prompt_async(user_name, data["bot_id"])
-        return result
-
-    def create(self, data: Dict[str, Any]) -> BotParametersDto:
+    async def create(self, data: Dict[str, Any]) -> BotParametersDto:
         """
         Create new bot parameters.
 
@@ -150,23 +120,7 @@ class BotParametersService(BaseService[BotParametersDto]):
 
         Returns:
             Created BotParametersDto instance
-
-        Raises:
-            ServiceError: When bot parameters creation fails
         """
-        result = self._perform_create(data)
-
-        if result is None:
-            self.logger.warning(
-                f"Bot parameters creation failed for bot_id={data.get('bot_id')}, "
-                "_perform_create returned None"
-            )
-            raise ServiceError(
-                "Bot parameters creation failed, no BotParametersDto returned."
-            )
-        return result
-
-    def _perform_create(self, data: Dict[str, Any]) -> BotParametersDto:
         bot_params = BotParameters(
             bot_id=data["bot_id"],
             bot_name=data.get("bot_name", ""),
@@ -189,51 +143,8 @@ class BotParametersService(BaseService[BotParametersDto]):
             voice_output=bool(data.get("voice_output", False)),
             persona_description=data.get("persona_description", ""),
         )
-        db.session.add(bot_params)
-        db.session.commit()
-        self.logger.info(
-            f"BotParameters created id={bot_params.id} bot_id={bot_params.bot_id}"
-        )
-        return self._bot_parameters_to_dto(bot_params)
-
-    # Async counterpart of create/_perform_create, for
-    # create_bot_parameters_async above. create/_perform_create themselves
-    # stay sync: still called from create_random_parameters below (not
-    # migrated).
-    async def create_async(self, data: Dict[str, Any]) -> BotParametersDto:
-        result = await self._perform_create_async(data)
-        if result is None:
-            raise ServiceError(
-                "Bot parameters creation failed, no BotParametersDto returned."
-            )
-        return result
-
-    async def _perform_create_async(self, data: Dict[str, Any]) -> BotParametersDto:
-        session = get_async_session()
-        bot_params = BotParameters(
-            bot_id=data["bot_id"],
-            bot_name=data.get("bot_name", ""),
-            bot_type=data.get("bot_type", ""),
-            main_personality_trait_1=data.get("main_personality_trait_1", ""),
-            main_personality_trait_2=data.get("main_personality_trait_2", ""),
-            main_personality_trait_3=data.get("main_personality_trait_3", ""),
-            used_sources=data.get("used_sources", ""),
-            context_type=data.get("context_type", ""),
-            answer_style=data.get("answer_style", ""),
-            answer_length=data.get("answer_length", ""),
-            interlocutor_type=data.get("interlocutor_type", ""),
-            goal=data.get("goal", ""),
-            behaviour_when_ignore=data.get("behaviour_when_ignore", ""),
-            behaviour_with_language=data.get("behaviour_with_language", ""),
-            localisation=data.get("localisation", ""),
-            interlocutor_identity=data.get("interlocutor_identity")
-            or InterlocutorIdentity.USER.value,
-            answer_format=data.get("answer_format", ""),
-            voice_output=bool(data.get("voice_output", False)),
-            persona_description=data.get("persona_description", ""),
-        )
-        session.add(bot_params)
-        await session.commit()
+        self.bot_parameters_repo.add(bot_params)
+        await self.bot_parameters_repo.commit()
         self.logger.info(
             f"BotParameters created id={bot_params.id} bot_id={bot_params.bot_id}"
         )
@@ -434,7 +345,9 @@ class BotParametersService(BaseService[BotParametersDto]):
         },
     ]
 
-    def create_random_parameters(self, user_name: str, bot_id: int) -> BotParametersDto:
+    async def create_random_parameters(
+        self, user_name: str, bot_id: int
+    ) -> BotParametersDto:
         import random
 
         profile = random.choice(self.RANDOM_BOT_PROFILES)
@@ -444,8 +357,8 @@ class BotParametersService(BaseService[BotParametersDto]):
             f"bot_name={profile['bot_name']!r} bot_type={profile['bot_type']!r}"
         )
 
-        result = self._perform_create(data)
-        self.update_prompt(user_name, bot_id)
+        result = await self.create(data)
+        await self.update_prompt(user_name, bot_id)
         return result
 
     def get_random_value_from_dict(self, cat, data: dict):
@@ -456,285 +369,36 @@ class BotParametersService(BaseService[BotParametersDto]):
             return random.choice(label_list)["label"]
         return ""
 
-    def get_dto_by_id(self, entity_id: int) -> BotParametersDto:
-        """
-        Retrieve bot parameters by their ID.
-
-        Args:
-            entity_id: ID of the bot parameters to retrieve
-
-        Returns:
-            BotParametersDto instance if found
-
-        Raises:
-            ServiceError: When bot parameters retrieval fails
-        """
-        result = self._perform_get_by_id(entity_id)
-        if result is None:
-            raise ServiceError(
-                "Get bot parameters by id failed, no BotParametersDto returned."
-            )
-        return result
-
-    def _perform_get_by_id(self, entity_id: int) -> BotParametersDto:
-        bot_params = BotParameters.query.get(entity_id)
-        if not bot_params:
-            raise NotFoundError("BotParameters", str(entity_id))
-        return self._bot_parameters_to_dto(bot_params)
-
-    def get_all(self) -> List[BotParametersDto]:
-        """
-        Retrieve all bot parameters.
-
-        Returns:
-            List of BotParametersDto instances
-
-        Raises:
-            ServiceError: When bot parameters retrieval fails
-        """
-        result = self._perform_get_all()
-        if result is None:
-            raise ServiceError("Bot parameters get_all failed, no list returned.")
-        return result
-
-    def _perform_get_all(self) -> List[BotParametersDto]:
-        bot_params_list: List[BotParameters] = BotParameters.query.filter_by().all()
-        self.logger.info(f"get_all BotParameters returned {len(bot_params_list)} record(s)")
-        return [
-            self._bot_parameters_to_dto(bot_params) for bot_params in bot_params_list
-        ]
-
-    def update(self, entity_id: int, data: Dict[str, Any]) -> BotParametersDto:
-        """
-        Update bot parameters information.
-
-        Args:
-            entity_id: ID of the bot parameters to update
-            data: Fields to update
-
-        Returns:
-            Updated BotParametersDto instance
-
-        Raises:
-            ServiceError: When bot parameters update fails
-        """
-        result = self._perform_update(
-            entity_id,
-            data,
-        )
-        if result is None:
-            self.logger.warning(
-                f"Bot parameters update failed for id={entity_id}, "
-                "_perform_update returned None"
-            )
-            raise ServiceError(
-                "Bot parameters update failed, no BotParametersDto returned."
-            )
-        return result
-
-    def _perform_update(self, entity_id: int, data: Dict[str, Any]) -> BotParametersDto:
-        bot_params = BotParameters.query.get(entity_id)
-        if not bot_params:
-            raise NotFoundError("BotParameters", str(entity_id))
-
-        self.logger.debug(f"update BotParameters id={entity_id} fields={list(data.keys())}")
-        for key, value in data.items():
-            if key != "user_name" and hasattr(bot_params, key):
-                setattr(bot_params, key, value)
-
-        db.session.commit()
-        self.logger.info(
-            f"BotParameters updated id={entity_id} bot_id={bot_params.bot_id}"
-        )
-
-        # Update prompt after update
-        if "user_name" in data:
-            self.update_prompt(data["user_name"], bot_params.bot_id)
-
-        return self._bot_parameters_to_dto(bot_params)
-
-    def delete(self, entity_id: int) -> bool:
-        """
-        Delete bot parameters.
-
-        Args:
-            entity_id: ID of the bot parameters to delete
-
-        Returns:
-            True if deletion was successful
-
-        Raises:
-            ServiceError: When bot parameters deletion fails
-        """
-        result = self._perform_delete(entity_id)
-        if result is None:
-            self.logger.warning(
-                f"Bot parameters delete failed for id={entity_id}, "
-                "_perform_delete returned None"
-            )
-            raise ServiceError(
-                "Bot parameters delete failed, no bot parameters deleted."
-            )
-        return result
-
-    def _perform_delete(self, entity_id: int) -> bool:
-        bot_params = BotParameters.query.get(entity_id)
-        if not bot_params:
-            raise NotFoundError("BotParameters", str(entity_id))
-
-        bot_id = bot_params.bot_id
-        db.session.delete(bot_params)
-        db.session.commit()
-        self.logger.info(f"BotParameters deleted id={entity_id} bot_id={bot_id}")
-        return True
-
-    # Migrated to async: rag_router.py (trigfirstmessage) is the only caller.
     async def get_welcome_message(self, user_name: str, bot_id: int) -> str:
         """
-        Get welcome message for a bot.
-
-        Args:
-            user_name: Name of the user
-            bot_id: ID of the bot
-
-        Returns:
-            Welcome message string
-
-        Raises:
-            ServiceError: When welcome message generation fails
+        Get the message that triggers a bot's first contact with user_name.
         """
-        result = await self._perform_get_welcome_message(
-            user_name,
-            bot_id,
-        )
-        if result is None:
-            raise ServiceError("Get welcome message failed.")
-        return result
-
-    async def _perform_get_welcome_message(self, user_name: str, bot_id: int) -> str:
         self.logger.debug(f"get_welcome_message bot_id={bot_id} user_name={user_name}")
-        behaviour_dict = self.yaml_svc.behaviour_dict
-        session = get_async_session()
-        result = await session.execute(
-            select(BotParameters).where(BotParameters.bot_id == bot_id)
+        params = await self.bot_parameters_repo.get_by_bot_id(bot_id)
+        return self.prompt_svc.welcome_message_trigger(
+            user_name, params, self.yaml_svc.behaviour_dict
         )
-        params = result.scalar_one_or_none()
-        question = self.prompt_svc.welcome_message_trigger(
-            user_name, params, behaviour_dict
-        )
-        return question
 
-    # Stays sync: also called from BotService (bot_svc.py, not migrated
-    # yet) in addition to bot_parameters_router.py.
-    def get_by_bot_id(self, bot_id: int) -> Optional[BotParametersDto]:
+    async def get_by_bot_id(self, bot_id: int) -> Optional[BotParametersDto]:
         """
-        Get bot parameters by bot ID.
-
-        Args:
-            bot_id: The ID of the bot
-
-        Returns:
-            BotParametersDto instance if found, None otherwise
+        Get bot parameters by bot ID, None if the bot has none.
         """
-        return self._perform_get_by_bot_id(bot_id)
-
-    def _perform_get_by_bot_id(self, bot_id: int) -> Optional[BotParametersDto]:
-        bot_params = BotParameters.query.filter_by(bot_id=bot_id).first()
+        bot_params = await self.bot_parameters_repo.get_by_bot_id(bot_id)
         if not bot_params:
             return None
         return self._bot_parameters_to_dto(bot_params)
 
-    # Async counterpart of get_by_bot_id, for bot_parameters_router.py's
-    # now-async get_bot_parameters_by_bot_id route. get_by_bot_id itself
-    # stays sync: still called from BotService (bot_svc.py, not migrated
-    # yet).
-    async def get_by_bot_id_async(self, bot_id: int) -> Optional[BotParametersDto]:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotParameters).where(BotParameters.bot_id == bot_id)
-        )
-        bot_params = result.scalar_one_or_none()
-        if not bot_params:
-            return None
-        return self._bot_parameters_to_dto(bot_params)
-
-    def update_by_bot_id(
-        self, user_name: str, bot_id: int, update_data: Dict[str, Any]
-    ) -> BotParametersDto:
-        """
-        Update bot parameters by bot ID.
-
-        Args:
-            user_name: Name of the user updating the parameters
-            bot_id: The ID of the bot
-            update_data: Dictionary containing updated parameter values
-
-        Returns:
-            Updated BotParametersDto instance
-
-        Raises:
-            ServiceError: When bot parameters update fails
-        """
-        result = self._perform_update_by_bot_id(
-            user_name,
-            bot_id,
-            update_data,
-        )
-        if result is None:
-            raise ServiceError("Update bot parameters by bot_id failed.")
-        return result
-
-    def _perform_update_by_bot_id(
-        self, user_name: str, bot_id: int, update_data: Dict[str, Any]
-    ) -> BotParametersDto:
-        bot_params = BotParameters.query.filter_by(bot_id=bot_id).first()
-        if not bot_params:
-            raise NotFoundError("BotParameters", str(bot_id))
-
-        self.logger.debug(
-            f"update_by_bot_id bot_id={bot_id} fields={list(update_data.keys())}"
-        )
-        # Update all fields that are present in the update_data
-        for key, value in update_data.items():
-            if hasattr(bot_params, key):
-                setattr(bot_params, key, value)
-
-        db.session.commit()
-        self.logger.info(f"BotParameters updated bot_id={bot_id}")
-        self.update_prompt(user_name, bot_id)
-        return self._bot_parameters_to_dto(bot_params)
-
-    # Migrated to async: bot_parameters_router.py's patch_bot_parameters_admin
-    # is the only caller.
     async def patch_bot_parameters(
         self, bot_id: int, data: dict, user_name: str
     ) -> Optional[BotParametersDto]:
         """
-        Patch bot parameters with specific logic for each field.
-
-        Args:
-            bot_id: ID of the bot
-            data: Dictionary containing fields to patch
-            user_name: Name of the user patching the parameters
+        Patch bot parameters with specific logic for each field, then
+        regenerate the bot's prompt.
 
         Returns:
             Updated BotParametersDto instance, or None if not found
         """
-        return await self._perform_patch_bot_parameters(
-            bot_id,
-            data,
-            user_name,
-        )
-
-    async def _perform_patch_bot_parameters(
-        self, bot_id: int, data: dict, user_name: str
-    ) -> Optional[BotParametersDto]:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotParameters).where(BotParameters.bot_id == bot_id)
-        )
-        bot_params = result.scalar_one_or_none()
-
+        bot_params = await self.bot_parameters_repo.get_by_bot_id(bot_id)
         if not bot_params:
             return None
 
@@ -757,93 +421,40 @@ class BotParametersService(BaseService[BotParametersDto]):
             f"patch_bot_parameters bot_id={bot_id} applied_fields={applied_fields} "
             f"skipped_fields={[k for k in data if k not in applied_fields and k != 'user_name']}"
         )
-        await session.commit()
+        await self.bot_parameters_repo.commit()
         self.logger.info(f"BotParameters patched bot_id={bot_id}")
-        await self.update_prompt_async(user_name, bot_id)
+        await self.update_prompt(user_name, bot_id)
         return self._bot_parameters_to_dto(bot_params)
 
     async def delete_by_bot_id(self, bot_id: int) -> bool:
         """
         Delete bot parameters by bot ID.
 
-        Args:
-            bot_id: The ID of the bot
-
         Returns:
             True if deletion was successful, False if not found
-
-        Raises:
-            ServiceError: When bot parameters deletion fails
         """
-        result = await self._perform_delete_by_bot_id(bot_id)
-        if result is None:
-            return False
-        return result
-
-    async def _perform_delete_by_bot_id(self, bot_id: int) -> bool:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotParameters).where(BotParameters.bot_id == bot_id)
-        )
-        bot_params = result.scalar_one_or_none()
+        bot_params = await self.bot_parameters_repo.get_by_bot_id(bot_id)
         if not bot_params:
             self.logger.warning(f"delete_by_bot_id bot_id={bot_id} not found")
             return False
 
-        await session.delete(bot_params)
-        await session.commit()
+        await self.bot_parameters_repo.delete(bot_params)
+        await self.bot_parameters_repo.commit()
         self.logger.info(f"BotParameters deleted bot_id={bot_id}")
         return True
 
-    def update_prompt(self, user_name: str, bot_id: int):
+    async def update_prompt(self, user_name: str, bot_id: int):
         """
-        Update prompt for a bot.
-
-        Args:
-            user_name: Name of the user
-            bot_id: ID of the bot
-
-        Raises:
-            ServiceError: When prompt update fails
+        Regenerate bot_id's prompt from its current parameters.
         """
-        result = self._perform_update_prompt(
-            user_name,
-            bot_id,
-        )
-
-    def _perform_update_prompt(self, user_name: str, bot_id: int):
-        behaviour_dict = self.yaml_svc.behaviour_dict
-        answer_dict = self.yaml_svc.answer_dict
-        params = BotParameters.query.filter_by(bot_id=bot_id).first()
+        params = await self.bot_parameters_repo.get_by_bot_id(bot_id)
         if params:
-            self.prompt_svc.update_prompt(
-                user_name, bot_id, params, behaviour_dict, answer_dict
-            )
-            self.logger.debug(f"Prompt updated for bot_id={bot_id} by user_name={user_name}")
-        else:
-            self.logger.warning(
-                f"No BotParameters found for bot_id {bot_id}, prompt not updated"
-            )
-
-    # Async counterpart of update_prompt/_perform_update_prompt, for
-    # create_bot_parameters_async/patch_bot_parameters above.
-    # update_prompt/_perform_update_prompt themselves stay sync: still
-    # called from create_bot_parameters/create_random_parameters (not
-    # migrated).
-    async def update_prompt_async(self, user_name: str, bot_id: int):
-        await self._perform_update_prompt_async(user_name, bot_id)
-
-    async def _perform_update_prompt_async(self, user_name: str, bot_id: int):
-        behaviour_dict = self.yaml_svc.behaviour_dict
-        answer_dict = self.yaml_svc.answer_dict
-        session = get_async_session()
-        result = await session.execute(
-            select(BotParameters).where(BotParameters.bot_id == bot_id)
-        )
-        params = result.scalar_one_or_none()
-        if params:
-            await self.prompt_svc.update_prompt_async(
-                user_name, bot_id, params, behaviour_dict, answer_dict
+            await self.prompt_svc.update_prompt(
+                user_name,
+                bot_id,
+                params,
+                self.yaml_svc.behaviour_dict,
+                self.yaml_svc.answer_dict,
             )
             self.logger.debug(f"Prompt updated for bot_id={bot_id} by user_name={user_name}")
         else:

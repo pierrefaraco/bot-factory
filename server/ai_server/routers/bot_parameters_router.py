@@ -20,22 +20,10 @@ runs), and bot-ownership scoping was never implemented in the original
 either -- not something to add silently as part of a framework-only
 migration.
 
-Every route here is `async def`. delete_bot_parameters calls
-BotParametersService.delete_by_bot_id directly (no caller outside this
-router). The other three instead call a dedicated `_async` twin
-(create_bot_parameters_async/get_by_bot_id_async) or were migrated in
-place (patch_bot_parameters: its only caller was this router already) --
-create_bot_parameters/create_random_parameters/get_by_bot_id themselves
-stay sync where a twin was added: their call chain funnels through
-update_prompt(), which calls BotService.update() (bot_svc.py, also
-shared with bot_router.py's still-sync update_bot_admin) or, for
-get_by_bot_id, is shared with BotService directly -- see
-bot_parameters_svc.py's own comments for exactly which caller blocks
-each one. DB session scoping doesn't care about any of this either way:
-it's wired once, at the router level, via
+Every route here is `async def`, as is every BotParametersService method
+it calls. DB session scoping is wired once, at the router level, via
 Depends(async_db_session_dependency) -- see that dependency's own
-docstring for why an async-generator Depends works for both a sync and
-an async route (no per-route decorator needed for either).
+docstring.
 """
 
 from typing import Optional
@@ -116,7 +104,7 @@ async def create_or_update_bot_parameters(
         logger.warning(f"create_or_update_bot_parameters rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    bot_parameters_dto = await bot_parameters_svc.create_bot_parameters_async(
+    bot_parameters_dto = await bot_parameters_svc.create_bot_parameters(
         user.name, validated_data["bot_id"], validated_data
     )
     logger.info(
@@ -166,7 +154,7 @@ async def get_bot_parameters_by_bot_id(
 ):
     """Get bot parameters by bot ID"""
     logger.info(f"GET /bot-parameters/{bot_id} - get_bot_parameters_by_bot_id called")
-    bot_parameters_dto = await bot_parameters_svc.get_by_bot_id_async(bot_id)
+    bot_parameters_dto = await bot_parameters_svc.get_by_bot_id(bot_id)
     if not bot_parameters_dto:
         logger.warning(f"get_bot_parameters_by_bot_id({bot_id}) not found")
         raise ApiError("Bot parameters not found", status_code=404)

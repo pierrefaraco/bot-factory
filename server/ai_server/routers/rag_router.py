@@ -121,7 +121,7 @@ async def _check_bot_access_permission(
     if user.roles == ADMIN_ROLE:
         return True
     elif user.roles == USER_ROLE:
-        return await bot_svc.is_bot_belong_to_user_async(bot_id, user.id)
+        return await bot_svc.is_bot_belong_to_user(bot_id, user.id)
     elif user.roles == GUEST_ROLE:
         return await bot_assignment_svc.is_bot_assigned_to_user(bot_id, user.id)
     return False

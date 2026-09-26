@@ -1,18 +1,18 @@
 import random
-from typing import Optional, List, Dict, Any
-from ai_server.models import Bot, BotAvatar
-from ai_server.database.session import db, get_async_session
+from typing import Optional, Dict, Any
+from ai_server.models import BotAvatar
 from ai_server.dto.avatar_dto import AvatarDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
+from ai_server.repositories import BotAvatarRepository
 from ai_server.services.base_service import BaseService
-from sqlalchemy import select
 
 
 class AvatarService(BaseService[AvatarDto]):
     """Service for managing avatar entities"""
 
-    def __init__(self):
+    def __init__(self, avatar_repo: BotAvatarRepository):
         super().__init__()
+        self.avatar_repo = avatar_repo
 
     def _avatar_to_dto(self, avatar: BotAvatar) -> AvatarDto:
         """
@@ -34,27 +34,14 @@ class AvatarService(BaseService[AvatarDto]):
         avatar_dto.mouth_color = avatar.mouth_color
         return avatar_dto
 
-    # create_random_avatar/create/_perform_create stay sync (db.session, not
-    # get_async_session()): create_random_avatar is called synchronously
-    # from BotService.create_random_bot (bot_svc.py, itself not migrated
-    # yet) -- see /root/.claude/plans/moonlit-leaping-salamander.md. Only
-    # the methods below with no caller outside avatar_router.py are
-    # migrated to the async engine in this pass.
-    def create_random_avatar(self, bot_id: int) -> AvatarDto:
+    async def create_random_avatar(self, bot_id: int) -> AvatarDto:
         """
         Create a random avatar for a bot.
 
-        Args:
-            bot_id: ID of the bot owning the avatar
-
         Returns:
             Created AvatarDto instance
-
-        Raises:
-            ServiceError: When avatar creation fails
         """
-        data = self._random_avatar_data(bot_id)
-        return self.create(data)
+        return await self.create(self._random_avatar_data(bot_id))
 
     def _random_avatar_data(self, bot_id: int) -> Dict[str, Any]:
         data = {}
@@ -70,15 +57,7 @@ class AvatarService(BaseService[AvatarDto]):
         self.logger.debug(f"Generated random avatar attributes for bot_id={bot_id}: {data}")
         return data
 
-    # Async counterpart of create_random_avatar, for avatar_router.py's
-    # now-async create_random_avatar route. create_random_avatar itself
-    # stays sync: still called from BotService.create_random_bot
-    # (bot_svc.py, not migrated yet).
-    async def create_random_avatar_async(self, bot_id: int) -> AvatarDto:
-        data = self._random_avatar_data(bot_id)
-        return await self.create_async(data)
-
-    def create(self, data: Dict[str, Any]) -> AvatarDto:
+    async def create(self, data: Dict[str, Any]) -> AvatarDto:
         """
         Create a new avatar.
 
@@ -87,18 +66,8 @@ class AvatarService(BaseService[AvatarDto]):
 
         Returns:
             Created AvatarDto instance
-
-        Raises:
-            ServiceError: When avatar creation fails
         """
         self.logger.info(f"Creating avatar for bot_id={data.get('bot_id')}")
-        result = self._perform_create(data)
-        if result is None:
-            self.logger.warning(f"Avatar creation returned no result for bot_id={data.get('bot_id')}")
-            raise ServiceError("Avatar creation failed, no AvatarDto returned.")
-        return result
-
-    def _perform_create(self, data: Dict[str, Any]) -> AvatarDto:
         avatar = BotAvatar(
             bot_id=data["bot_id"],
             body=data.get("body", 0),
@@ -110,79 +79,10 @@ class AvatarService(BaseService[AvatarDto]):
             mouth=data.get("mouth", 0),
             mouth_color=data.get("mouth_color", 0),
         )
-        db.session.add(avatar)
-        db.session.commit()
+        self.avatar_repo.add(avatar)
+        await self.avatar_repo.commit()
         self.logger.info(f"Avatar created id={avatar.id} bot_id={avatar.bot_id}")
         return self._avatar_to_dto(avatar)
-
-    # Async counterpart of create, for avatar_router.py's now-async
-    # create_avatar route. create/_perform_create themselves stay sync:
-    # still shared with create_random_avatar above (itself needed sync for
-    # BotService.create_random_bot).
-    async def create_async(self, data: Dict[str, Any]) -> AvatarDto:
-        self.logger.info(f"Creating avatar for bot_id={data.get('bot_id')}")
-        session = get_async_session()
-        avatar = BotAvatar(
-            bot_id=data["bot_id"],
-            body=data.get("body", 0),
-            body_color=data.get("body_color", 0),
-            hat=data.get("hat", 0),
-            hat_color=data.get("hat_color", 0),
-            eyes=data.get("eyes", 0),
-            eyes_color=data.get("eyes_color", 0),
-            mouth=data.get("mouth", 0),
-            mouth_color=data.get("mouth_color", 0),
-        )
-        session.add(avatar)
-        await session.commit()
-        self.logger.info(f"Avatar created id={avatar.id} bot_id={avatar.bot_id}")
-        return self._avatar_to_dto(avatar)
-
-    def get_dto_by_id(self, entity_id: int) -> AvatarDto:
-        """
-        Retrieve an avatar by its ID.
-
-        Args:
-            entity_id: ID of the avatar to retrieve
-
-        Returns:
-            AvatarDto instance if found
-
-        Raises:
-            ServiceError: When avatar retrieval fails
-        """
-        self.logger.debug(f"Fetching avatar id={entity_id}")
-        result = self._perform_get_by_id(entity_id)
-        if result is None:
-            raise ServiceError("Get avatar by id failed, no AvatarDto returned.")
-        return result
-
-    def _perform_get_by_id(self, entity_id: int) -> AvatarDto:
-        avatar = BotAvatar.query.get(entity_id)
-        if not avatar:
-            self.logger.warning(f"Avatar not found id={entity_id}")
-            raise NotFoundError("Avatar", str(entity_id))
-        return self._avatar_to_dto(avatar)
-
-    def get_all(self) -> List[AvatarDto]:
-        """
-        Retrieve all avatars.
-
-        Returns:
-            List of AvatarDto instances
-
-        Raises:
-            ServiceError: When avatar retrieval fails
-        """
-        result = self._perform_get_all()
-        if result is None:
-            raise ServiceError("Avatar get_all failed, no list returned.")
-        self.logger.info(f"Retrieved {len(result)} avatars")
-        return result
-
-    def _perform_get_all(self) -> List[AvatarDto]:
-        avatars: List[BotAvatar] = BotAvatar.query.filter_by().all()
-        return [self._avatar_to_dto(avatar) for avatar in avatars]
 
     async def patch_avatar(self, data: Dict[str, Any]) -> AvatarDto:
         """
@@ -197,9 +97,8 @@ class AvatarService(BaseService[AvatarDto]):
         Raises:
             ServiceError: When avatar update fails
         """
-        session = get_async_session()
         entity_id = data.get("id")
-        avatar = await session.get(BotAvatar, entity_id)
+        avatar = await self.avatar_repo.get(entity_id)
         if not avatar:
             self.logger.warning(f"patch_avatar: avatar not found id={entity_id}")
             raise NotFoundError("Avatar", str(entity_id))
@@ -225,7 +124,7 @@ class AvatarService(BaseService[AvatarDto]):
         if mouth_color := data.get("mouth_color"):
             avatar.mouth_color = mouth_color
 
-        await session.commit()
+        await self.avatar_repo.commit()
         self.logger.info(
             f"Avatar patched id={entity_id} fields={[k for k in data if k != 'id']}"
         )
@@ -254,8 +153,7 @@ class AvatarService(BaseService[AvatarDto]):
         return result
 
     async def _perform_update(self, entity_id: int, data: Dict[str, Any]) -> AvatarDto:
-        session = get_async_session()
-        avatar = await session.get(BotAvatar, entity_id)
+        avatar = await self.avatar_repo.get(entity_id)
         if not avatar:
             self.logger.warning(f"Avatar update failed: id={entity_id} not found")
             raise NotFoundError("Avatar", str(entity_id))
@@ -264,76 +162,17 @@ class AvatarService(BaseService[AvatarDto]):
             if hasattr(avatar, key):
                 setattr(avatar, key, value)
 
-        await session.commit()
+        await self.avatar_repo.commit()
         self.logger.info(f"Avatar updated id={entity_id}")
         return self._avatar_to_dto(avatar)
 
-    def delete(self, entity_id: int) -> bool:
+    async def get_avatar_by_bot_id(self, bot_id: int) -> Optional[AvatarDto]:
         """
-        Delete an avatar.
-
-        Args:
-            entity_id: ID of the avatar to delete
-
-        Returns:
-            True if deletion was successful
-
-        Raises:
-            ServiceError: When avatar deletion fails
-        """
-        self.logger.info(f"Deleting avatar id={entity_id}")
-        result = self._perform_delete(entity_id)
-        if result is None:
-            raise ServiceError("Avatar delete failed, no avatar deleted.")
-        return result
-
-    def _perform_delete(self, entity_id: int) -> bool:
-        avatar = BotAvatar.query.get(entity_id)
-        if not avatar:
-            self.logger.warning(f"Avatar delete failed: id={entity_id} not found")
-            raise NotFoundError("Avatar", str(entity_id))
-
-        db.session.delete(avatar)
-        db.session.commit()
-        self.logger.info(f"Avatar deleted id={entity_id}")
-        return True
-
-    # Stays sync too: called from BotService (bot_svc.py, not migrated yet)
-    # in addition to avatar_router.py.
-    def get_avatar_by_bot_id(self, bot_id: int) -> Optional[AvatarDto]:
-        """
-        Retrieve an avatar by its bot ID.
-
-        Args:
-            bot_id: ID of the bot owning the avatar
-
-        Returns:
-            AvatarDto instance if found, None otherwise
-
-        Raises:
-            ServiceError: When avatar retrieval fails
+        Retrieve an avatar by its bot ID, None if the bot has none (not an
+        error case).
         """
         self.logger.debug(f"Fetching avatar for bot_id={bot_id}")
-        return self._perform_get_by_bot_id(bot_id)
-
-    def _perform_get_by_bot_id(self, bot_id: int) -> Optional[AvatarDto]:
-        avatar = BotAvatar.query.filter_by(bot_id=bot_id).first()
-        if avatar:
-            return self._avatar_to_dto(avatar)
-        # A bot legitimately may not have an avatar yet - not an error case.
-        self.logger.debug(f"No avatar found for bot_id={bot_id}")
-        return None
-
-    # Async counterpart of get_avatar_by_bot_id, for avatar_router.py's
-    # now-async get_avatar_by_bot_id route. get_avatar_by_bot_id itself
-    # stays sync: still called from BotService (bot_svc.py, not migrated
-    # yet).
-    async def get_avatar_by_bot_id_async(self, bot_id: int) -> Optional[AvatarDto]:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotAvatar).where(BotAvatar.bot_id == bot_id)
-        )
-        avatar = result.scalar_one_or_none()
+        avatar = await self.avatar_repo.get_by_bot_id(bot_id)
         if avatar:
             return self._avatar_to_dto(avatar)
         self.logger.debug(f"No avatar found for bot_id={bot_id}")
@@ -343,32 +182,16 @@ class AvatarService(BaseService[AvatarDto]):
         """
         Delete an avatar by its bot ID.
 
-        Args:
-            bot_id: ID of the bot owning the avatar
-
         Returns:
             True if deletion was successful, False if avatar not found
-
-        Raises:
-            ServiceError: When avatar deletion fails
         """
         self.logger.info(f"Deleting avatar for bot_id={bot_id}")
-        result = await self._perform_delete_by_bot_id(bot_id)
-        if result is None:
-            return False
-        return result
-
-    async def _perform_delete_by_bot_id(self, bot_id: int) -> bool:
-        session = get_async_session()
-        result = await session.execute(
-            select(BotAvatar).where(BotAvatar.bot_id == bot_id)
-        )
-        avatar_to_delete = result.scalar_one_or_none()
-        if not avatar_to_delete:
+        avatar = await self.avatar_repo.get_by_bot_id(bot_id)
+        if not avatar:
             self.logger.debug(f"No avatar to delete for bot_id={bot_id}")
             return False
 
-        await session.delete(avatar_to_delete)
-        await session.commit()
+        await self.avatar_repo.delete(avatar)
+        await self.avatar_repo.commit()
         self.logger.info(f"Avatar deleted for bot_id={bot_id}")
         return True

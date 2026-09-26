@@ -11,19 +11,10 @@ dependencies/content_type.py's require_json_body() docstring for exactly
 how that plays out differently for the required-bot_id models here vs.
 the all-optional AvatarPatchRequest.
 
-Every route here is `async def`. patch_avatar/update_avatar/delete_avatar
-call their AvatarService method directly (no caller besides this
-router). create_random_avatar/create_avatar/get_avatar_by_bot_id instead
-call a dedicated `_async` twin (create_random_avatar_async/create_async/
-get_avatar_by_bot_id_async) added alongside the original sync method:
-the sync one is still called directly from BotService (bot_svc.py, not
-migrated yet), so it couldn't be converted in place without either
-breaking that caller or duplicating its logic -- adding a separate async
-entry point avoids both. DB session scoping doesn't care about any of
-this either way: it's wired once, at the router level, via
+Every route here is `async def`, as is every AvatarService method it
+calls. DB session scoping is wired once, at the router level, via
 Depends(async_db_session_dependency) -- see that dependency's own
-docstring for why an async-generator Depends works for both a sync and
-an async route (no per-route decorator needed for either).
+docstring.
 """
 
 from typing import Optional
@@ -98,7 +89,7 @@ async def create_random_avatar(
 ):
     """Create a random avatar for a bot"""
     logger.info("POST /avatar/random - create_random_avatar called")
-    avatar_dto = await avatar_service.create_random_avatar_async(body.bot_id)
+    avatar_dto = await avatar_service.create_random_avatar(body.bot_id)
     logger.info(f"create_random_avatar succeeded for bot_id={body.bot_id} avatar_id={avatar_dto.id}")
     return avatar_dto.to_dict()
 
@@ -124,7 +115,7 @@ async def patch_avatar(body: AvatarPatchRequest, avatar_service: AvatarServiceDe
 async def create_avatar(body: AvatarRequest, avatar_service: AvatarServiceDep):
     """Create an avatar"""
     logger.info("POST /avatar - create_avatar called")
-    avatar_dto = await avatar_service.create_async(body.model_dump(exclude_unset=True))
+    avatar_dto = await avatar_service.create(body.model_dump(exclude_unset=True))
     logger.info(f"create_avatar succeeded for bot_id={body.bot_id} avatar_id={avatar_dto.id}")
     return avatar_dto.to_dict()
 
@@ -145,7 +136,7 @@ async def update_avatar(body: AvatarRequest, avatar_service: AvatarServiceDep):
 async def get_avatar_by_bot_id(bot_id: int, avatar_service: AvatarServiceDep):
     """Get avatar by bot ID"""
     logger.info(f"GET /avatar/{bot_id} - get_avatar_by_bot_id called")
-    avatar_dto = await avatar_service.get_avatar_by_bot_id_async(bot_id)
+    avatar_dto = await avatar_service.get_avatar_by_bot_id(bot_id)
     if not avatar_dto:
         logger.warning(f"get_avatar_by_bot_id({bot_id}) not found")
         raise ApiError("Avatar not found", status_code=404)

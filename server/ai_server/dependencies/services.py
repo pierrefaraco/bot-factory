@@ -31,6 +31,8 @@ from fastapi import Depends, Request
 
 from ai_server.repositories import (
     BotAssignmentRepository,
+    BotAvatarRepository,
+    BotParametersRepository,
     BotRepository,
     ConversationRepository,
     TokenUsageRepository,
@@ -80,18 +82,28 @@ def build_services() -> Services:
     bot_repo = BotRepository()
     user_repo = UserRepository()
     conversation_repo = ConversationRepository()
+    avatar_repo = BotAvatarRepository()
+    bot_parameters_repo = BotParametersRepository()
 
-    avatar = AvatarService()
+    avatar = AvatarService(avatar_repo)
     bot_assignment = BotAssignmentService(bot_assignment_repo, bot_repo, user_repo)
     token_tracking = TokenTrackingService(token_usage_repo)
     message = MessageService()
     yaml = YamlSvc()
     chroma_db = ChromaDbService()
-    prompt = PromptService()
+    prompt = PromptService(bot_repo)
     knowledge = KnowledgeSvc(chroma_db)
     template = TemplateSvc(knowledge)
-    bot_parameters = BotParametersService(yaml, prompt)
-    bot = BotService(avatar, bot_assignment, bot_parameters, knowledge, template)
+    bot_parameters = BotParametersService(yaml, prompt, bot_parameters_repo)
+    bot = BotService(
+        avatar,
+        bot_assignment,
+        bot_parameters,
+        knowledge,
+        template,
+        bot_repo,
+        user_repo,
+    )
     user_admin = UserAdminService(
         bot_assignment,
         user_repo,

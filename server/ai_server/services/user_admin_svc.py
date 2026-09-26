@@ -149,7 +149,7 @@ class UserAdminService(BaseService[UserDto]):
             password_hash=password_hash,
             mail=user_data["email"],
             roles=user_data["roles"],
-            parent_id=user_data.get("parent_id", -1),
+            parent_id=int(user_data.get("parent_id", -1)),
             is_active=user_data.get("is_active", False),
         )
         self.user_repo.add(user)

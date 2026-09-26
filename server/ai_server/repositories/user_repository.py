@@ -1,6 +1,6 @@
 from typing import Optional, Sequence
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 
 from ai_server.config.constant import ADMIN_ROLE
 from ai_server.models import User
@@ -37,3 +37,15 @@ class UserRepository(BaseRepository):
     async def list_children(self, parent_id: int) -> Sequence[User]:
         stmt = select(User).where(User.parent_id == parent_id)
         return (await self.session.execute(stmt)).scalars().all()
+
+    async def clear_selected_bot(self, bot_id: int) -> None:
+        """Unselect bot_id for every user that selected it. Done explicitly
+        rather than left to the FK's ON DELETE SET NULL: user_account.
+        selected_bot_id references bot.id via a use_alter FK that MySQL
+        never created as a real constraint (see models/user.py), so it
+        can't be trusted to null this out on its own."""
+        await self.session.execute(
+            update(User)
+            .where(User.selected_bot_id == bot_id)
+            .values(selected_bot_id=None)
+        )

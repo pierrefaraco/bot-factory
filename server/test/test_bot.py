@@ -7,7 +7,7 @@ cleanup is enough.
 """
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.models import Bot, User
+from ai_server.models import Bot, BotAvatar, BotParameters, Knowledge, User
 
 from .helpers import assert_error
 
@@ -22,6 +22,26 @@ def test_create_bot_golden_path(http_client, api_base_url, create_user, login, t
     body = response.json()
     assert body["user_account_id"] == user.id
     track(Bot, body["id"])
+
+
+def test_create_bot_builds_avatar_parameters_prompt_and_knowledge(
+    http_client, api_base_url, create_user, login, db_session, track
+):
+    user, password = create_user(role=USER_ROLE)
+    headers = login(user.mail, password)
+
+    response = http_client.post(f"{api_base_url}/bot", json={}, headers=headers)
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    track(Bot, body["id"])
+    assert body["avatar"]["bot_id"] == body["id"]
+    assert body["bot_parameters"]["bot_id"] == body["id"]
+    db_session.expire_all()
+    assert db_session.query(BotAvatar).filter_by(bot_id=body["id"]).count() == 1
+    assert db_session.query(BotParameters).filter_by(bot_id=body["id"]).count() == 1
+    assert db_session.query(Knowledge).filter_by(bot_id=body["id"]).count() > 0
+    assert db_session.get(Bot, body["id"]).prompt
 
 
 def test_create_bot_missing_content_type(http_client, api_base_url, create_user, login):
@@ -57,6 +77,31 @@ def test_get_bot_golden_path(http_client, api_base_url, create_user, create_bot,
 
     assert response.status_code == 200, response.text
     assert response.json()["id"] == bot.id
+
+
+def test_get_bot_full_view_includes_parameters_and_avatar(
+    http_client,
+    api_base_url,
+    create_user,
+    create_bot,
+    create_bot_parameters,
+    create_avatar,
+    login,
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    create_bot_parameters(bot.id, bot_name="Full View Bot")
+    create_avatar(bot.id, hat=3)
+    headers = login(user.mail, password)
+
+    response = http_client.get(
+        f"{api_base_url}/bot/{bot.id}", params={"view": "full"}, headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["bot_parameters"]["bot_name"] == "Full View Bot"
+    assert body["avatar"]["hat"] == 3
 
 
 def test_get_bot_not_owner(http_client, api_base_url, create_user, create_bot, login):
@@ -97,6 +142,20 @@ def test_get_self_bots_golden_path(http_client, api_base_url, create_user, creat
 
     assert response.status_code == 200, response.text
     assert isinstance(response.json(), list)
+
+
+def test_get_self_bots_include_avatar(
+    http_client, api_base_url, create_user, create_bot, create_avatar, login
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    create_avatar(bot.id, eyes=4)
+    headers = login(user.mail, password)
+
+    response = http_client.get(f"{api_base_url}/bot/me", headers=headers)
+
+    assert response.status_code == 200, response.text
+    assert [b["avatar"]["eyes"] for b in response.json()] == [4]
 
 
 def test_get_all_bots_golden_path(http_client, api_base_url, create_user, login):
