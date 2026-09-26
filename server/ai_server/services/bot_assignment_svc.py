@@ -1,6 +1,5 @@
 from typing import Optional, List, Dict, Any
 from ai_server.models import BotAssignment, Bot, User
-from ai_server.database.session import db
 from ai_server.dto.bot_assignment_dto import BotAssignmentDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
 from ai_server.repositories import (
@@ -57,8 +56,7 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         assigned_by: int,
     ) -> None:
         """Business rules for assigning bot_id to user_id on behalf of
-        assigned_by, given the already-loaded rows (None if not found).
-        Shared by the async path and the sync one below."""
+        assigned_by, given the already-loaded rows (None if not found)."""
         if not bot:
             logger.warning(f"assignment rejected: bot_id={bot_id} not found")
             raise NotFoundError("Bot", str(bot_id))
@@ -330,35 +328,4 @@ class BotAssignmentService(BaseService[BotAssignmentDto]):
         for assignment in assignments:
             self.bot_assignment_repo.add(assignment)
         await self.bot_assignment_repo.flush()
-        return [self._assignment_to_dto(assignment) for assignment in assignments]
-
-    # Transitional sync twin of replace_user_assignments(), for
-    # UserAdminService.create()'s still-sync register_* chain (run in a
-    # threadpool for its CPU-heavy password hashing, see user_admin_svc.py).
-    # Goes away once that chain -- the User aggregate -- is migrated to
-    # repositories. Commits itself: that chain has no async unit of work.
-    def replace_user_assignments_sync(
-        self, user_id: int, assigned_by: int, bot_ids: List[int]
-    ) -> List[BotAssignmentDto]:
-        logger.debug(
-            f"Replacing bot assignments for user {user_id} with {len(bot_ids)} bots"
-        )
-        for bot_id in bot_ids:
-            self._check_assignable(
-                Bot.query.get(int(bot_id)),
-                User.query.get(user_id),
-                int(bot_id),
-                user_id,
-                assigned_by,
-            )
-
-        BotAssignment.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-        assignments = [
-            BotAssignment(
-                bot_id=int(bot_id), user_id=user_id, assigned_by=int(assigned_by)
-            )
-            for bot_id in bot_ids
-        ]
-        db.session.add_all(assignments)
-        db.session.commit()
         return [self._assignment_to_dto(assignment) for assignment in assignments]

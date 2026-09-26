@@ -32,6 +32,7 @@ from fastapi import Depends, Request
 from ai_server.repositories import (
     BotAssignmentRepository,
     BotRepository,
+    ConversationRepository,
     TokenUsageRepository,
     UserRepository,
 )
@@ -78,6 +79,7 @@ def build_services() -> Services:
     bot_assignment_repo = BotAssignmentRepository()
     bot_repo = BotRepository()
     user_repo = UserRepository()
+    conversation_repo = ConversationRepository()
 
     avatar = AvatarService()
     bot_assignment = BotAssignmentService(bot_assignment_repo, bot_repo, user_repo)
@@ -91,7 +93,12 @@ def build_services() -> Services:
     bot_parameters = BotParametersService(yaml, prompt)
     bot = BotService(avatar, bot_assignment, bot_parameters, knowledge, template)
     user_admin = UserAdminService(
-        bot_assignment, bot, token_usage_repo, bot_assignment_repo
+        bot_assignment,
+        user_repo,
+        bot_repo,
+        conversation_repo,
+        token_usage_repo,
+        bot_assignment_repo,
     )
     llm = LlmService(token_tracking, user_admin)
     rag = RagService(llm, chroma_db, prompt, message)
@@ -110,7 +117,7 @@ def build_services() -> Services:
         user_admin=user_admin,
         llm=llm,
         rag=rag,
-        authent=AuthenticationService(user_admin),
+        authent=AuthenticationService(user_admin, user_repo),
         google_authent=GoogleAuthentSvc(user_admin),
     )
 

@@ -30,8 +30,7 @@ their own comments below for why): get_user_bots/get_all_bots/
 get_all_owned_bots call their BotService method directly (no caller
 outside this router); get_bot_parameters_description does no DB/blocking
 work at all (pure in-memory YAML lookup, bot_parameters_svc.py); select_bot
-does its own small async User update directly (no service method existed
-for it, sync or async, so there was nothing to duplicate); get_bot/
+goes through UserAdminService.select_bot(); get_bot/
 update_bot_admin call a dedicated `_async` twin
 (get_dto_by_id_async, update_async) added
 alongside the original sync BotService method -- that one is still
@@ -56,7 +55,6 @@ from pydantic import BaseModel, field_validator
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.models import User
-from ai_server.database.session import get_async_session
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_content_type
 from ai_server.dependencies.db_session import async_db_session_dependency
@@ -132,12 +130,15 @@ def create_bot(bot_svc: BotServiceDep, claims: dict = Depends(admin_or_user)):
 
 
 @router.get("/me", dependencies=[Depends(any_role)])
-async def get_user_bots(bot_svc: BotServiceDep, claims: dict = Depends(any_role)):
+async def get_user_bots(
+    bot_svc: BotServiceDep,
+    user_svc: UserAdminServiceDep,
+    claims: dict = Depends(any_role),
+):
     """Récupère tous les bots d'un utilisateur"""
     logger.info("GET /bot/me - get_user_bots called")
     user_id = claims["sub"]
-    user: User = User.query.filter_by(id=user_id).first()
-    if not user:
+    if not await user_svc.get_user_dto_by_id(int(user_id)):
         logger.warning(f"get_user_bots rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
@@ -174,18 +175,16 @@ async def get_bot_parameters_description(bot_svc: BotServiceDep):
 
 
 @router.patch("/selectbot/{bot_id:int}", status_code=204, dependencies=[Depends(any_role)])
-async def select_bot(bot_id: int, claims: dict = Depends(any_role)):
+async def select_bot(
+    bot_id: int, user_svc: UserAdminServiceDep, claims: dict = Depends(any_role)
+):
     """Select a bot by its ID and user ID."""
     logger.info(f"PATCH /bot/selectbot/{bot_id} - select_bot called")
     user_id = claims["sub"]
-    session = get_async_session()
-    user = await session.get(User, user_id)
-    if not user:
+    if not await user_svc.select_bot(int(user_id), bot_id):
         logger.warning(f"select_bot({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    user.selected_bot_id = bot_id
-    await session.commit()
     logger.info(f"select_bot({bot_id}) succeeded for user_id={user_id}")
     return Response(status_code=204)
 

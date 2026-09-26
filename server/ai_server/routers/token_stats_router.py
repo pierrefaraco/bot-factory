@@ -20,7 +20,6 @@ unintentional bug, not a documented contract.
 from fastapi import APIRouter, Depends, Query
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.db_session import async_db_session_dependency
 from ai_server.dependencies.services import TokenTrackingServiceDep, UserAdminServiceDep
@@ -40,16 +39,6 @@ admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 admin_only = require_roles([ADMIN_ROLE])
 
 
-def _enforce_user_scope(caller_id, target_id: int, allow_self: bool = True) -> None:
-    """authorize_user_scope() returns a ({"error": ...}, status_code)
-    tuple on rejection (shared with users_admin_router.py) -- convert
-    that into ApiError here."""
-    error = authorize_user_scope(caller_id, target_id, allow_self=allow_self)
-    if error:
-        response, status_code = error
-        raise ApiError(response["error"], status_code=status_code)
-
-
 @router.get("/me")
 async def get_token_stats_self(
     token_tracking_svc: TokenTrackingServiceDep,
@@ -67,11 +56,12 @@ async def get_token_stats_self(
 async def get_token_stats_by_id(
     user_id: int,
     token_tracking_svc: TokenTrackingServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Get token statistics for a user (own guest, or any user if admin)"""
     logger.info(f"GET /token-stats/user/{user_id} - get_token_stats_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_svc.authorize_user_scope(claims["sub"], user_id)
     stats = await token_tracking_svc.get_user_token_stats(user_id)
     logger.info(f"get_token_stats_by_id({user_id}) succeeded")
     return stats
@@ -96,13 +86,14 @@ async def get_token_history_self(
 async def get_token_history_by_id(
     user_id: int,
     token_tracking_svc: TokenTrackingServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
     limit: int = Query(default=100, ge=1, le=1000),
     last24h: bool = Query(default=False),
 ):
     """Get token usage history for a user (own guest, or any user if admin)"""
     logger.info(f"GET /token-stats/history/user/{user_id} - get_token_history_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_svc.authorize_user_scope(claims["sub"], user_id)
     logger.debug(f"get_token_history_by_id({user_id}) params: limit={limit} last24h={last24h}")
     history = await token_tracking_svc.get_user_token_history(user_id, limit, last24h)
     logger.info(f"get_token_history_by_id({user_id}) succeeded count={len(history)}")
@@ -144,11 +135,12 @@ async def get_total_tokens_self(
 async def get_total_tokens_by_id(
     user_id: int,
     token_tracking_svc: TokenTrackingServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Get total tokens consumed by a user (own guest, or any user if admin)"""
     logger.info(f"GET /token-stats/total/user/{user_id} - get_total_tokens_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_svc.authorize_user_scope(claims["sub"], user_id)
     total = await token_tracking_svc.get_user_total_tokens(user_id)
     logger.info(f"get_total_tokens_by_id({user_id}) succeeded")
     return {"user_id": user_id, "total_tokens": total}
@@ -171,12 +163,13 @@ async def get_tokens_last_24h_self(
 async def get_tokens_last_24h_by_id(
     user_id: int,
     token_tracking_svc: TokenTrackingServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Get total tokens consumed by a user in the last 24h (own guest, or
     any user if admin)"""
     logger.info(f"GET /token-stats/last-24h/user/{user_id} - get_tokens_last_24h_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_svc.authorize_user_scope(claims["sub"], user_id)
     total = await token_tracking_svc.get_user_tokens_last_24h(user_id)
     logger.info(f"get_tokens_last_24h_by_id({user_id}) succeeded")
     return {"user_id": user_id, "total_tokens_last_24h": total}
@@ -216,12 +209,13 @@ async def get_stats_last_24h_self(
 async def get_stats_last_24h_by_id(
     user_id: int,
     token_tracking_svc: TokenTrackingServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Get detailed token stats for a user in the last 24h (own guest, or
     any user if admin)"""
     logger.info(f"GET /token-stats/stats-24h/user/{user_id} - get_stats_last_24h_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_svc.authorize_user_scope(claims["sub"], user_id)
     stats = await token_tracking_svc.get_user_stats_last_24h(user_id)
     logger.info(f"get_stats_last_24h_by_id({user_id}) succeeded")
     return stats

@@ -888,6 +888,35 @@ def test_register_guest_with_assigned_bots(
     assert assignments[bot.id].is_active
 
 
+def test_register_guest_with_foreign_bot_creates_nothing(
+    http_client, api_base_url, create_user, create_bot, login, db_session, track
+):
+    parent, parent_password = create_user(role=USER_ROLE)
+    stranger, _stranger_password = create_user(role=USER_ROLE)
+    foreign_bot = create_bot(stranger.id)
+    headers = login(parent.mail, parent_password)
+    email = unique("newguest") + "@example.com"
+
+    response = http_client.post(
+        f"{api_base_url}/users/guest",
+        json={
+            "name": "New Guest",
+            "email": email,
+            "password": "Passw0rd!23",
+            "assigned_bot_ids": [foreign_bot.id],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 500, response.text
+    db_session.expire_all()
+    created = db_session.query(User).filter_by(mail=email).first()
+    if created:  # keep the DB clean even if the assertion below fails
+        _guest_assignments(db_session, created.id, track)
+        track(User, created.id)
+    assert created is None
+
+
 def test_patch_guest_replaces_assigned_bots(
     http_client,
     api_base_url,

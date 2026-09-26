@@ -3,14 +3,15 @@ from threading import Thread
 import datetime
 from typing import Optional
 
+from starlette.concurrency import run_in_threadpool
 from werkzeug.security import check_password_hash
 
-from ai_server.models import Bot, User
-from ai_server.database.session import db
+from ai_server.models import User
 from ai_server.dependencies.auth import create_access_token
 from ai_server.exceptions.service_exceptions import AuthenticationError, NotFoundError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.services.base_service import BaseService
+from ai_server.repositories import UserRepository
 from ai_server.services.jwt_svc import JWTTools
 from ai_server.services.user_admin_svc import UserAdminService
 
@@ -21,12 +22,13 @@ REVOKED_JWT_LIST = []
 class AuthenticationService(BaseService):
     """Authentication service implementation class"""
 
-    def __init__(self, user_admin_svc: UserAdminService):
+    def __init__(self, user_admin_svc: UserAdminService, user_repo: UserRepository):
         super().__init__()
         self.logger = BotFactoryLogger()
         self.user_admin_svc = user_admin_svc
+        self.user_repo = user_repo
 
-    def login(self, mail: str, password: str) -> Optional[str]:
+    async def login(self, mail: str, password: str) -> Optional[str]:
         """
         Authenticate user and create access token.
 
@@ -41,15 +43,9 @@ class AuthenticationService(BaseService):
             AuthenticationError: When user is inactive or credentials are invalid
             NotFoundError: When user is not found
         """
-        return self._perform_login(
-            mail,
-            password,
-        )
-
-    def _perform_login(self, mail: str, password: str) -> Optional[str]:
         self.logger.info(f"Attempting login for user: {mail}")
 
-        user: User = User.query.filter_by(mail=mail).first()
+        user: User = await self.user_repo.get_by_email(mail)
         if not user:
             self.logger.warning(f"Login attempt for non-existent user: {mail}")
             raise NotFoundError("User", mail)
@@ -59,7 +55,10 @@ class AuthenticationService(BaseService):
             self.logger.warning(msg)
             raise AuthenticationError(msg)
 
-        if not check_password_hash(user.password_hash, password):
+        # CPU-heavy on purpose: off the event loop.
+        if not await run_in_threadpool(
+            check_password_hash, user.password_hash, password
+        ):
             self.logger.warning(f"Invalid password for user: {mail}")
             raise AuthenticationError("Invalid credentials")
 
@@ -96,10 +95,7 @@ class AuthenticationService(BaseService):
 
         jti/identity passed in for the same reason as logout() above.
 
-        Async (unlike login()/_perform_login(), which stays sync: see its
-        own reasoning): its only DB read goes through
-        UserAdminService.get_user_dto_by_id(), already migrated to
-        get_async_session(). build_token() isn't reused here since it
+        build_token() isn't reused here since it
         expects a User ORM row's `.mail`, while get_user_dto_by_id()
         returns a UserDto with `.email` instead -- same JWT shape either
         way, just a different source attribute name.

@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse
 
 from ai_server.config.config import AppConfig
 from ai_server.config.constant import ADMIN_ROLE
-from ai_server.database.session import db_session_scope
+from ai_server.database.session import async_db_session_scope
 from ai_server.dependencies.services import build_services
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -61,16 +61,18 @@ async def lifespan(app: FastAPI):
     services = build_services()
     app.state.services = services
 
-    with db_session_scope():
-        # Fail fast if the vector store RAG depends on isn't reachable,
-        # instead of starting up and only failing later on the first chat.
-        services.chroma_db.check_connection()
+    # Fail fast if the vector store RAG depends on isn't reachable,
+    # instead of starting up and only failing later on the first chat.
+    services.chroma_db.check_connection()
 
+    async with async_db_session_scope():
         user_admin_svc = services.user_admin
         super_admin_login = os.getenv("SUPER_ADMIN_LOGIN")
-        if super_admin_login and not user_admin_svc.get_user_by_email(super_admin_login):
+        if super_admin_login and not await user_admin_svc.get_user_by_email(
+            super_admin_login
+        ):
             logger.info(f"Creating super admin user: {super_admin_login}")
-            user_admin_svc.register_user(
+            await user_admin_svc.register_user(
                 mail=super_admin_login,
                 user_name=super_admin_login,
                 password=os.getenv("SUPER_ADMIN_PASSWORD"),

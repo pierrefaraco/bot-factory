@@ -26,13 +26,14 @@ from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.models import User
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency
-from ai_server.dependencies.services import BotAssignmentServiceDep
+from ai_server.dependencies.services import BotAssignmentServiceDep, UserAdminServiceDep
+from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.api_error import ApiError
 from ai_server.log.bot_factory_logger import BotFactoryLogger
+from ai_server.services.user_admin_svc import UserAdminService
 
 router = APIRouter(
     prefix="/api/bot-guest-assignment",
@@ -67,8 +68,8 @@ class BotGuestAssignmentRefRequest(BaseModel):
     guest_user_id: int
 
 
-def _current_user(user_id) -> User:
-    user: User = User.query.filter_by(id=user_id).first()
+async def _current_user(user_id, user_svc: UserAdminService) -> UserDto:
+    user = await user_svc.get_user_dto_by_id(int(user_id))
     if not user:
         raise ApiError("User not found", status_code=401)
     return user
@@ -80,6 +81,7 @@ def _current_user(user_id) -> User:
 async def create_assignment(
     body: BotGuestAssignmentRequest,
     bot_assignment_svc: BotAssignmentServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Create a new bot guest assignment"""
@@ -89,7 +91,7 @@ async def create_assignment(
         f"create_assignment payload: bot_id={body.bot_id} "
         f"guest_user_id={body.guest_user_id} is_active={body.is_active}"
     )
-    _current_user(user_id)
+    await _current_user(user_id, user_svc)
 
     # Add the assigner information; the service expects "user_id" for the
     # assignee (the DTO field is named guest_user_id for API clarity).
@@ -110,12 +112,13 @@ async def create_assignment(
 async def get_assignments_by_parent(
     parent_user_id: int,
     bot_assignment_svc: BotAssignmentServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Get all assignments created by a parent user"""
     logger.info(f"GET /bot-guest-assignment/parent/{parent_user_id} - get_assignments_by_parent called")
     user_id = claims["sub"]
-    user = _current_user(user_id)
+    user = await _current_user(user_id, user_svc)
 
     if user.roles != ADMIN_ROLE and int(user_id) != parent_user_id:
         logger.warning(f"get_assignments_by_parent({parent_user_id}) forbidden for user_id={user_id}")
@@ -126,7 +129,9 @@ async def get_assignments_by_parent(
     return [assignment.to_dict() for assignment in assignments]
 
 
-def _authorize_guest_scope(user: User, user_id, guest_user_id: int) -> None:
+async def _authorize_guest_scope(
+    user: UserDto, user_id, guest_user_id: int, user_svc: UserAdminService
+) -> None:
     """Shared by get_assignments_by_guest and get_assigned_bot_ids: a
     Guest may only look at their own assignments; a User/Admin may look
     at a guest's assignments only if that guest is their own (Admin is
@@ -135,7 +140,7 @@ def _authorize_guest_scope(user: User, user_id, guest_user_id: int) -> None:
         if int(user_id) != guest_user_id:
             raise ApiError("Forbidden", status_code=403)
     elif user.roles in [USER_ROLE, ADMIN_ROLE]:
-        guest_user: User = User.query.filter_by(id=guest_user_id).first()
+        guest_user = await user_svc.get_user_dto_by_id(guest_user_id)
         if not guest_user or (user.roles != ADMIN_ROLE and guest_user.parent_id != int(user_id)):
             raise ApiError("Forbidden", status_code=403)
 
@@ -144,14 +149,15 @@ def _authorize_guest_scope(user: User, user_id, guest_user_id: int) -> None:
 async def get_assignments_by_guest(
     guest_user_id: int,
     bot_assignment_svc: BotAssignmentServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(any_role),
 ):
     """Get all assignments for a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id} - get_assignments_by_guest called")
     user_id = claims["sub"]
-    user = _current_user(user_id)
+    user = await _current_user(user_id, user_svc)
     try:
-        _authorize_guest_scope(user, user_id, guest_user_id)
+        await _authorize_guest_scope(user, user_id, guest_user_id, user_svc)
     except ApiError:
         logger.warning(f"get_assignments_by_guest({guest_user_id}) forbidden for user_id={user_id}")
         raise
@@ -165,14 +171,15 @@ async def get_assignments_by_guest(
 async def get_assigned_bot_ids(
     guest_user_id: int,
     bot_assignment_svc: BotAssignmentServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(any_role),
 ):
     """Get list of bot IDs assigned to a guest user"""
     logger.info(f"GET /bot-guest-assignment/guest/{guest_user_id}/bot-ids - get_assigned_bot_ids called")
     user_id = claims["sub"]
-    user = _current_user(user_id)
+    user = await _current_user(user_id, user_svc)
     try:
-        _authorize_guest_scope(user, user_id, guest_user_id)
+        await _authorize_guest_scope(user, user_id, guest_user_id, user_svc)
     except ApiError:
         logger.warning(f"get_assigned_bot_ids({guest_user_id}) forbidden for user_id={user_id}")
         raise
@@ -190,12 +197,13 @@ async def update_assignment(
     assignment_id: int,
     body: BotGuestAssignmentUpdateRequest,
     bot_assignment_svc: BotAssignmentServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Update a bot guest assignment"""
     logger.info(f"PUT /bot-guest-assignment/{assignment_id} - update_assignment called")
     user_id = claims["sub"]
-    user = _current_user(user_id)
+    user = await _current_user(user_id, user_svc)
 
     assignment = await bot_assignment_svc.get_dto_by_id(assignment_id)
     if not assignment:
@@ -214,12 +222,13 @@ async def update_assignment(
 async def delete_assignment(
     assignment_id: int,
     bot_assignment_svc: BotAssignmentServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Delete a bot guest assignment"""
     logger.info(f"DELETE /bot-guest-assignment/{assignment_id} - delete_assignment called")
     user_id = claims["sub"]
-    user = _current_user(user_id)
+    user = await _current_user(user_id, user_svc)
 
     assignment = await bot_assignment_svc.get_dto_by_id(assignment_id)
     if not assignment:
@@ -243,11 +252,12 @@ async def delete_assignment(
 async def remove_assignment(
     body: BotGuestAssignmentRefRequest,
     bot_assignment_svc: BotAssignmentServiceDep,
+    user_svc: UserAdminServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Remove assignment between a bot and guest user"""
     logger.info("DELETE /bot-guest-assignment/remove - remove_assignment called")
-    _current_user(claims["sub"])
+    await _current_user(claims["sub"], user_svc)
 
     logger.debug(f"remove_assignment payload: bot_id={body.bot_id} guest_user_id={body.guest_user_id}")
     if not await bot_assignment_svc.remove_assignment(body.bot_id, body.guest_user_id):

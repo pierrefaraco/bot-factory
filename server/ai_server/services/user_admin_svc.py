@@ -1,36 +1,50 @@
-from http import HTTPStatus
-from sqlalchemy import delete, func, or_, select
+from typing import List, Optional, Dict, Any
+
+from starlette.concurrency import run_in_threadpool
 from werkzeug.security import generate_password_hash, check_password_hash
+
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.models import Bot, Message, Session, User
-from ai_server.database.session import db, get_async_session
+from ai_server.models import User
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.exceptions.api_error import ApiError
-from typing import List, Optional, Dict, Any
 from ai_server.dto.user_dto import UserDto
 from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
+from ai_server.repositories import (
+    BotAssignmentRepository,
+    BotRepository,
+    ConversationRepository,
+    TokenUsageRepository,
+    UserRepository,
+)
 from ai_server.services.base_service import BaseService
 from ai_server.services.bot_assignment_svc import BotAssignmentService
-from ai_server.repositories import BotAssignmentRepository, TokenUsageRepository
-from ai_server.services.bot_svc import BotService
 
 
 logger = BotFactoryLogger()
 
 
 class UserAdminService(BaseService[UserDto]):
-    """Service for managing user entities"""
+    """Service for managing user entities.
+
+    Password hashing/checking (werkzeug's generate_password_hash/
+    check_password_hash) is deliberately CPU-heavy: it always runs through
+    run_in_threadpool, so it never blocks the event loop while the rest of
+    each use case stays plain async."""
 
     def __init__(
         self,
         bot_assignment_svc: BotAssignmentService,
-        bot_svc: BotService,
+        user_repo: UserRepository,
+        bot_repo: BotRepository,
+        conversation_repo: ConversationRepository,
         token_usage_repo: TokenUsageRepository,
         bot_assignment_repo: BotAssignmentRepository,
     ):
         super().__init__()
         self.bot_assignment_svc = bot_assignment_svc
-        self.bot_svc = bot_svc
+        self.user_repo = user_repo
+        self.bot_repo = bot_repo
+        self.conversation_repo = conversation_repo
         self.token_usage_repo = token_usage_repo
         self.bot_assignment_repo = bot_assignment_repo
 
@@ -55,29 +69,21 @@ class UserAdminService(BaseService[UserDto]):
             created_at=user.created_at.isoformat() if user.created_at else "",
         )
 
-    # register_new_user/register_new_guest/register_user/create/
-    # _perform_create all stay sync (db.session, not
-    # get_async_session()): _perform_create does
-    # werkzeug.security.generate_password_hash(), a deliberately CPU-heavy
-    # hash -- run directly on the event loop (no FastAPI threadpool for an
-    # `async def` route) that would block every other concurrent request
-    # for its whole duration, not just this one. register_new_user is also
-    # shared with GoogleAuthentSvc (google_authent_svc.py, not migrated).
-    # See /root/.claude/plans/moonlit-leaping-salamander.md.
-    def register_new_user(self, mail: str, user_name: str, password: str) -> UserDto:
-        """
-        Register a new user with USER_ROLE.
+    async def _get_user_or_404(self, user_id: int, action: str) -> User:
+        user = await self.user_repo.get(user_id)
+        if not user:
+            self.logger.warning(f"{action}({user_id}) failed: user not found")
+            raise ApiError("User not found", 404)
+        return user
 
-        Args:
-            mail: User email
-            user_name: User name
-            password: User password
+    async def register_new_user(
+        self, mail: str, user_name: str, password: str
+    ) -> UserDto:
+        """
+        Register a new, active user with USER_ROLE.
 
         Returns:
             Created UserDto instance
-
-        Raises:
-            ServiceError: When user registration fails
         """
         data = {
             "email": mail,
@@ -86,32 +92,23 @@ class UserAdminService(BaseService[UserDto]):
             "roles": USER_ROLE,
             "is_active": True,
         }
-        return self.create(data)
+        return await self.create(data)
 
-    def register_new_guest(self, parent_id, data) -> UserDto:
+    async def register_new_guest(self, parent_id, data) -> UserDto:
         """
-        Register a new guest user.
-
-        Args:
-            parent_id: ID of the parent user
-            mail: User email
-            user_name: User name
-            password: User password
+        Register a new (inactive) guest user of parent_id; data may carry
+        assigned_bot_ids.
 
         Returns:
             Created UserDto instance
-
-        Raises:
-            ServiceError: When guest registration fails
         """
-
         data["roles"] = GUEST_ROLE
         data["is_active"] = False
         data["parent_id"] = parent_id
 
-        return self.create(data)
+        return await self.create(data)
 
-    def register_user(
+    async def register_user(
         self,
         mail: str,
         user_name: str,
@@ -123,19 +120,8 @@ class UserAdminService(BaseService[UserDto]):
         """
         Register a user with specific parameters.
 
-        Args:
-            mail: User email
-            user_name: User name
-            password: User password
-            roles: User roles
-            parent_id: ID of parent user (default -1)
-            is_active: Whether user is active (default False)
-
         Returns:
             Created UserDto instance
-
-        Raises:
-            ServiceError: When user registration fails
         """
         user_data = {
             "email": mail,
@@ -145,121 +131,75 @@ class UserAdminService(BaseService[UserDto]):
             "parent_id": parent_id,
             "is_active": is_active,
         }
-        return self.create(user_data)
+        return await self.create(user_data)
 
-    def create(self, user_data: Dict[str, Any]) -> UserDto:
+    async def create(self, user_data: Dict[str, Any]) -> UserDto:
         """
-        Create a new user.
-
-        Args:
-            data: User creation data
+        Create a new user, and assign it user_data["assigned_bot_ids"] if
+        any -- in one transaction: a rejected bot creates no user at all.
 
         Returns:
             Created UserDto instance
-
-        Raises:
-            ServiceError: When user creation fails
         """
+        password_hash = await run_in_threadpool(
+            generate_password_hash, user_data["password"]
+        )
+        user = User(
+            name=user_data["name"],
+            password_hash=password_hash,
+            mail=user_data["email"],
+            roles=user_data["roles"],
+            parent_id=user_data.get("parent_id", -1),
+            is_active=user_data.get("is_active", False),
+        )
+        self.user_repo.add(user)
+        await self.user_repo.flush()
+        user_dto = self.user_to_dto(user)
 
-        user_dto: UserDto = self._perform_create(user_data)
-        # user_dto : UserDto = self._safe_execute("_perform_create", self._perform_create, user_data)
-        if user_dto is None:
-            raise ServiceError("User creation failed, no UserDto returned.")
         bot_ids = user_data.get("assigned_bot_ids") or []
         if bot_ids:
             user_dto.assigned_bots = (
-                self.bot_assignment_svc.replace_user_assignments_sync(
-                    user_dto.id, int(user_data["parent_id"]), bot_ids
+                await self.bot_assignment_svc.replace_user_assignments(
+                    user.id, int(user_data["parent_id"]), bot_ids
                 )
             )
 
-        return user_dto
-
-    def _perform_create(self, data: Dict[str, Any]) -> UserDto:
-        password_hash = generate_password_hash(data["password"])
-        new_user = User(
-            name=data["name"],
-            password_hash=password_hash,
-            mail=data["email"],
-            roles=data["roles"],
-            parent_id=data.get("parent_id", -1),
-            is_active=data.get("is_active", False),
-        )
-        db.session.add(new_user)
-
-        db.session.commit()
-
+        await self.user_repo.commit()
         self.logger.info(
-            f"User created id={new_user.id} email={data['email']} roles={data['roles']}"
+            f"User created id={user.id} email={user_data['email']} roles={user_data['roles']}"
         )
-        return self.get_user_by_email(data["email"])
+        return user_dto
 
     async def get_dto_by_id(self, entity_id: int) -> UserDto:
         """
         Retrieve a user by their ID.
 
-        Args:
-            entity_id: ID of the user to retrieve
-
-        Returns:
-            UserDto instance if found
-
         Raises:
-            ServiceError: When user retrieval fails
+            NotFoundError: When the user does not exist
         """
-        result = await self._perform_get_by_id(entity_id)
-        if result is None:
-            raise ServiceError("Get user by id failed, no UserDto returned.")
-        return result
-
-    async def _perform_get_by_id(self, entity_id: int) -> UserDto:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.id == entity_id))
-        user = result.scalar_one_or_none()
+        user = await self.user_repo.get(entity_id)
         if not user:
             raise NotFoundError("User", str(entity_id))
-
-        user_dto = self.user_to_dto(user)
         self.logger.debug(f"Fetched user id={entity_id}")
-        return user_dto
-
-    # Stays sync: shared with llm_svc.py's TokenCountingCallback (not
-    # migrated). rag_router.py used to call this too, but now calls
-    # get_user_dto_by_id() below instead (its own routes are async).
-    def get_user_by_id(self, user_id: int) -> Optional[User]:
-        """
-        Get User entity by ID (for backward compatibility).
-
-        Args:
-            user_id: ID of the user to retrieve
-
-        Returns:
-            User entity if found, None otherwise
-
-        Raises:
-            ServiceError: When user retrieval fails
-        """
-        return self._perform_get_user_by_id(user_id)
-
-    def _perform_get_user_by_id(self, user_id: int) -> Optional[User]:
-        self.logger.debug(f"Fetching user with id: {user_id}")
-        return User.query.filter_by(id=user_id).first()
+        return self.user_to_dto(user)
 
     async def get_user_dto_by_id(self, user_id: int) -> Optional[UserDto]:
         """
-        Get UserDto by ID.
-
-        Args:
-            user_id: ID of the user to retrieve
-
-        Returns:
-            UserDto instance if found, None otherwise
+        Get UserDto by ID, None if not found.
         """
         try:
             return await self.get_dto_by_id(user_id)
-        except (ServiceError, NotFoundError):
+        except NotFoundError:
             self.logger.debug(f"get_user_dto_by_id: user {user_id} not found")
             return None
+
+    async def get_user_by_email(self, email: str) -> Optional[UserDto]:
+        """
+        Get user by email, None if not found.
+        """
+        self.logger.debug(f"Fetching user by email: {email}")
+        user = await self.user_repo.get_by_email(email)
+        return self.user_to_dto(user) if user else None
 
     async def get_all(self, caller_id: int) -> List[UserDto]:
         """
@@ -271,22 +211,11 @@ class UserAdminService(BaseService[UserDto]):
 
         Returns:
             List of UserDto instances
-
-        Raises:
-            ServiceError: When user retrieval fails
         """
-        result = await self._perform_get_all(caller_id)
-        if result is None:
-            raise ServiceError("User get_all failed, no list returned.")
-        return result
-
-    async def _perform_get_all(self, caller_id: int) -> List[UserDto]:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.roles != ADMIN_ROLE))
-        users: List[User] = list(result.scalars().all())
+        users = await self.user_repo.list_non_admins()
         # user_to_dto() alone leaves assigned_bots at its dataclass default
         # ([]) -- the admin "All users" list needs it populated the same way
-        # _perform_get_children() already does, so its bot-assignment column
+        # get_children_users() already does, so its bot-assignment column
         # isn't blank for every row regardless of actual assignments.
         dtos = [await self._get_assignated_bots(user) for user in users]
         for dto, user in zip(dtos, users):
@@ -295,10 +224,7 @@ class UserAdminService(BaseService[UserDto]):
             # an Admin (excluded from `users` above), so the frontend can't
             # always resolve it by matching parent_id against this same list.
             if user.parent_id and user.parent_id != -1:
-                parent_result = await session.execute(
-                    select(User).where(User.id == user.parent_id)
-                )
-                parent = parent_result.scalar_one_or_none()
+                parent = await self.user_repo.get(user.parent_id)
                 dto.parent_email = parent.mail if parent else None
             # owned_bots_count: distinct from assigned_bots (dto.assigned_bots
             # is bots *assigned to* this account, e.g. to a Guest by its
@@ -306,24 +232,13 @@ class UserAdminService(BaseService[UserDto]):
             # which is a completely different relationship -- the "Bots"
             # column shows one or the other depending on role.
             if user.roles == USER_ROLE:
-                count_result = await session.execute(
-                    select(func.count()).select_from(Bot).where(
-                        Bot.user_account_id == user.id
-                    )
-                )
-                dto.owned_bots_count = count_result.scalar_one()
+                dto.owned_bots_count = await self.bot_repo.count_by_owner(user.id)
         self.logger.debug(f"get_all users: caller_id={caller_id} count={len(dtos)}")
         return dtos
 
     async def get_all_users(self, caller_id: int) -> List[UserDto]:
         """
         Get all users (for backward compatibility).
-
-        Returns:
-            List of UserDto instances
-
-        Raises:
-            ServiceError: When user retrieval fails
         """
         return await self.get_all(caller_id)
 
@@ -331,35 +246,10 @@ class UserAdminService(BaseService[UserDto]):
         """
         Update user information.
 
-        Args:
-            user_id: ID of the user to update
-            data: Fields to update
-
-        Returns:
-            Updated UserDto instance
-
         Raises:
-            ServiceError: When user update fails
+            NotFoundError: When the user does not exist
         """
-        user_dto: UserDto = await self._perform_update(
-            user_id,
-            user_data,
-        )
-        if user_dto is None:
-            raise ServiceError("User update failed, no UserDto returned.")
-
-        user_data["id"] = user_dto.id
-        user_data["parent_id"] = user_dto.parent_id
-
-        # bots_ass_dto: BotAssignmentDto = self._safe_execute("_perform_assign_bot", self._perform_assign_bot, user_data)
-        # if bots_ass_dto:
-        #     user_dto.assigned_bots = bots_ass_dto
-        return user_dto
-
-    async def _perform_update(self, user_id: int, data: Dict[str, Any]) -> UserDto:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
+        user = await self.user_repo.get(user_id)
         if not user:
             raise NotFoundError("User", str(user_id))
 
@@ -368,7 +258,7 @@ class UserAdminService(BaseService[UserDto]):
         # on the read side) -- without this, hasattr(user, "email") is always
         # False (there's no such attribute), so the loop below silently
         # skipped every email update instead of applying it.
-        update_fields = dict(data)
+        update_fields = dict(user_data)
         if "email" in update_fields:
             update_fields["mail"] = update_fields.pop("email")
 
@@ -380,33 +270,24 @@ class UserAdminService(BaseService[UserDto]):
                     f"User {user_id} update: ignoring unknown field '{key}'"
                 )
 
-        await session.commit()
+        await self.user_repo.commit()
         self.logger.info(f"User {user_id} updated fields={list(update_fields.keys())}")
         return self.user_to_dto(user)
 
     async def patch_user(self, parent_id: int, guest_id: int, data: dict) -> UserDto:
-        user_dto = await self._perform_patch_user(
-            parent_id,
-            guest_id,
-            data,
-        )
-        if user_dto is None:
-            raise ServiceError("Patch user failed.")
-        return user_dto
+        """
+        Set parent_id's selected bot and/or replace guest_id's assigned
+        bots, in one transaction.
 
-    async def _perform_patch_user(self, parent_id, guest_id: int, data: dict) -> UserDto:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.id == parent_id))
-        parent_user: User = result.scalar_one_or_none()
+        Raises:
+            NotFoundError: When the parent user or the selected bot does not exist
+        """
+        parent_user = await self.user_repo.get(parent_id)
         if not parent_user:
             raise NotFoundError("parent-user", str(parent_id))
 
-        # Update fields with specific logic (keeping original print statements for debugging)
         if selected_bot_id := data.get("selected_bot_id"):
-            # bot_svc.get_dto_by_id() stays sync (shared with bot_router.py)
-            # -- called here as a plain sync call.
-            bot = self.bot_svc.get_dto_by_id(selected_bot_id)
-            if not bot:
+            if not await self.bot_repo.get(selected_bot_id):
                 raise NotFoundError("Selected Bot", str(selected_bot_id))
             parent_user.selected_bot_id = selected_bot_id
             self.logger.info(
@@ -416,46 +297,57 @@ class UserAdminService(BaseService[UserDto]):
         user_dto: UserDto = self.user_to_dto(parent_user)
 
         if "assigned_bot_ids" in data:
-            # Part of this method's own transaction (committed below): a
-            # rejected bot leaves the previous assignments untouched.
             bots_ass_dto = await self.bot_assignment_svc.replace_user_assignments(
                 guest_id, parent_id, data.get("assigned_bot_ids") or []
             )
             if bots_ass_dto:
                 user_dto.assigned_bots = bots_ass_dto
-        await session.commit()
+        await self.user_repo.commit()
         return user_dto
+
+    async def select_bot(self, user_id: int, bot_id: int) -> bool:
+        """Set user_id's selected bot (bot_id is not checked). False if the
+        user does not exist."""
+        user = await self.user_repo.get(user_id)
+        if not user:
+            return False
+        user.selected_bot_id = bot_id
+        await self.user_repo.commit()
+        return True
+
+    async def get_selected_bot(self, user_id: int) -> dict:
+        """The asymmetric response shapes (some branches include a "bot"
+        key, the final one doesn't) are the original route's own behavior,
+        kept verbatim."""
+        user = await self.user_repo.get(user_id)
+        if not user.selected_bot_id:
+            self.logger.info(f"get_selected_bot({user_id}) succeeded: no bot selected")
+            return {"selected_bot_id": None, "bot": None}
+
+        if not await self.bot_repo.get(user.selected_bot_id):
+            self.logger.warning(
+                f"get_selected_bot({user_id}) selected_bot_id={user.selected_bot_id} not found"
+            )
+            return {"selected_bot_id": user.selected_bot_id, "bot": None}
+
+        self.logger.info(
+            f"get_selected_bot({user_id}) succeeded selected_bot_id={user.selected_bot_id}"
+        )
+        return {"selected_bot_id": user.selected_bot_id}
 
     async def delete(self, entity_id: int) -> bool:
         """
-        Delete a user.
-
-        Args:
-            entity_id: ID of the user to delete
-
-        Returns:
-            True if deletion was successful
+        Delete a user and everything that references it.
 
         Raises:
-            ServiceError: When user deletion fails
+            NotFoundError: When the user does not exist
+            ServiceError: When the user still has children
         """
-        result = await self._perform_delete(entity_id)
-        if result is None:
-            raise ServiceError("User delete failed, no user deleted.")
-        return result
-
-    async def _perform_delete(self, entity_id: int) -> bool:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.id == entity_id))
-        user = result.scalar_one_or_none()
+        user = await self.user_repo.get(entity_id)
         if not user:
             raise NotFoundError("User", str(entity_id))
 
-        # Check for children users
-        children_result = await session.execute(
-            select(User).where(User.parent_id == entity_id)
-        )
-        children = children_result.scalars().all()
+        children = await self.user_repo.list_children(entity_id)
         if children:
             self.logger.warning(
                 f"delete user {entity_id} rejected: {len(children)} child user(s) still attached"
@@ -470,47 +362,33 @@ class UserAdminService(BaseService[UserDto]):
         # has ever chatted, been assigned a bot, or owns a bot used to 500
         # with a raw IntegrityError instead of actually deleting anything.
         # Deleted in dependency order (children before parents), same as
-        # server/test/factories.py's registry for the same reason: Message
-        # references session_id, so sessions must go after their messages.
-        session_ids_result = await session.execute(
-            select(Session.id).where(Session.user_id == entity_id)
-        )
-        session_ids = list(session_ids_result.scalars().all())
+        # server/test/factories.py's registry for the same reason.
+        session_count = await self.conversation_repo.delete_for_user(entity_id)
         self.logger.info(
-            f"Deleting user {entity_id}: cascading {len(session_ids)} session(s), "
+            f"Deleting user {entity_id}: cascaded {session_count} session(s), "
             "their messages, token usage, bot assignments and owned bots"
         )
-        if session_ids:
-            await session.execute(
-                delete(Message).where(Message.session_id.in_(session_ids))
-            )
-        await session.execute(delete(Session).where(Session.user_id == entity_id))
         await self.token_usage_repo.delete_by_user_id(entity_id)
         await self.bot_assignment_repo.delete_involving_user(entity_id)
-        # Bot's own children (BotParameters/BotAvatar/Knowledge) do have
-        # ondelete=CASCADE, so removing the Bot rows here is enough for them.
-        await session.execute(delete(Bot).where(Bot.user_account_id == entity_id))
+        await self.bot_repo.delete_by_owner(entity_id)
 
-        await session.delete(user)
-        await session.commit()
+        await self.user_repo.delete(user)
+        await self.user_repo.commit()
         self.logger.info(f"User {entity_id} deleted successfully")
         return True
 
     async def delete_user(self, user_id: int) -> bool:
         """
-        Delete a user (for backward compatibility).
-
-        Args:
-            user_id: ID of the user to delete
-
-        Returns:
-            True if deletion was successful
+        Delete a user, mapping service errors to API errors.
 
         Raises:
             ApiError: When user deletion fails
         """
         try:
             return await self.delete(user_id)
+        except NotFoundError:
+            self.logger.warning(f"delete_user({user_id}) failed: user not found")
+            raise ApiError("User not found", 404)
         except ServiceError as e:
             if "children" in str(e):
                 self.logger.warning(f"delete_user({user_id}) blocked: has children")
@@ -520,33 +398,6 @@ class UserAdminService(BaseService[UserDto]):
                 )
             self.logger.warning(f"delete_user({user_id}) failed: {e}")
             raise ApiError("User not found", 404)
-        except NotFoundError:
-            self.logger.warning(f"delete_user({user_id}) failed: user not found")
-            raise ApiError("User not found", 404)
-
-    # Stays sync: used internally by the sync _perform_create() (register_*
-    # chain) in addition to asgi.py's startup super-admin bootstrap.
-    def get_user_by_email(self, email: str) -> Optional[UserDto]:
-        """
-        Get user by email.
-
-        Args:
-            email: Email to search for
-
-        Returns:
-            UserDto instance if found, None otherwise
-
-        Raises:
-            ServiceError: When user retrieval fails
-        """
-        return self._perform_get_by_email(email)
-
-    def _perform_get_by_email(self, email: str) -> Optional[UserDto]:
-        self.logger.debug(f"Fetching user by email: {email}")
-        user = User.query.filter_by(mail=email).first()
-        if user:
-            return self.user_to_dto(user)
-        return None
 
     async def get_users_by_role(self, role: str, caller_id: int) -> List[UserDto]:
         """
@@ -554,80 +405,24 @@ class UserAdminService(BaseService[UserDto]):
         other than the caller's own (same rule as get_all() -- this route
         accepts role=Admin same as any other, and would otherwise be a
         second, unfiltered way to list every Admin in the system).
-
-        Args:
-            role: Role to filter by
-
-        Returns:
-            List of UserDto instances with the specified role
-
-        Raises:
-            ServiceError: When user retrieval fails
         """
-        result = await self._perform_get_by_role(role, caller_id)
-        if result is None:
-            raise ServiceError("Get users by role failed.")
-        return result
-
-    async def _perform_get_by_role(self, role: str, caller_id: int) -> List[UserDto]:
-        session = get_async_session()
-        result = await session.execute(
-            select(User).where(
-                User.roles.contains(role),
-                or_(User.roles != ADMIN_ROLE, User.id == int(caller_id)),
-            )
-        )
-        users = result.scalars().all()
+        users = await self.user_repo.list_by_role(role, int(caller_id))
         dtos = [self.user_to_dto(user) for user in users]
-        self.logger.debug(f"get_users_by_role role={role} caller_id={caller_id} count={len(dtos)}")
+        self.logger.debug(
+            f"get_users_by_role role={role} caller_id={caller_id} count={len(dtos)}"
+        )
         return dtos
-
-    def get_children_users_count(self, parent_id: int) -> List[UserDto]:
-        """
-        Get count of all child users of a parent.
-
-        Args:
-            parent_id: ID of the parent user
-
-        Returns:
-            Count of child users
-
-        Raises:
-            ServiceError: When user retrieval fails
-        """
-        result = self._perform_get_children_count(parent_id)
-        if result is None:
-            raise ServiceError("Get children users count failed.")
-        return result
 
     async def get_children_users(self, parent_id: int) -> List[UserDto]:
         """
-        Get all child users of a parent.
-
-        Args:
-            parent_id: ID of the parent user
-
-        Returns:
-            List of UserDto instances that are children of the parent
-
-        Raises:
-            ServiceError: When user retrieval fails
+        Get all child users of a parent, with their assigned bots.
         """
-        result = await self._perform_get_children(parent_id)
-        if result is None:
-            raise ServiceError("Get children users failed.")
-        return result
-
-    async def _perform_get_children(self, parent_id: int) -> List[UserDto]:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.parent_id == parent_id))
-        users = result.scalars().all()
-
+        users = await self.user_repo.list_children(parent_id)
         dtos = [await self._get_assignated_bots(user) for user in users]
         self.logger.debug(f"get_children_users parent_id={parent_id} count={len(dtos)}")
         return dtos
 
-    async def _get_assignated_bots(self, user) -> List[UserDto]:
+    async def _get_assignated_bots(self, user) -> UserDto:
         user_dto = self.user_to_dto(user)
         user_dto.assigned_bots = await self.bot_assignment_svc.get_assignments_by_user(
             user.id, include_inactive=True
@@ -638,83 +433,40 @@ class UserAdminService(BaseService[UserDto]):
         """
         Change user role.
 
-        Args:
-            user_id: ID of the user
-            new_role: New role to assign
-
-        Returns:
-            Updated UserDto instance
-
         Raises:
-            ServiceError: When role change fails
+            ApiError: 404 when the user does not exist
         """
-        result = await self._perform_change_role(
-            user_id,
-            new_role,
-        )
-        if result is None:
-            raise ServiceError("Change user role failed.")
-        return result
-
-    async def _perform_change_role(self, user_id: int, new_role: str) -> UserDto:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            self.logger.warning(f"change_role({user_id}) failed: user not found")
-            raise ApiError("User not found", 404)
-
+        user = await self._get_user_or_404(user_id, "change_role")
         old_role = user.roles
         user.roles = new_role
-        await session.commit()
+        await self.user_repo.commit()
         self.logger.info(f"User {user_id} role changed: {old_role} -> {new_role}")
         return self.user_to_dto(user)
 
-    # Stays sync: _perform_change_password() does
-    # werkzeug.security.check_password_hash()/generate_password_hash(),
-    # deliberately CPU-heavy -- same reason as create()/_perform_create()
-    # above.
-    def change_password(
+    async def change_password(
         self, user_id: int, old_password: str, new_password: str
     ) -> bool:
         """
         Change user password.
 
-        Args:
-            user_id: ID of the user
-            old_password: Current password
-            new_password: New password
-
-        Returns:
-            True if password was changed successfully
-
         Raises:
-            ServiceError: When password change fails
+            ApiError: 404 when the user does not exist, 401 on a wrong old password
         """
-        result = self._perform_change_password(
-            user_id,
-            old_password,
-            new_password,
-        )
-        if result is None:
-            raise ServiceError("Change password failed.")
-        return result
+        user = await self._get_user_or_404(user_id, "change_password")
 
-    def _perform_change_password(
-        self, user_id: int, old_password: str, new_password: str
-    ) -> bool:
-        user = User.query.filter_by(id=user_id).first()
-        if not user:
-            self.logger.warning(f"change_password({user_id}) failed: user not found")
-            raise ApiError("User not found", 404)
-
-        if not check_password_hash(user.password_hash, old_password):
+        if not await run_in_threadpool(
+            check_password_hash, user.password_hash, old_password
+        ):
             # Never log password/hash values, only the outcome.
-            self.logger.warning(f"change_password({user_id}) failed: invalid old password")
+            self.logger.warning(
+                f"change_password({user_id}) failed: invalid old password"
+            )
             raise ApiError("Invalid old password", 401)
 
-        user.password_hash = generate_password_hash(new_password)
-        db.session.commit()
+        user.password_hash = await run_in_threadpool(
+            generate_password_hash, new_password
+        )
+        await self.user_repo.commit()
         self.logger.info(f"Password changed for user {user_id}")
         return True
 
@@ -722,31 +474,13 @@ class UserAdminService(BaseService[UserDto]):
         """
         Deactivate a user account.
 
-        Args:
-            user_id: ID of the user to deactivate
-
-        Returns:
-            Updated UserDto instance
-
         Raises:
-            ServiceError: When user deactivation fails
+            ApiError: 404 when the user does not exist
         """
-        result = await self._perform_deactivate(user_id)
-        if result is None:
-            raise ServiceError("Deactivate user failed.")
-        return result
-
-    async def _perform_deactivate(self, user_id: int) -> UserDto:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            self.logger.warning(f"deactivate_user({user_id}) failed: user not found")
-            raise ApiError("User not found", 404)
-
+        user = await self._get_user_or_404(user_id, "deactivate_user")
         was_active = user.is_active
         user.is_active = False
-        await session.commit()
+        await self.user_repo.commit()
         self.logger.info(f"User {user_id} deactivated (was_active={was_active})")
         return self.user_to_dto(user)
 
@@ -754,31 +488,13 @@ class UserAdminService(BaseService[UserDto]):
         """
         Activate a user account.
 
-        Args:
-            user_id: ID of the user to activate
-
-        Returns:
-            Updated UserDto instance
-
         Raises:
-            ServiceError: When user activation fails
+            ApiError: 404 when the user does not exist
         """
-        result = await self._perform_activate(user_id)
-        if result is None:
-            raise ServiceError("Activate user failed.")
-        return result
-
-    async def _perform_activate(self, user_id: int) -> UserDto:
-        session = get_async_session()
-        result = await session.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            self.logger.warning(f"activate_user({user_id}) failed: user not found")
-            raise ApiError("User not found", 404)
-
+        user = await self._get_user_or_404(user_id, "activate_user")
         was_active = user.is_active
         user.is_active = True
-        await session.commit()
+        await self.user_repo.commit()
         self.logger.info(f"User {user_id} activated (was_active={was_active})")
         return self.user_to_dto(user)
 
@@ -786,92 +502,71 @@ class UserAdminService(BaseService[UserDto]):
         """
         Reassign all children from one parent to another.
 
-        Args:
-            old_parent_id: ID of the current parent
-            new_parent_id: ID of the new parent
-
-        Returns:
-            True if reassignment was successful
-
         Raises:
-            ServiceError: When reassignment fails
+            ApiError: 404 when the new parent does not exist
         """
-        result = await self._perform_reassign_children(
-            old_parent_id,
-            new_parent_id,
-        )
-        if result is None:
-            raise ServiceError("Reassign children failed.")
-        return result
-
-    async def _perform_reassign_children(
-        self, old_parent_id: int, new_parent_id: int
-    ) -> bool:
-        session = get_async_session()
-        children_dtos = await self.get_children_users(old_parent_id)
-        result = await session.execute(select(User).where(User.id == new_parent_id))
-        new_parent = result.scalar_one_or_none()
-
-        if not new_parent:
+        children = await self.user_repo.list_children(old_parent_id)
+        if not await self.user_repo.get(new_parent_id):
             self.logger.warning(
                 f"reassign_children({old_parent_id} -> {new_parent_id}) failed: new parent not found"
             )
             raise ApiError("New parent user not found", 404)
 
-        # Update children's parent_id
-        reassigned_count = 0
-        skipped_count = 0
-        for child_dto in children_dtos:
-            child_result = await session.execute(
-                select(User).where(User.id == child_dto.id)
-            )
-            child = child_result.scalar_one_or_none()
-            if child:
-                child.parent_id = new_parent_id
-                reassigned_count += 1
-            else:
-                skipped_count += 1
-
-        await session.commit()
+        for child in children:
+            child.parent_id = new_parent_id
+        await self.user_repo.commit()
         self.logger.info(
-            f"Reassigned {reassigned_count} child(ren) from parent {old_parent_id} "
+            f"Reassigned {len(children)} child(ren) from parent {old_parent_id} "
             f"to {new_parent_id}"
-            + (f", {skipped_count} skipped (not found)" if skipped_count else "")
         )
         return True
 
-    @staticmethod
-    def get_selected_bot(user_id: int):
+    async def authorize_user_scope(
+        self, caller_id, target_id: int, allow_self: bool = True
+    ) -> None:
+        """Raises ApiError unless the caller may act on target_id -- the
+        shared "own it or be admin" check of every guest/<id> + admin/<id>
+        route.
+
+        - allow_self and target_id is the caller's own id: allowed (including
+          an Admin acting on themselves).
+        - target_id belongs to another Admin: always 403, even for an Admin
+          caller -- peer admin accounts are out of scope for this whole route
+          family (role change, delete, activate/deactivate, bot assignment...).
+        - ADMIN (any other target): unrestricted.
+        - USER: allowed only if target_id is one of their guests
+          (target.parent_id == caller_id).
+        - Anything else: 403.
         """
-        Get selected bot for a user (static method for backward compatibility).
+        caller = await self.user_repo.get(int(caller_id))
+        if not caller:
+            raise ApiError("User not found", status_code=401)
 
-        Args:
-            user_id: ID of the user
+        if allow_self and int(caller_id) == target_id:
+            return
 
-        Returns:
-            JSON response with selected bot information
-        """
-        try:
-            user = User.query.get(user_id)
-            if not user:
-                logger.warning(f"get_selected_bot({user_id}) failed: user not found")
-                return {"error": "User not found"}, 404
+        target = await self.user_repo.get(target_id)
+        if not target:
+            raise ApiError("Guest user not found", status_code=404)
 
-            if not user.selected_bot_id:
-                return {"selected_bot_id": None, "bot": None}, 200
+        # int(target_id) != int(caller_id) here specifically, not just "any
+        # Admin target": allow_self=False routes (deactivate/activate) reach
+        # this point even when target_id IS the caller's own id, and an Admin
+        # has always been allowed to self-service those (that's what
+        # allow_self=False was gating for non-admins in the first place, via
+        # the parent_id check below -- it was never meant to touch this case).
+        if target.roles == ADMIN_ROLE and int(target_id) != int(caller_id):
+            raise ApiError(
+                f"Unable to act on user {target_id} - target is an Admin",
+                status_code=403,
+            )
 
-            bot = Bot.query.get(user.selected_bot_id)
-            if not bot:
-                return {"selected_bot_id": user.selected_bot_id, "bot": None}, 200
+        if caller.roles == ADMIN_ROLE:
+            return
 
-            return {
-                "selected_bot_id": user.selected_bot_id,
-                "bot": {
-                    "id": bot.id,
-                    "bot_name": bot.bot_name,
-                    "prompt": bot.prompt,
-                },
-            }, 200
-        except Exception as exc:
-            logger.exception(f"Error retrieving selected bot for user {user_id}: {exc}")
-            return {"error": "Internal server error"}, 500
+        if target.parent_id == int(caller_id):
+            return
+
+        raise ApiError(
+            f"Unable to access user {target_id} - not your guest", status_code=403
+        )

@@ -23,19 +23,11 @@ password, inactive account, unknown email) all collapse to the same
 applies the same collapse for its own AuthenticationError case (inactive
 account) so a disabled Google-linked account isn't distinguishable either.
 
-refresh/logout are async (`async def`): refresh_token()'s only DB read is
-migrated (UserAdminService.get_user_dto_by_id, get_async_session()), and
-logout() does no DB work at all (just JWTTools.get_user(), a constant,
-and a fire-and-forget Thread to revoke the jti later -- see
-authent_svc.py). login/login_with_google stay sync -- both do
-genuinely blocking work with no async equivalent available: login()'s
-check_password_hash() is deliberately CPU-heavy (same reasoning as
-users_admin_router.py's register()/change_password_self()), and
-login_with_google()'s google-auth verify_oauth2_token() call does a
-blocking HTTP round-trip to Google's cert endpoint (google_authent_svc.py
-uses google.auth.transport.requests, a sync transport) and can itself
-call register_new_user() -> the same CPU-heavy password hashing on
-auto-provisioning a new user.
+Every route is `async def`. The genuinely blocking parts -- login()'s
+deliberately CPU-heavy check_password_hash(), and login_with_google()'s
+verify_oauth2_token() HTTP round-trip to Google's cert endpoint (a sync
+transport) -- run through run_in_threadpool inside the services
+(authent_svc.py, google_authent_svc.py), off the event loop.
 """
 
 from fastapi import APIRouter, Depends
@@ -75,12 +67,12 @@ class GoogleOAuthRequest(BaseModel):
 
 
 @router.post("/login", dependencies=[Depends(require_json_content_type)])
-def login(body: LoginRequest, auth_svc: AuthenticationServiceDep):
+async def login(body: LoginRequest, auth_svc: AuthenticationServiceDep):
     """User login with email and password. Returns a JWT access token."""
     app_logger.info("POST /auth/login - login called")
     app_logger.info(f"User attempting login with email: {body.email}")
     try:
-        access_token = auth_svc.login(body.email, body.password)
+        access_token = await auth_svc.login(body.email, body.password)
     except (AuthenticationError, NotFoundError) as exc:
         # Même message générique pour les deux cas (mauvais mot de passe vs
         # utilisateur inexistant), pour ne pas permettre l'énumération des
@@ -97,7 +89,7 @@ def login(body: LoginRequest, auth_svc: AuthenticationServiceDep):
 
 
 @router.post("/google", dependencies=[Depends(require_json_content_type)])
-def login_with_google(
+async def login_with_google(
     body: GoogleOAuthRequest,
     google_auth_svc: GoogleAuthentServiceDep,
 ):
@@ -108,7 +100,7 @@ def login_with_google(
     app_logger.info("User attempting login with Google OAuth credential")
 
     try:
-        access_token = google_auth_svc.verify_google_token(body.credential)
+        access_token = await google_auth_svc.verify_google_token(body.credential)
     except AuthenticationError as exc:
         # Même message générique que /login (voir commentaire plus haut) :
         # un compte désactivé ne doit pas être distinguable d'un jeton invalide.

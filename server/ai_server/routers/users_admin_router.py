@@ -35,38 +35,21 @@ a legitimate `old_parent_id: 0` is falsy in Python, so this check can
 still reject a validly-present-but-zero id that pydantic already
 accepted -- a real (if obscure) behavior of the original, not dead code.
 
-Every route here is `async def`. register/register_guest/
-change_password_self/change_password_guest still funnel into
-UserAdminService methods (create/_perform_create, change_password/
-_perform_change_password) that do werkzeug.security.
-generate_password_hash()/check_password_hash() -- deliberately CPU-heavy
-work, with no async equivalent, that would block the event loop for
-every concurrent request if run directly on it (register_new_user is
-also shared with GoogleAuthentSvc, google_authent_svc.py, not migrated,
-so it stays a plain sync method regardless). Each of those four routes
-instead wraps its own sync body (the existing-user/guest-ownership check
-included) in a `run_in_threadpool` call, via a small `_..._sync()`
-helper -- the same protection a plain `def` route gets automatically
-from FastAPI, made explicit since these routes need to stay `async def`
-for consistency with the rest of this router. See
-/root/.claude/plans/moonlit-leaping-salamander.md. DB session scoping
-doesn't care about any of this either way: it's wired once, at the
-router level, via Depends(async_db_session_dependency) -- see that
-dependency's own docstring for why an async-generator Depends works for
-both a sync and an async route (no per-route decorator needed for
-either).
+Every route here is `async def`, as is every UserAdminService method it
+calls; the CPU-heavy password hashing behind register*/change_password*
+runs in a threadpool inside the service (see user_admin_svc.py). The
+"own it or be admin" check of every <id> route is
+UserAdminService.authorize_user_scope(). DB session scoping is wired
+once, at the router level, via Depends(async_db_session_dependency) --
+see that dependency's own docstring.
 """
 
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
-from starlette.concurrency import run_in_threadpool
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.models import Bot, User
-from ai_server.database.session import get_async_session
-from ai_server.decorators.user_scope import authorize_user_scope
 from ai_server.dependencies.auth import require_roles
 from ai_server.dependencies.content_type import require_json_body
 from ai_server.dependencies.db_session import async_db_session_dependency
@@ -137,26 +120,18 @@ class PatchBotRequest(BaseModel):
     assigned_bot_ids: Optional[list[int]] = None
 
 
-def _enforce_user_scope(caller_id, target_id: int, allow_self: bool = True) -> None:
-    error = authorize_user_scope(caller_id, target_id, allow_self=allow_self)
-    if error:
-        response, status_code = error
-        raise ApiError(response["error"], status_code=status_code)
-
-
-def _register_sync(body: UserRegistrationRequest, user_admin_svc: UserAdminService):
-    existing_user = User.query.filter_by(mail=body.email).first()
-    if existing_user:
+async def _register(body: UserRegistrationRequest, user_admin_svc: UserAdminService):
+    if await user_admin_svc.get_user_by_email(body.email):
         logger.warning(f"register rejected: email already registered ({body.email})")
         raise ApiError("Email already registered", status_code=409)
-    return user_admin_svc.register_new_user(body.email, body.name, body.password)
+    return await user_admin_svc.register_new_user(body.email, body.name, body.password)
 
 
 @router.post("", status_code=201, dependencies=[Depends(require_json_body(UserRegistrationRequest))])
 async def register(body: UserRegistrationRequest, user_admin_svc: UserAdminServiceDep):
     """Register a new user"""
     logger.info("POST /users - register called")
-    user = await run_in_threadpool(_register_sync, body, user_admin_svc)
+    user = await _register(body, user_admin_svc)
     app_logger.info(f"New user registered: {body.email}")
     return {"message": "User registered successfully", "user": user}
 
@@ -182,7 +157,7 @@ async def update_users_by_id(
 ):
     """Update a user's information (own guest, or any user if admin)"""
     logger.info(f"PUT /users/{user_id} - update_users_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_admin_svc.authorize_user_scope(claims["sub"], user_id)
     return await _update_users_impl(user_id, body, user_admin_svc)
 
 
@@ -196,14 +171,13 @@ async def _update_users_impl(
     return {"message": "User updated successfully", "user": user_dto.to_dict()}
 
 
-def _register_guest_sync(
+async def _register_guest(
     parent_id, validated_data: dict, user_admin_svc: UserAdminService
 ):
-    existing_user = User.query.filter_by(mail=validated_data["email"]).first()
-    if existing_user:
+    if await user_admin_svc.get_user_by_email(validated_data["email"]):
         logger.warning(f"register_guest rejected: email already registered ({validated_data['email']})")
         raise ApiError("Email already registered", status_code=409)
-    user_admin_svc.register_new_guest(parent_id, validated_data)
+    await user_admin_svc.register_new_guest(parent_id, validated_data)
 
 
 @router.post(
@@ -219,9 +193,7 @@ async def register_guest(
     parent_id = claims["sub"]
     validated_data = body.model_dump()
 
-    await run_in_threadpool(
-        _register_guest_sync, parent_id, validated_data, user_admin_svc
-    )
+    await _register_guest(parent_id, validated_data, user_admin_svc)
     app_logger.info(f"New guest user registered by parent {parent_id}: {validated_data['email']}")
     return {"message": "Guest user registered successfully"}
 
@@ -322,7 +294,7 @@ async def delete_user_by_id(
 ):
     """Delete a user (own guest, or any user if admin)"""
     logger.info(f"DELETE /users/{user_id} - delete_user_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_admin_svc.authorize_user_scope(claims["sub"], user_id)
     return await delete_user(user_id, user_admin_svc)
 
 
@@ -337,7 +309,7 @@ async def change_role(
 ):
     """Change le rôle d'un utilisateur"""
     logger.info(f"PUT /users/{user_id}/role - change_role called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_admin_svc.authorize_user_scope(claims["sub"], user_id)
 
     user = await user_admin_svc.change_user_role(user_id, body.role)
     app_logger.info(f"Role changed for user {user_id} by admin {claims['sub']} to {body.role}")
@@ -347,22 +319,16 @@ async def change_role(
     }
 
 
-def _change_password_sync(
-    user_id, body: PasswordChangeRequest, user_admin_svc: UserAdminService
-):
-    if body.new_password == body.old_password:
-        logger.warning(f"change_password({user_id}) rejected: new password equals old password")
-        raise ApiError("Password update failed. New password equal old password", status_code=400)
-
-    user_admin_svc.change_password(user_id, body.old_password, body.new_password)
-    logger.info(f"change_password({user_id}) succeeded")
-
-
 async def change_password(
     user_id, body: PasswordChangeRequest, user_admin_svc: UserAdminService
 ):
     """Change le mot de passe de l'utilisateur connecté"""
-    await run_in_threadpool(_change_password_sync, user_id, body, user_admin_svc)
+    if body.new_password == body.old_password:
+        logger.warning(f"change_password({user_id}) rejected: new password equals old password")
+        raise ApiError("Password update failed. New password equal old password", status_code=400)
+
+    await user_admin_svc.change_password(user_id, body.old_password, body.new_password)
+    logger.info(f"change_password({user_id}) succeeded")
     return {"msg": "Password updated successfully"}
 
 
@@ -419,7 +385,7 @@ async def deactivate_user_by_id(
     deactivation, same as before the guest/admin merge -- there was never a
     /me route for this."""
     logger.info(f"PUT /users/{user_id}/deactivate - deactivate_user_by_id called")
-    _enforce_user_scope(claims["sub"], user_id, allow_self=False)
+    await user_admin_svc.authorize_user_scope(claims["sub"], user_id, allow_self=False)
     return await deactivate_user(user_id, user_admin_svc)
 
 
@@ -440,7 +406,7 @@ async def activate_user_by_id(
     activation, same as before the guest/admin merge -- there was never a
     /me route for this."""
     logger.info(f"PUT /users/{user_id}/activate - activate_user_by_id called")
-    _enforce_user_scope(claims["sub"], user_id, allow_self=False)
+    await user_admin_svc.authorize_user_scope(claims["sub"], user_id, allow_self=False)
     return await activate_user(user_id, user_admin_svc)
 
 
@@ -493,7 +459,7 @@ async def get_user_by_id(
 ):
     """Get a user's details (own guest, or any user if admin)"""
     logger.info(f"GET /users/{user_id} - get_user_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
+    await user_admin_svc.authorize_user_scope(claims["sub"], user_id)
     return await get_user(user_id, user_admin_svc)
 
 
@@ -532,41 +498,27 @@ async def patch_user_by_id(
     """Update a user's selected bot (own guest, or any user if admin)"""
     logger.info(f"PATCH /users/{target_user_id} - patch_user_by_id called")
     caller_id = claims["sub"]
-    _enforce_user_scope(caller_id, target_user_id)
+    await user_admin_svc.authorize_user_scope(caller_id, target_user_id)
     return await _patch_user(caller_id, body, user_admin_svc, target_user_id)
 
 
-async def _get_selected_bot(user_id):
-    """Internal function to get user's selected bot. The asymmetric
-    response shapes (some branches include a "bot" key, the final one
-    doesn't) are the original's own behavior, kept verbatim. Self-contained
-    (no UserAdminService call), migrated to the async engine directly."""
-    session = get_async_session()
-    user: User = await session.get(User, user_id)
-    if not user.selected_bot_id:
-        logger.info(f"get_selected_bot({user_id}) succeeded: no bot selected")
-        return {"selected_bot_id": None, "bot": None}
-
-    bot: Bot = await session.get(Bot, user.selected_bot_id)
-    if not bot:
-        logger.warning(f"get_selected_bot({user_id}) selected_bot_id={user.selected_bot_id} not found")
-        return {"selected_bot_id": user.selected_bot_id, "bot": None}
-
-    logger.info(f"get_selected_bot({user_id}) succeeded selected_bot_id={user.selected_bot_id}")
-    return {"selected_bot_id": user.selected_bot_id}
-
-
 @router.get("/selected_bot/me")
-async def get_selected_bot_self(claims: dict = Depends(any_role)):
+async def get_selected_bot_self(
+    user_admin_svc: UserAdminServiceDep, claims: dict = Depends(any_role)
+):
     """Get current user's selected bot"""
     user_id = claims["sub"]
     logger.info(f"GET /users/selected_bot/me - get_selected_bot_self called for user_id={user_id}")
-    return await _get_selected_bot(user_id)
+    return await user_admin_svc.get_selected_bot(user_id)
 
 
 @router.get("/selected_bot/{user_id:int}")
-async def get_selected_bot_by_id(user_id: int, claims: dict = Depends(admin_or_user)):
+async def get_selected_bot_by_id(
+    user_id: int,
+    user_admin_svc: UserAdminServiceDep,
+    claims: dict = Depends(admin_or_user),
+):
     """Get a user's selected bot (own guest, or any user if admin)"""
     logger.info(f"GET /users/selected_bot/{user_id} - get_selected_bot_by_id called")
-    _enforce_user_scope(claims["sub"], user_id)
-    return await _get_selected_bot(user_id)
+    await user_admin_svc.authorize_user_scope(claims["sub"], user_id)
+    return await user_admin_svc.get_selected_bot(user_id)

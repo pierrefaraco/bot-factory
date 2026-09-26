@@ -3,10 +3,10 @@ from ai_server.exceptions.service_exceptions import AuthenticationError
 from ai_server.services.base_service import BaseService
 from google.oauth2 import id_token
 from google.auth.transport import requests
+from starlette.concurrency import run_in_threadpool
 from ai_server.config.config import app_config
 from ai_server.dependencies.auth import create_access_token
 from ai_server.services.user_admin_svc import UserAdminService
-from ai_server.models import User
 from ai_server.dto.user_dto import UserDto
 
 
@@ -17,23 +17,26 @@ class GoogleAuthentSvc(BaseService):
         super().__init__()
         self.user_admin_svc = user_admin_svc
 
-    def verify_google_token(self, credential):
+    async def verify_google_token(self, credential):
         try:
-            id_info = id_token.verify_oauth2_token(
-                credential, requests.Request(), app_config.GOOGLE_CLIENT_ID
+            # Blocking: fetches Google's signing certs over HTTP.
+            id_info = await run_in_threadpool(
+                id_token.verify_oauth2_token,
+                credential,
+                requests.Request(),
+                app_config.GOOGLE_CLIENT_ID,
             )
             # Never log the full id_info payload: it carries PII (name,
             # picture, locale...) beyond what's needed for the audit trail.
             self.logger.info(f"Google OAuth token verified for email={id_info['email']}")
 
-            user: User = User.query.filter_by(mail=id_info["email"]).first()
-
-            if not user:
-                user_dto = self.record_user(id_info)
-            else:
-                user_dto = self.user_admin_svc.user_to_dto(user)
+            user_dto = await self.user_admin_svc.get_user_by_email(id_info["email"])
+            if not user_dto:
+                user_dto = await self.record_user(id_info)
             if not user_dto.is_active:
-                msg = f"User {user.name} is not active, administrator can enable it."
+                msg = (
+                    f"User {user_dto.name} is not active, administrator can enable it."
+                )
                 self.logger.warning(msg)
                 raise AuthenticationError(msg)
 
@@ -45,9 +48,9 @@ class GoogleAuthentSvc(BaseService):
             self.logger.warning(f"Invalid Google OAuth token: {e}")
             return None
 
-    def record_user(self, id_info: dict) -> UserDto:
+    async def record_user(self, id_info: dict) -> UserDto:
         self.logger.info(f"Auto-provisioning new user from Google OAuth: email={id_info['email']}")
-        return self.user_admin_svc.register_new_user(
+        return await self.user_admin_svc.register_new_user(
             id_info["email"], id_info["name"], ""
         )
 
