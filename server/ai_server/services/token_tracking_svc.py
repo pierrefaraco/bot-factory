@@ -193,7 +193,7 @@ class TokenTrackingService:
             # Ajouter les enregistrements individuels si demandé
             if include_records:
                 records = await self.token_usage_repo.list_for_user(
-                    user_id, since=time_24h_ago, limit=records_limit
+                    user_id, records_limit, since=time_24h_ago
                 )
                 result["records"] = [self._record_to_dict(record) for record in records]
 
@@ -271,10 +271,8 @@ class TokenTrackingService:
             f"get_user_token_history user_id={user_id} limit={limit} last_24h={last_24h}"
         )
         try:
-            # NB: not filtered on user_id -- unchanged from before this
-            # service used a repository; every user's rows come back.
-            history = await self.token_usage_repo.list_latest(
-                limit, since=self.get_date_24h_ago() if last_24h else None
+            history = await self.token_usage_repo.list_for_user(
+                user_id, limit, since=self.get_date_24h_ago() if last_24h else None
             )
             return [self._record_to_dict(record) for record in history]
 

@@ -55,22 +55,10 @@ class TokenUsageRepository(BaseRepository):
         return (await self.session.execute(stmt)).all()
 
     async def list_for_user(
-        self, user_id: int, since: datetime, limit: int
+        self, user_id: int, limit: int, since: Optional[datetime] = None
     ) -> Sequence[TokenUsage]:
         """Newest first."""
-        stmt = (
-            select(TokenUsage)
-            .where(TokenUsage.user_id == user_id, TokenUsage.timestamp >= since)
-            .order_by(TokenUsage.id.desc())
-            .limit(limit)
-        )
-        return (await self.session.execute(stmt)).scalars().all()
-
-    async def list_latest(
-        self, limit: int, since: Optional[datetime] = None
-    ) -> Sequence[TokenUsage]:
-        """Newest first, across every user."""
-        stmt = select(TokenUsage)
+        stmt = select(TokenUsage).where(TokenUsage.user_id == user_id)
         if since is not None:
             stmt = stmt.where(TokenUsage.timestamp >= since)
         stmt = stmt.order_by(TokenUsage.id.desc()).limit(limit)

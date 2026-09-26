@@ -110,6 +110,23 @@ def test_get_history_self_golden_path(
     assert isinstance(response.json()["history"], list)
 
 
+def test_get_history_self_only_returns_own_usage(
+    http_client, api_base_url, create_user, create_bot, create_token_usage, login
+):
+    user, password = create_user(role=USER_ROLE)
+    other, _other_password = create_user(role=USER_ROLE)
+    own = create_token_usage(user.id, create_bot(user.id).id)
+    create_token_usage(other.id, create_bot(other.id).id)
+    headers = login(user.mail, password)
+
+    response = http_client.get(
+        f"{api_base_url}/token-stats/history/me", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()["history"]] == [own.id]
+
+
 def test_get_history_self_invalid_limit(http_client, api_base_url, create_user, login):
     user, password = create_user(role=USER_ROLE)
     headers = login(user.mail, password)
