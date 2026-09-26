@@ -88,7 +88,7 @@ def build_services() -> Services:
     avatar = AvatarService(avatar_repo)
     bot_assignment = BotAssignmentService(bot_assignment_repo, bot_repo, user_repo)
     token_tracking = TokenTrackingService(token_usage_repo)
-    message = MessageService()
+    message = MessageService(conversation_repo)
     yaml = YamlSvc()
     chroma_db = ChromaDbService()
     prompt = PromptService(bot_repo)

@@ -116,6 +116,53 @@ def test_chat_requires_auth(http_client, api_base_url):
     assert_error(response, 401)
 
 
+def test_chat_history_is_kept_in_order_then_deleted(
+    http_client,
+    api_base_url,
+    create_user,
+    create_bot,
+    create_bot_parameters,
+    login,
+    db_session,
+    track_rag_session,
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    create_bot_parameters(bot.id, interlocutor_identity="USER")
+    _select_bot(db_session, user, bot)
+    headers = login(user.mail, password)
+    for question in ("First?", "Second?"):
+        response = http_client.post(
+            f"{api_base_url}/rag/chat", json={"question": question}, headers=headers
+        )
+        track_rag_session(bot.id, user.id)
+        assert response.status_code == 200, response.text
+
+    history = http_client.get(f"{api_base_url}/rag/{bot.id}", headers=headers)
+
+    assert history.status_code == 200, history.text
+    messages = history.json()
+    assert [(m["role"], m["order"]) for m in messages] == [
+        ("user", 0),
+        ("assistant", 1),
+        ("user", 2),
+        ("assistant", 3),
+    ]
+    assert [m["content"] for m in messages if m["role"] == "user"] == [
+        "First?",
+        "Second?",
+    ]
+
+    deleted = http_client.delete(f"{api_base_url}/rag/{bot.id}", headers=headers)
+
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json() == {"deleted_message_count": [4, 1]}
+    assert (
+        http_client.get(f"{api_base_url}/rag/{bot.id}", headers=headers).status_code
+        == 204
+    )
+
+
 def test_get_session_history_empty(http_client, api_base_url, create_user, create_bot, login):
     user, password = create_user(role=USER_ROLE)
     bot = create_bot(user.id)
