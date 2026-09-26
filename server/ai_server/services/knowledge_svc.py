@@ -1,17 +1,15 @@
-import pprint
 import time
 import uuid
 from ai_server.config.config import app_config
-from abc import ABCMeta
 from ai_server.services.chroma_db_svc import ChromaDbService
-from ai_server.models import Knowledge, User
-from ai_server.database.session import db
+from ai_server.models import Knowledge
 from ai_server.dto.knowledge_dto import KnowledgeDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
+from ai_server.repositories import KnowledgeRepository
 from ai_server.services.base_service import BaseService
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
+from starlette.concurrency import run_in_threadpool
 from werkzeug.utils import secure_filename
 import os
 
@@ -21,13 +19,23 @@ ENUMERATIONS = {"CHAPTER_DAD_ID": -1, "CHILDREN_REF_ID": uuid.uuid4(), "INDICE":
 
 
 class KnowledgeSvc(BaseService[KnowledgeDto]):
-    """Service for managing knowledge/context entities"""
+    """Service for managing a bot's knowledge chapters and their ChromaDB
+    vectors (collection `Collection{bot_id}`, one entry set per chapter,
+    tagged with its knowledge_id).
 
-    def __init__(self, chroma_db_svc: ChromaDbService):
+    Async throughout. ChromaDB (HTTP client + FastEmbed embeddings) and
+    PDF file writes are blocking with no async equivalent: each such call
+    goes through run_in_threadpool, off the event loop. DB changes are
+    committed before the matching vector write, as before."""
+
+    def __init__(
+        self, chroma_db_svc: ChromaDbService, knowledge_repo: KnowledgeRepository
+    ):
         super().__init__()
         self.upload_folder = app_config.UPLOAD_FOLDER
         self.config = app_config
         self.chroma_db_svc = chroma_db_svc
+        self.knowledge_repo = knowledge_repo
         os.makedirs(self.upload_folder, exist_ok=True)
 
     def _knowledge_to_dto(self, knowledge: Knowledge) -> KnowledgeDto:
@@ -50,12 +58,15 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             knowledge.children_ref_id,
             knowledge.pdf_file,
             knowledge.updated_at.isoformat() if knowledge.updated_at else "",
-            knowledge.vector_synced_at.isoformat() if knowledge.vector_synced_at else None,
+            knowledge.vector_synced_at.isoformat()
+            if knowledge.vector_synced_at
+            else None,
         )
 
     def save_pdf(self, pdf_file: str, file) -> str:
         """
-        Save PDF file to upload folder.
+        Save PDF file to upload folder. Blocking (file I/O): callers run it
+        through run_in_threadpool.
 
         Args:
             pdf_file: PDF filename
@@ -91,75 +102,42 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         logger.debug(f"save_pdf: saved {safe_filename} to {pdf_file_path}")
         return pdf_file_path
 
-    def save_knowledges_dto(
+    async def save_knowledges_dto(
         self, bot_id: int, knowledges_dto: List[KnowledgeDto]
     ) -> None:
         """
-        Save multiple knowledges from DTOs.
-
-        Args:
-            bot_id: ID of the bot owning the knowledges
-            knowledges_dto: List of knowledge DTOs to save
-
-        Raises:
-            ServiceError: When knowledge saving fails
+        Save multiple knowledges from DTOs (no vector indexing: see
+        recordChaptersToVectorDB).
         """
-        result = self._perform_save_knowledges_dto(
-            bot_id,
-            knowledges_dto,
-        )
-
-    def _perform_save_knowledges_dto(
-        self, bot_id: int, knowledges_dto: List[KnowledgeDto]
-    ) -> None:
         for dto in knowledges_dto:
             knowledge_date = (
                 dto.date
                 if isinstance(dto.date, datetime)
                 else datetime.strptime(dto.date, "%d/%m/%Y %H:%M:%S")
             )
-            knowledge = Knowledge(
-                bot_id,
-                dto.name,
-                knowledge_date,
-                dto.content,
-                dto.knowledge_dad_id,
-                dto.indice,
-                dto.children_ref_id,
+            self.knowledge_repo.add(
+                Knowledge(
+                    bot_id,
+                    dto.name,
+                    knowledge_date,
+                    dto.content,
+                    dto.knowledge_dad_id,
+                    dto.indice,
+                    dto.children_ref_id,
+                )
             )
-            db.session.add(knowledge)
-        db.session.commit()
+        await self.knowledge_repo.commit()
         logger.info(
             f"save_knowledges_dto: saved {len(knowledges_dto)} knowledges for bot_id={bot_id}"
         )
 
-    def save_imported_knowledges(
+    async def save_imported_knowledges(
         self, bot_id: int, imported_knowledges: List[Dict]
     ) -> List[KnowledgeDto]:
         """
-        Save imported knowledges and return as DTOs.
-
-        Args:
-            bot_id: ID of the bot owning the knowledges
-            imported_knowledges: List of knowledge dictionaries
-
-        Returns:
-            List of saved ChapterDto instances
-
-        Raises:
-            ServiceError: When knowledge saving fails
+        Save imported knowledges, index them, and return all of the bot's
+        knowledges as DTOs.
         """
-        result = self._perform_save_imported_knowledges(
-            bot_id,
-            imported_knowledges,
-        )
-        if result is None:
-            raise ServiceError("Save imported knowledges failed.")
-        return result
-
-    def _perform_save_imported_knowledges(
-        self, bot_id: int, imported_knowledges: List[Dict]
-    ) -> List[KnowledgeDto]:
         logger.info(
             f"save_imported_knowledges: importing {len(imported_knowledges)} "
             f"knowledges for bot_id={bot_id}"
@@ -175,20 +153,22 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
                 knowledge["indice"],
                 knowledge["children_ref_id"],
             )
-            db.session.add(knowledge_entity)
+            self.knowledge_repo.add(knowledge_entity)
             created_entities.append(knowledge_entity)
-        db.session.commit()
+        await self.knowledge_repo.commit()
         for knowledge_entity in created_entities:
-            self._ingest_knowledge_node(knowledge_entity)
+            await self._ingest_knowledge_node(knowledge_entity)
 
-        knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
+        knowledges = await self.knowledge_repo.list_for_bot(bot_id)
+        for knowledge in knowledges:
+            await self.knowledge_repo.refresh(knowledge)
         logger.info(
             f"save_imported_knowledges: imported {len(imported_knowledges)} knowledges "
             f"for bot_id={bot_id}, total now {len(knowledges)}"
         )
         return [self._knowledge_to_dto(ch) for ch in knowledges]
 
-    def save_knowledge(
+    async def save_knowledge(
         self,
         pdf_file: str,
         bot_id: int,
@@ -200,7 +180,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         file=None,
     ) -> KnowledgeDto:
         """
-        Save (create or update) a knowledge.
+        Save (create or update) a knowledge, and re-index it.
 
         Args:
             pdf_file: PDF filename
@@ -214,39 +194,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
 
         Returns:
             ChapterDto instance
-
-        Raises:
-            ServiceError: When knowledge saving fails
         """
-        result = self._perform_save_knowledge(
-            pdf_file,
-            bot_id,
-            knowledge_id,
-            knowledge_name,
-            knowledge_content,
-            knowledge_dad_id,
-            indice,
-            file,
-        )
-        if result is None:
-            raise ServiceError("Save knowledge failed.")
-        return result
-
-    def _perform_save_knowledge(
-        self,
-        pdf_file: str,
-        bot_id: int,
-        knowledge_id: int,
-        knowledge_name: str,
-        knowledge_content: str,
-        knowledge_dad_id: str,
-        indice: int,
-        file,
-    ) -> KnowledgeDto:
-        knowledge = self.get_knowledge_if_exist(bot_id, knowledge_id)
-
+        knowledge = await self.knowledge_repo.get_for_bot(bot_id, knowledge_id)
         if knowledge:
-            return self.update_knowledge_entity(
+            return await self.update_knowledge_entity(
                 bot_id,
                 knowledge,
                 knowledge_name,
@@ -256,18 +207,17 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
                 indice,
                 file,
             )
-        else:
-            return self.create_knowledge_entity(
-                bot_id,
-                knowledge_name,
-                knowledge_content,
-                pdf_file,
-                knowledge_dad_id,
-                indice,
-                file,
-            )
+        return await self.create_knowledge_entity(
+            bot_id,
+            knowledge_name,
+            knowledge_content,
+            pdf_file,
+            knowledge_dad_id,
+            indice,
+            file,
+        )
 
-    def create_knowledge_entity(
+    async def create_knowledge_entity(
         self,
         bot_id: int,
         knowledge_name: str,
@@ -278,51 +228,16 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         file=None,
     ) -> KnowledgeDto:
         """
-        Create a new knowledge entity.
-
-        Args:
-            bot_id: ID of the bot owning the knowledge
-            knowledge_name: Name of the knowledge
-            knowledge_content: Content of the knowledge
-            pdf_file: PDF filename
-            knowledge_dad_id: ID of parent knowledge
-            indice: Order index
-            file: File object
-
-        Returns:
-            ChapterDto instance
-
-        Raises:
-            ServiceError: When knowledge creation fails
+        Create a new knowledge (indice -1: next free one at its level), and
+        index it.
         """
-        result = self._perform_create_knowledge(
-            bot_id,
-            knowledge_name,
-            knowledge_content,
-            pdf_file,
-            knowledge_dad_id,
-            indice,
-            file,
-        )
-        if result is None:
-            raise ServiceError("Create knowledge failed.")
-        return result
-
-    def _perform_create_knowledge(
-        self,
-        bot_id: int,
-        knowledge_name: str,
-        knowledge_content: str,
-        pdf_file: str,
-        knowledge_dad_id: str,
-        indice: int,
-        file,
-    ) -> KnowledgeDto:
         if file:
-            pdf_file = os.path.basename(self.save_pdf(pdf_file, file))
+            pdf_file = os.path.basename(
+                await run_in_threadpool(self.save_pdf, pdf_file, file)
+            )
 
         if indice == -1:
-            indice = self._compute_indice(bot_id, knowledge_dad_id)
+            indice = await self._compute_indice(bot_id, knowledge_dad_id)
 
         knowledge = Knowledge(
             bot_id,
@@ -334,21 +249,19 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             f"{uuid.uuid4()}",
             pdf_file,
         )
-        db.session.add(knowledge)
-        db.session.commit()
-
-        created_knowledge: Knowledge = Knowledge.query.filter_by(
-            name=knowledge_name, bot_id=bot_id
-        ).first()
+        self.knowledge_repo.add(knowledge)
+        await self.knowledge_repo.commit()
+        await self.knowledge_repo.refresh(knowledge)
         logger.info(
-            f"create_knowledge_entity: created knowledge_id={created_knowledge.id} "
+            f"create_knowledge_entity: created knowledge_id={knowledge.id} "
             f"bot_id={bot_id} dad_id={knowledge_dad_id} indice={indice}"
         )
-        self.sync_knowledge_to_vector_db(created_knowledge)
-        return self._knowledge_to_dto(created_knowledge)
+        await self.sync_knowledge_to_vector_db(knowledge)
+        return self._knowledge_to_dto(knowledge)
 
-    def create_empty_knowledge(self, bot_id, knowledge_dad_id) -> KnowledgeDto:
-        indice = self._compute_indice(bot_id, knowledge_dad_id)
+    async def create_empty_knowledge(self, bot_id, knowledge_dad_id) -> KnowledgeDto:
+        """Create an empty chapter at the end of knowledge_dad_id's level."""
+        indice = await self._compute_indice(bot_id, knowledge_dad_id)
 
         knowledge = Knowledge(
             bot_id=bot_id,
@@ -360,68 +273,27 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             children_ref_id=f"{uuid.uuid4()}",
             pdf_file="",
         )
-        db.session.add(knowledge)
-        db.session.commit()
+        self.knowledge_repo.add(knowledge)
+        await self.knowledge_repo.commit()
+        await self.knowledge_repo.refresh(knowledge)
         logger.info(
             f"create_empty_knowledge: created knowledge_id={knowledge.id} "
             f"bot_id={bot_id} dad_id={knowledge_dad_id} indice={indice}"
         )
-        self.sync_knowledge_to_vector_db(knowledge)
+        await self.sync_knowledge_to_vector_db(knowledge)
         return self._knowledge_to_dto(knowledge)
 
-    def create(self, data: Dict[str, Any]) -> KnowledgeDto:
-        """
-        Create a new knowledge.
-
-        Args:
-            data: Chapter creation data
-
-        Returns:
-            Created ChapterDto instance
-
-        Raises:
-            ServiceError: When knowledge creation fails
-        """
-        result = self._perform_create(data)
-        if result is None:
-            raise ServiceError("Chapter creation failed, no ChapterDto returned.")
-        return result
-
-    def _perform_create(self, data: Dict[str, Any]) -> KnowledgeDto:
-        if data.get("indice", -1) == -1:
-            data["indice"] = self._compute_indice(
-                data["bot_id"], data.get("knowledge_dad_id", -1)
-            )
-
-        knowledge = Knowledge(
-            bot_id=data["bot_id"],
-            name=data["knowledge_name"],
-            date=datetime.now(timezone.utc),
-            content=data.get("knowledge_content", ""),
-            knowledge_dad_id=data.get("knowledge_dad_id", ""),
-            indice=data["indice"],
-            children_ref_id=f"{uuid.uuid4()}",
-            pdf_file=data.get("pdf_file", ""),
-        )
-        db.session.add(knowledge)
-        db.session.commit()
-        logger.info(
-            f"create (generic): created knowledge_id={knowledge.id} bot_id={knowledge.bot_id}"
-        )
-        return self._knowledge_to_dto(knowledge)
-
-    def _compute_indice(self, bot_id: int, knowledge_dad_id: str) -> int:
+    async def _compute_indice(self, bot_id: int, knowledge_dad_id: str) -> int:
         """Compute next available index for a knowledge at the same level."""
         indice = 1
-        existing_knowledges_at_same_lvl: List[Knowledge] = Knowledge.query.filter_by(
-            knowledge_dad_id=knowledge_dad_id, bot_id=bot_id
-        ).all()
-        for knowledge in existing_knowledges_at_same_lvl:
+        for knowledge in await self.knowledge_repo.list_children(
+            bot_id, knowledge_dad_id
+        ):
             if knowledge.indice >= indice:
                 indice = knowledge.indice + 1
         return indice
 
-    def update_knowledge_entity(
+    async def update_knowledge_entity(
         self,
         bot_id: int,
         knowledge: Knowledge,
@@ -433,51 +305,12 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         file=None,
     ) -> KnowledgeDto:
         """
-        Update an existing knowledge entity.
-
-        Args:
-            bot_id: ID of the bot owning the knowledge
-            knowledge: Chapter entity to update
-            new_name: New knowledge name
-            new_content: New knowledge content
-            pdf_file: PDF filename
-            knowledge_dad_id: ID of parent knowledge
-            indice: Order index
-            file: File object
-
-        Returns:
-            ChapterDto instance
-
-        Raises:
-            ServiceError: When knowledge update fails
+        Update an existing knowledge, and re-index it.
         """
-        result = self._perform_update_knowledge(
-            bot_id,
-            knowledge,
-            new_name,
-            new_content,
-            pdf_file,
-            knowledge_dad_id,
-            indice,
-            file,
-        )
-        if result is None:
-            raise ServiceError("Update knowledge failed.")
-        return result
-
-    def _perform_update_knowledge(
-        self,
-        bot_id: int,
-        knowledge: Knowledge,
-        new_name: str,
-        new_content: str,
-        pdf_file: str,
-        knowledge_dad_id: str,
-        indice: int,
-        file,
-    ) -> KnowledgeDto:
         if file:
-            pdf_file = os.path.basename(self.save_pdf(pdf_file, file))
+            pdf_file = os.path.basename(
+                await run_in_threadpool(self.save_pdf, pdf_file, file)
+            )
 
         knowledge.date = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
         knowledge.updated_at = datetime.now(timezone.utc)
@@ -487,342 +320,167 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             knowledge.knowledge_dad_id = knowledge_dad_id
         knowledge.indice = indice
         knowledge.pdf_file = pdf_file
-        db.session.commit()
+        await self.knowledge_repo.commit()
         logger.info(
             f"update_knowledge_entity: updated knowledge_id={knowledge.id} bot_id={bot_id}"
         )
-        self.sync_knowledge_to_vector_db(knowledge)
+        await self.sync_knowledge_to_vector_db(knowledge)
         return self._knowledge_to_dto(knowledge)
 
-    def get_dto_by_id(self, entity_id: int) -> KnowledgeDto:
-        """
-        Retrieve a knowledge by its ID.
-
-        Args:
-            entity_id: ID of the knowledge to retrieve
-
-        Returns:
-            ChapterDto instance if found
-
-        Raises:
-            ServiceError: When knowledge retrieval fails
-        """
-        result = self._perform_get_by_id(entity_id)
-        if result is None:
-            raise ServiceError("Get knowledge by id failed, no ChapterDto returned.")
-        return result
-
-    def _perform_get_by_id(self, entity_id: int) -> KnowledgeDto:
-        knowledge = Knowledge.query.get(entity_id)
-        if not knowledge:
-            raise NotFoundError("Chapter", str(entity_id))
-        return self._knowledge_to_dto(knowledge)
-
-    def get_all(self) -> List[KnowledgeDto]:
-        """
-        Retrieve all knowledges.
-
-        Returns:
-            List of ChapterDto instances
-
-        Raises:
-            ServiceError: When knowledge retrieval fails
-        """
-        result = self._perform_get_all()
-        if result is None:
-            raise ServiceError("Chapter get_all failed, no list returned.")
-        return result
-
-    def _perform_get_all(self) -> List[KnowledgeDto]:
-        knowledges: List[Knowledge] = Knowledge.query.filter_by().all()
-        return [self._knowledge_to_dto(knowledge) for knowledge in knowledges]
-
-    def get_knowledges(self, bot_id: int) -> List[KnowledgeDto]:
+    async def get_knowledges(self, bot_id: int) -> List[KnowledgeDto]:
         """
         Get all knowledges for a specific bot.
-
-        Args:
-            bot_id: ID of the bot
-
-        Returns:
-            List of ChapterDto instances
-
-        Raises:
-            ServiceError: When knowledge retrieval fails
         """
-        result = self._perform_get_knowledges(bot_id)
-        if result is None:
-            raise ServiceError("Get knowledges failed.")
-        return result
-
-    def _perform_get_knowledges(self, bot_id: int) -> List[KnowledgeDto]:
-        knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
-        db.session.commit()
+        knowledges = await self.knowledge_repo.list_for_bot(bot_id)
         return [self._knowledge_to_dto(ch) for ch in knowledges]
 
-    def get_knowledge(self, bot_id: int, knowledge_id: int) -> Optional[KnowledgeDto]:
-        """
-        Get a specific knowledge by bot and knowledge ID.
-
-        Args:
-            bot_id: ID of the bot
-            knowledge_id: ID of the knowledge
-
-        Returns:
-            ChapterDto instance if found, None otherwise
-        """
-        return self._perform_get_knowledge(
-            bot_id,
-            knowledge_id,
-        )
-
-    def _perform_get_knowledge(
+    async def get_knowledge(
         self, bot_id: int, knowledge_id: int
     ) -> Optional[KnowledgeDto]:
-        ch: Knowledge = Knowledge.query.filter_by(
-            bot_id=bot_id, id=knowledge_id
-        ).first()
-        if not ch:
+        """
+        Get a specific knowledge by bot and knowledge ID, None if not found.
+        """
+        knowledge = await self.knowledge_repo.get_for_bot(bot_id, knowledge_id)
+        if not knowledge:
             return None
-        return self._knowledge_to_dto(ch)
-
-    def get_knowledge_if_exist(
-        self, bot_id: int, knowledge_id: int
-    ) -> Optional[Knowledge]:
-        """
-        Get knowledge entity if it exists.
-
-        Args:
-            bot_id: ID of the bot
-            knowledge_id: ID of the knowledge
-
-        Returns:
-            Chapter entity if found, None otherwise
-        """
-        return self._perform_get_knowledge_if_exist(
-            bot_id,
-            knowledge_id,
-        )
-
-    def _perform_get_knowledge_if_exist(
-        self, bot_id: int, knowledge_id: int
-    ) -> Optional[Knowledge]:
-        return Knowledge.query.filter_by(id=knowledge_id, bot_id=bot_id).first()
-
-    def update(self, entity_id: int, data: Dict[str, Any]) -> KnowledgeDto:
-        """
-        Update knowledge information.
-
-        Args:
-            entity_id: ID of the knowledge to update
-            data: Fields to update
-
-        Returns:
-            Updated ChapterDto instance
-
-        Raises:
-            ServiceError: When knowledge update fails
-        """
-        result = self._perform_update(
-            entity_id,
-            data,
-        )
-        if result is None:
-            raise ServiceError("Chapter update failed, no ChapterDto returned.")
-        return result
-
-    def _perform_update(self, entity_id: int, data: Dict[str, Any]) -> KnowledgeDto:
-        knowledge = Knowledge.query.get(entity_id)
-        if not knowledge:
-            raise NotFoundError("Chapter", str(entity_id))
-
-        updated_fields = []
-        for key, value in data.items():
-            if hasattr(knowledge, key) and value is not None:
-                setattr(knowledge, key, value)
-                updated_fields.append(key)
-
-        knowledge.date = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
-        db.session.commit()
-        logger.info(
-            f"update (generic): updated knowledge_id={entity_id} fields={updated_fields}"
-        )
         return self._knowledge_to_dto(knowledge)
-
-    def delete(self, entity_id: int) -> bool:
-        """
-        Delete a knowledge.
-
-        Args:
-            entity_id: ID of the knowledge to delete
-
-        Returns:
-            True if deletion was successful
-
-        Raises:
-            ServiceError: When knowledge deletion fails
-        """
-        result = self._perform_delete(entity_id)
-        if result is None:
-            raise ServiceError("Chapter delete failed, no knowledge deleted.")
-        return result
-
-    def _perform_delete(self, entity_id: int) -> bool:
-        knowledge = Knowledge.query.get(entity_id)
-        if not knowledge:
-            raise NotFoundError("Chapter", str(entity_id))
-
-        bot_id = knowledge.bot_id
-        self._delete_knowledge(knowledge)
-        logger.info(f"delete: deleted knowledge_id={entity_id} bot_id={bot_id}")
-        return True
 
     def compare_fn(self, knowledge: Knowledge) -> int:
         """Helper function for sorting knowledges by index."""
         return knowledge.indice
 
-    def delete_knowledge(self, knowledge_id: int) -> bool:
+    async def delete_knowledge(self, knowledge_id: int) -> bool:
         """
-        Delete a knowledge by ID.
-
-        Args:
-            knowledge_id: ID of the knowledge to delete
+        Delete a knowledge, its whole subtree and their vectors, then
+        renumber its remaining siblings.
 
         Returns:
-            True if deletion was successful, False otherwise
+            True if deletion was successful, False if not found
         """
-        try:
-            return self.delete(knowledge_id)
-        except (ServiceError, NotFoundError) as e:
-            logger.warning(f"delete_knowledge({knowledge_id}) failed: {e}")
+        knowledge = await self.knowledge_repo.get(knowledge_id)
+        if not knowledge:
+            logger.warning(f"delete_knowledge({knowledge_id}) failed: not found")
             return False
 
-    def _delete_knowledge(self, knowledge_to_delete: Knowledge) -> None:
-        """Recursively delete a knowledge and its children."""
-        for knowledge_child in Knowledge.query.filter_by(
-            knowledge_dad_id=knowledge_to_delete.children_ref_id
-        ):
-            self._delete_knowledge(knowledge_child)
-        knowledge_dad_id = knowledge_to_delete.knowledge_dad_id
-        bot_id = knowledge_to_delete.bot_id
-        knowledge_id = knowledge_to_delete.id
-        db.session.delete(knowledge_to_delete)
-        db.session.commit()
-        self._remove_knowledge_from_vector_db(bot_id, knowledge_id)
-        self._re_compute_indices(knowledge_dad_id)
+        bot_id = knowledge.bot_id
+        deleted_ids = await self._delete_subtree(knowledge)
+        await self._re_compute_indices(bot_id, knowledge.knowledge_dad_id)
+        await self.knowledge_repo.commit()
+        for deleted_id in deleted_ids:
+            await self._remove_knowledge_from_vector_db(bot_id, deleted_id)
+        logger.info(
+            f"delete: deleted knowledge_id={knowledge_id} bot_id={bot_id} "
+            f"({len(deleted_ids)} chapter(s) with its subtree)"
+        )
+        return True
 
-    def _re_compute_indices(self, knowledge_dad_id: str) -> None:
-        """Recompute indices for knowledges at the same level."""
-        sorted_knowledges: List[Knowledge] = sorted(
-            [
-                knowledge
-                for knowledge in Knowledge.query.filter_by(
-                    knowledge_dad_id=knowledge_dad_id
-                )
-            ],
+    async def _delete_subtree(self, knowledge: Knowledge) -> List[int]:
+        """Delete knowledge and, recursively, its children (same bot only).
+        Returns the deleted ids."""
+        deleted_ids = []
+        for child in await self.knowledge_repo.list_children(
+            knowledge.bot_id, knowledge.children_ref_id
+        ):
+            deleted_ids += await self._delete_subtree(child)
+        deleted_ids.append(knowledge.id)
+        await self.knowledge_repo.delete(knowledge)
+        return deleted_ids
+
+    async def _re_compute_indices(self, bot_id: int, knowledge_dad_id: str) -> None:
+        """Renumber bot_id's knowledges at the knowledge_dad_id level 1..n."""
+        siblings = sorted(
+            await self.knowledge_repo.list_children(bot_id, knowledge_dad_id),
             key=self.compare_fn,
         )
-        indice = 1
-        for knowledge in sorted_knowledges:
+        for indice, knowledge in enumerate(siblings, start=1):
             knowledge.indice = indice
-            indice = indice + 1
-        db.session.commit()
 
-    def delete_all(self, bot_id: int) -> bool:
+    async def delete_all(self, bot_id: int) -> bool:
         """
-        Delete all knowledges for a bot.
-
-        Args:
-            bot_id: ID of the bot
+        Delete all knowledges of a bot and its vector collection.
 
         Returns:
             True if deletion was successful, False otherwise
         """
-        result = self._perform_delete_all(bot_id)
-        if result is None:
-            return False
-        return result
-
-    def _perform_delete_all(self, bot_id: int) -> bool:
         try:
-            # Delete associated collection from vector database
             start = time.perf_counter()
-            self.chroma_db_svc.delete_all(f"Collection{bot_id}")
+            await run_in_threadpool(
+                self.chroma_db_svc.delete_all, f"Collection{bot_id}"
+            )
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.debug(
                 f"delete_all: vector DB collection Collection{bot_id} deleted in {elapsed_ms:.1f}ms"
             )
 
-            # Get and delete all knowledges associated with the bot
-            knowledges = Knowledge.query.filter_by(bot_id=bot_id).all()
-            for knowledge in knowledges:
-                db.session.delete(knowledge)
-
-            # Commit the transaction
-            db.session.commit()
+            deleted_count = await self.knowledge_repo.delete_for_bot(bot_id)
+            await self.knowledge_repo.commit()
             logger.info(
-                f"delete_all: deleted {len(knowledges)} knowledges and vector data "
+                f"delete_all: deleted {deleted_count} knowledges and vector data "
                 f"for bot_id={bot_id}"
             )
             return True
         except Exception as e:
-            # Handle exceptions and rollback transaction on error
-            db.session.rollback()
-            logger.exception(f"delete_all: failed to delete data for bot_id={bot_id}: {e}")
+            await self.knowledge_repo.rollback()
+            logger.exception(
+                f"delete_all: failed to delete data for bot_id={bot_id}: {e}"
+            )
             return False
 
-    def _ingest_knowledge_node(self, knowledge: Knowledge) -> None:
+    async def _ingest_knowledge_node(self, knowledge: Knowledge) -> None:
         """Ingest a single knowledge node's text and optional PDF, tagged by
         knowledge_id so it can later be targeted for deletion/update without
         touching the rest of the bot's collection."""
         collection_name = f"Collection{knowledge.bot_id}"
-        metadata = {"knowledge_id": knowledge.id, "bot_id": knowledge.bot_id, "name": knowledge.name}
+        metadata = {
+            "knowledge_id": knowledge.id,
+            "bot_id": knowledge.bot_id,
+            "name": knowledge.name,
+        }
         text = f"{knowledge.name}\n{knowledge.content}".strip()
         if text:
-            self.chroma_db_svc.ingest_text(text, collection_name, metadata=metadata)
+            await run_in_threadpool(
+                self.chroma_db_svc.ingest_text, text, collection_name, metadata=metadata
+            )
         if knowledge.pdf_file:
             pdf_path = os.path.join(self.upload_folder, knowledge.pdf_file)
-            self.chroma_db_svc.ingest_pdf(
-                pdf_path, collection_name=collection_name, metadata=metadata
+            await run_in_threadpool(
+                self.chroma_db_svc.ingest_pdf,
+                pdf_path,
+                collection_name=collection_name,
+                metadata=metadata,
             )
         knowledge.vector_synced_at = datetime.now(timezone.utc)
-        db.session.commit()
+        await self.knowledge_repo.commit()
 
-    def _remove_knowledge_from_vector_db(self, bot_id: int, knowledge_id: int) -> None:
-        collection_name = f"Collection{bot_id}"
-        self.chroma_db_svc.delete_documents_by_metadata(
-            collection_name, {"knowledge_id": knowledge_id}
+    async def _remove_knowledge_from_vector_db(
+        self, bot_id: int, knowledge_id: int
+    ) -> None:
+        await run_in_threadpool(
+            self.chroma_db_svc.delete_documents_by_metadata,
+            f"Collection{bot_id}",
+            {"knowledge_id": knowledge_id},
         )
 
-    def sync_knowledge_to_vector_db(self, knowledge: Knowledge) -> None:
+    async def sync_knowledge_to_vector_db(self, knowledge: Knowledge) -> None:
         """Incrementally re-sync a single knowledge node: remove its old
         vectors, then re-ingest its current content."""
-        self._remove_knowledge_from_vector_db(knowledge.bot_id, knowledge.id)
-        self._ingest_knowledge_node(knowledge)
+        await self._remove_knowledge_from_vector_db(knowledge.bot_id, knowledge.id)
+        await self._ingest_knowledge_node(knowledge)
 
-    def recordChaptersToVectorDB(self, bot_id: int) -> None:
+    async def recordChaptersToVectorDB(self, bot_id: int) -> None:
         """
-        Record knowledges to vector database.
-
-        Args:
-            bot_id: ID of the bot
-
-        Raises:
-            ServiceError: When recording fails
+        Rebuild the bot's whole vector collection from its knowledges.
         """
-        result = self._perform_record_knowledges(bot_id)
-
-    def _perform_record_knowledges(self, bot_id: int) -> None:
         start = time.perf_counter()
-        knowledges: List[Knowledge] = Knowledge.query.filter_by(bot_id=bot_id).all()
+        knowledges = await self.knowledge_repo.list_for_bot(bot_id)
         logger.info(
             f"recordChaptersToVectorDB: resyncing {len(knowledges)} knowledges "
             f"for bot_id={bot_id}"
         )
 
-        self.chroma_db_svc.delete_all(f"Collection{bot_id}")
+        await run_in_threadpool(self.chroma_db_svc.delete_all, f"Collection{bot_id}")
         for knowledge in knowledges:
-            self._ingest_knowledge_node(knowledge)
+            await self._ingest_knowledge_node(knowledge)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info(

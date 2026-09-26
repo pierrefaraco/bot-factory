@@ -7,10 +7,8 @@ role/ownership checks.
 Every route here is `async def`: this is the "dedicated RAG-phase pass"
 bot_svc.py's delete() previously deferred to, covering rag_svc.py,
 message_svc.py and the handful of bot_svc/bot_assignment_svc/
-bot_parameters_svc lookups this router needs -- transmit_to_alfred
-included, its one still-fully-sync call (knowledge_svc.
-recordChaptersToVectorDB, see its own docstring) pushed onto
-run_in_threadpool rather than left as a sync `def` route. Genuinely
+bot_parameters_svc lookups this router needs, transmit_to_alfred
+included. Genuinely
 blocking, non-DB-async work with no async equivalent (ChromaDB, the LLM's
 own retriever step) is pushed onto FastAPI's threadpool explicitly via
 run_in_threadpool from inside rag_svc.py/knowledge_svc.py, or -- for the
@@ -61,7 +59,6 @@ from typing import Callable
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
 from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from ai_server.dependencies.auth import require_roles
@@ -330,26 +327,13 @@ async def transmit_to_alfred(
     knowledge_svc: KnowledgeServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
-    """Transmit chapters to vector database.
-
-    knowledge_svc.recordChaptersToVectorDB() itself stays fully sync: it
-    re-fetches each Knowledge row and then mutates+commits it
-    (vector_synced_at) via the plain sync `db.session` from inside the
-    same call (see knowledge_svc.py::_ingest_knowledge_node) while also
-    driving ChromaDB writes that have no async client at all
-    (chroma_db_svc.py) -- fetching those rows async instead would hand
-    back objects bound to a different session than the one the commit
-    runs on, silently losing that write. Same class of blocker as
-    BotService.delete's own "Left for a dedicated RAG-phase pass" note.
-    Run via run_in_threadpool so this route can still be `async def` like
-    every other one in this router (and share its Depends-based session
-    scoping) without blocking the event loop for the call's duration."""
+    """Rebuild the bot's vector collection from its chapters."""
     logger.info(f"POST /rag/transmit_to_alfred/{bot_id} - transmit_to_alfred called")
     user_id = claims["sub"]
     logger.info(f"User {user_id} transmitting chapters for bot {bot_id} to vector DB")
 
     started_at = time.perf_counter()
-    await run_in_threadpool(knowledge_svc.recordChaptersToVectorDB, bot_id)
+    await knowledge_svc.recordChaptersToVectorDB(bot_id)
     elapsed_ms = (time.perf_counter() - started_at) * 1000
     logger.info(f"transmit_to_alfred succeeded for bot_id={bot_id} elapsed_ms={elapsed_ms:.1f}")
     return {"message": "Chapters transmitted to Alfred successfully"}

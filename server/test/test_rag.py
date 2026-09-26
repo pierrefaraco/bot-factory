@@ -11,7 +11,7 @@ import json
 import pytest
 
 from ai_server.config.constant import ADMIN_ROLE, USER_ROLE
-from ai_server.models import Message, Session as SessionModel, TokenUsage
+from ai_server.models import Knowledge, Message, Session as SessionModel, TokenUsage
 
 from .helpers import assert_error, read_sse
 
@@ -323,3 +323,27 @@ def test_transmit_to_alfred_golden_path(
 
     assert response.status_code == 200, response.text
     assert response.json()["message"] == "Chapters transmitted to Alfred successfully"
+
+
+def test_transmit_to_alfred_marks_chapters_synced(
+    http_client,
+    api_base_url,
+    create_user,
+    create_bot,
+    create_knowledge,
+    login,
+    db_session,
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    knowledge = create_knowledge(bot.id, content="Some content")
+    assert knowledge.vector_synced_at is None
+    headers = login(user.mail, password)
+
+    response = http_client.post(
+        f"{api_base_url}/rag/transmit_to_alfred/{bot.id}", json={}, headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    db_session.expire_all()
+    assert db_session.get(Knowledge, knowledge.id).vector_synced_at is not None

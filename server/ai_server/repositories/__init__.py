@@ -11,6 +11,7 @@ from ai_server.repositories.bot_avatar_repository import BotAvatarRepository
 from ai_server.repositories.bot_parameters_repository import BotParametersRepository
 from ai_server.repositories.bot_repository import BotRepository
 from ai_server.repositories.conversation_repository import ConversationRepository
+from ai_server.repositories.knowledge_repository import KnowledgeRepository
 from ai_server.repositories.token_usage_repository import TokenUsageRepository
 from ai_server.repositories.user_repository import UserRepository
 
@@ -20,6 +21,7 @@ __all__ = [
     "BotParametersRepository",
     "BotRepository",
     "ConversationRepository",
+    "KnowledgeRepository",
     "TokenUsageRepository",
     "UserRepository",
 ]

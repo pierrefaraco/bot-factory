@@ -23,6 +23,12 @@ class BaseRepository:
         the transaction."""
         await self.session.flush()
 
+    async def refresh(self, row) -> None:
+        """Reload row from the DB -- needed to read server-side defaults
+        (e.g. CURRENT_TIMESTAMP columns) after an INSERT: the async session
+        can't lazy-load them on attribute access like the sync one did."""
+        await self.session.refresh(row)
+
     async def commit(self) -> None:
         await self.session.commit()
 

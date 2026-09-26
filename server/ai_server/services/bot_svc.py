@@ -1,7 +1,5 @@
 from typing import Optional, List, Dict, Any
 
-from starlette.concurrency import run_in_threadpool
-
 from ai_server.models import Bot
 from ai_server.dto.bot_parameters_dto import BotParametersDto
 from ai_server.dto.bot_dto import BotDto
@@ -17,12 +15,7 @@ from ai_server.services.knowledge_svc import KnowledgeSvc
 
 
 class BotService(BaseService[BotDto]):
-    """Service for managing bot entities.
-
-    Async throughout. The only sync work left is KnowledgeSvc/TemplateSvc
-    (knowledge chapters + their ChromaDB vectors -- ChromaDB has no async
-    client), which create_random_bot()/delete() run through
-    run_in_threadpool, off the event loop."""
+    """Service for managing bot entities. Async throughout."""
 
     def __init__(
         self,
@@ -109,11 +102,8 @@ class BotService(BaseService[BotDto]):
         parameters_dto = await self.bot_parameters_svc.create_random_parameters(
             user.name, bot.id
         )
-        # Sync (Knowledge rows on the sync session + ChromaDB writes):
-        # off the event loop. The bot row is already committed above, so
-        # the sync session's own connection sees it.
-        await run_in_threadpool(self.template_svc.importTemplateInDB, bot.id, "start")
-        await run_in_threadpool(self.knowledge_svc.recordChaptersToVectorDB, bot.id)
+        await self.template_svc.importTemplateInDB(bot.id, "start")
+        await self.knowledge_svc.recordChaptersToVectorDB(bot.id)
         self.logger.info(
             f"create_random_bot succeeded bot_id={bot.id} user_account_id={user_account_id}"
         )
@@ -186,9 +176,8 @@ class BotService(BaseService[BotDto]):
             - BotAssignment
         """
         self.logger.info(f"delete bot_id={entity_id} starting")
-        # Knowledge's ChromaDB vectors aren't covered by any DB CASCADE --
-        # sync (ChromaDB), so off the event loop.
-        await run_in_threadpool(self.knowledge_svc.delete_all, entity_id)
+        # Knowledge's ChromaDB vectors aren't covered by any DB CASCADE.
+        await self.knowledge_svc.delete_all(entity_id)
 
         bot = await self.bot_repo.get(entity_id)
         if not bot:

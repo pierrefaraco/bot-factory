@@ -19,7 +19,7 @@ class TemplateSvc:
         self.knowledge_svc = knowledge_svc
         self.logger = BotFactoryLogger()
 
-    def importTemplateInDB(self, bot_id, template_name):
+    async def importTemplateInDB(self, bot_id, template_name):
         self.logger.info(f"Importing template '{template_name}' for bot_id={bot_id}")
 
         # Itemize data files under proj/resources/images:
@@ -51,7 +51,7 @@ class TemplateSvc:
                 match[4],
             )
             chapters_dto.append(chapter_dto)
-        self.knowledge_svc.save_knowledges_dto(bot_id, chapters_dto)
+        await self.knowledge_svc.save_knowledges_dto(bot_id, chapters_dto)
         self.logger.info(
             f"Template import completed for bot_id={bot_id}: {len(chapters_dto)} chapters saved"
         )

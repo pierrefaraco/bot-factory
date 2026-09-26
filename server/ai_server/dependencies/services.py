@@ -35,6 +35,7 @@ from ai_server.repositories import (
     BotParametersRepository,
     BotRepository,
     ConversationRepository,
+    KnowledgeRepository,
     TokenUsageRepository,
     UserRepository,
 )
@@ -83,6 +84,7 @@ def build_services() -> Services:
     user_repo = UserRepository()
     conversation_repo = ConversationRepository()
     avatar_repo = BotAvatarRepository()
+    knowledge_repo = KnowledgeRepository()
     bot_parameters_repo = BotParametersRepository()
 
     avatar = AvatarService(avatar_repo)
@@ -92,7 +94,7 @@ def build_services() -> Services:
     yaml = YamlSvc()
     chroma_db = ChromaDbService()
     prompt = PromptService(bot_repo)
-    knowledge = KnowledgeSvc(chroma_db)
+    knowledge = KnowledgeSvc(chroma_db, knowledge_repo)
     template = TemplateSvc(knowledge)
     bot_parameters = BotParametersService(yaml, prompt, bot_parameters_repo)
     bot = BotService(

@@ -20,18 +20,9 @@ like in previous phases (a required `importedChapters` field means an
 absent/empty body already 400s via SpecTree's own gate first) --
 skipped here in favor of reading straight off the validated body model.
 
-Every route here is `async def`, but knowledge_svc.py (and template_svc.py's
-importTemplateInDB, used by load_template) stay fully sync: same blocker as
-rag_router.py's transmit_to_alfred (see its own docstring) -- these methods
-re-fetch a Knowledge row and then mutate+commit it via the plain sync
-`db.session` from inside the same call, interleaved with ChromaDB writes
-that have no async client at all. Fetching those rows async instead would
-hand back objects bound to a different session than the one the commit
-runs on, silently losing that write. Every call into either service is
-therefore pushed onto run_in_threadpool so these routes can still be
-`async def` (and share the router's Depends-based session scoping) without
-blocking the event loop for the call's duration. BotService (async) is
-awaited directly instead, where applicable.
+Every route here is `async def`, as is every KnowledgeSvc/TemplateSvc
+method it calls; the blocking parts (ChromaDB, PDF file writes) run
+through run_in_threadpool inside knowledge_svc.py.
 """
 
 import json
@@ -41,7 +32,6 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field, ValidationError
-from starlette.concurrency import run_in_threadpool
 
 from ai_server.config.constant import ADMIN_ROLE, USER_ROLE
 from ai_server.config.validation import pydantic_error_messages
@@ -111,9 +101,7 @@ async def create_empty_knowledge(
 ):
     """Save or update a knowledge"""
     logger.info(f"POST/PUT /knowledge/save/{bot_id}/{knowledge_dad_id} - create_empty_knowledge called")
-    knowledge = await run_in_threadpool(
-        knowledge_svc.create_empty_knowledge, bot_id, knowledge_dad_id
-    )
+    knowledge = await knowledge_svc.create_empty_knowledge(bot_id, knowledge_dad_id)
     logger.info(f"create_empty_knowledge succeeded bot_id={bot_id} knowledge_id={knowledge.id}")
     return knowledge.to_dict()
 
@@ -144,8 +132,7 @@ async def save_knowledge(
     )
 
     file = _FlaskFileStorageAdapter(pdf) if pdf is not None else None
-    knowledge = await run_in_threadpool(
-        knowledge_svc.save_knowledge,
+    knowledge = await knowledge_svc.save_knowledge(
         validated_data.get("pdf_file"),
         bot_id,
         validated_data.get("id"),
@@ -197,8 +184,8 @@ async def save_imported_knowledges(
             status_code=403,
         )
 
-    knowledges = await run_in_threadpool(
-        knowledge_svc.save_imported_knowledges, bot_id, imported_knowledges
+    knowledges = await knowledge_svc.save_imported_knowledges(
+        bot_id, imported_knowledges
     )
     logger.info(f"save_imported_knowledges succeeded bot_id={bot_id} count={len(knowledges)}")
     return [knowledge.to_dict() for knowledge in knowledges]
@@ -213,7 +200,7 @@ async def get_knowledges(
     """Get all knowledges for a bot"""
     logger.info(f"GET /knowledge/{bot_id} - get_knowledges called")
     user_id = claims["sub"]
-    knowledges = await run_in_threadpool(knowledge_svc.get_knowledges, bot_id)
+    knowledges = await knowledge_svc.get_knowledges(bot_id)
     knowledges_dict = [knowledge.to_dict() for knowledge in knowledges]
     logger.info(f"get_knowledges succeeded bot_id={bot_id} user_id={user_id} count={len(knowledges_dict)}")
     return knowledges_dict
@@ -229,7 +216,7 @@ async def get_knowledge(
     """Get a specific knowledge"""
     logger.info(f"GET /knowledge/{bot_id}/{knowledge_id} - get_knowledge called")
     user_id = claims["sub"]
-    knowledge = await run_in_threadpool(knowledge_svc.get_knowledge, bot_id, knowledge_id)
+    knowledge = await knowledge_svc.get_knowledge(bot_id, knowledge_id)
     if not knowledge:
         logger.warning(f"get_knowledge(bot_id={bot_id}, knowledge_id={knowledge_id}) not found")
         raise ApiError("Chapter not found", status_code=404)
@@ -248,7 +235,7 @@ async def delete_knowledge(
     user_id = claims["sub"]
     logger.info(f"User {user_id} deleting knowledge {knowledge_id}")
 
-    if not await run_in_threadpool(knowledge_svc.delete_knowledge, knowledge_id):
+    if not await knowledge_svc.delete_knowledge(knowledge_id):
         logger.warning(f"delete_knowledge({knowledge_id}) not found")
         raise ApiError("Chapter not found", status_code=404)
 
@@ -267,7 +254,7 @@ async def delete_all_knowledges(
     user_id = claims["sub"]
     logger.info(f"User {user_id} deleting all knowledges for bot {bot_id}")
 
-    if not await run_in_threadpool(knowledge_svc.delete_all, bot_id):
+    if not await knowledge_svc.delete_all(bot_id):
         logger.warning(f"delete_all_knowledges(bot_id={bot_id}) not found")
         raise ApiError("No knowledges found for this bot", status_code=404)
 
@@ -292,7 +279,7 @@ async def load_template(
         raise ApiError("Template name is required", status_code=400)
 
     start_time = time.monotonic()
-    result = await run_in_threadpool(template_svc.importTemplateInDB, bot_id, template_name)
+    result = await template_svc.importTemplateInDB(bot_id, template_name)
     duration_ms = (time.monotonic() - start_time) * 1000
     logger.info(
         f"load_template succeeded bot_id={bot_id} template_name={template_name} "

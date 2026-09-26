@@ -11,6 +11,7 @@ the dev ChromaDB instance.
 from pathlib import Path
 
 from ai_server.config.constant import GUEST_ROLE, USER_ROLE
+from ai_server.models import Knowledge
 
 from .helpers import assert_error
 
@@ -287,6 +288,115 @@ def test_delete_knowledge_golden_path(
     assert response.json()["message"] == "Chapter deleted successfully"
 
 
+def test_create_empty_numbers_chapters_and_delete_is_recursive(
+    http_client, api_base_url, create_user, create_bot, login, db_session, track
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    headers = login(user.mail, password)
+
+    def create_empty(dad_id):
+        response = http_client.post(
+            f"{api_base_url}/knowledge/save/{bot.id}/{dad_id}", json={}, headers=headers
+        )
+        assert response.status_code == 200, response.text
+        track(Knowledge, response.json()["id"])
+        return response.json()
+
+    first = create_empty("this_is_a_root_chapter")
+    second = create_empty("this_is_a_root_chapter")
+    child = create_empty(first["children_ref_id"])
+    assert (first["indice"], second["indice"], child["indice"]) == (1, 2, 1)
+
+    response = http_client.delete(
+        f"{api_base_url}/knowledge/{first['id']}", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    db_session.expire_all()
+    remaining = {
+        k.id: k.indice for k in db_session.query(Knowledge).filter_by(bot_id=bot.id)
+    }
+    assert remaining == {second["id"]: 1}
+
+
+def test_delete_knowledge_leaves_other_bots_numbering_alone(
+    http_client,
+    api_base_url,
+    create_user,
+    create_bot,
+    create_knowledge,
+    login,
+    db_session,
+):
+    user, password = create_user(role=USER_ROLE)
+    bot = create_bot(user.id)
+    doomed = create_knowledge(
+        bot.id, knowledge_dad_id="this_is_a_root_chapter", indice=1
+    )
+    other_user, _other_password = create_user(role=USER_ROLE)
+    other_bot = create_bot(other_user.id)
+    other = create_knowledge(
+        other_bot.id, knowledge_dad_id="this_is_a_root_chapter", indice=1000
+    )
+    headers = login(user.mail, password)
+
+    response = http_client.delete(
+        f"{api_base_url}/knowledge/{doomed.id}", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    db_session.expire_all()
+    assert db_session.get(Knowledge, other.id).indice == 1000
+
+
+def test_delete_imported_chapter_leaves_other_bots_chapters_alone(
+    http_client, api_base_url, create_user, create_bot, login, db_session
+):
+    # Importing the same exported chapter tree into two bots gives both the
+    # same children_ref_id values.
+    user, password = create_user(role=USER_ROLE)
+    bot_a, bot_b = create_bot(user.id), create_bot(user.id)
+    headers = login(user.mail, password)
+    tree = [
+        {
+            "knowledge_name": "Parent",
+            "knowledge_content": "p",
+            "knowledge_dad_id": "this_is_a_root_chapter",
+            "indice": 1,
+            "children_ref_id": "shared-parent-ref",
+        },
+        {
+            "knowledge_name": "Child",
+            "knowledge_content": "c",
+            "knowledge_dad_id": "shared-parent-ref",
+            "indice": 1,
+            "children_ref_id": "shared-child-ref",
+        },
+    ]
+    for bot in (bot_a, bot_b):
+        response = http_client.post(
+            f"{api_base_url}/knowledge/save_knowledges/{bot.id}",
+            json={"importedChapters": tree},
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+    parent_a = (
+        db_session.query(Knowledge).filter_by(bot_id=bot_a.id, name="Parent").one()
+    )
+
+    response = http_client.delete(
+        f"{api_base_url}/knowledge/{parent_a.id}", headers=headers
+    )
+
+    assert response.status_code == 200, response.text
+    db_session.expire_all()
+    assert db_session.query(Knowledge).filter_by(bot_id=bot_a.id).count() == 0
+    assert sorted(
+        k.name for k in db_session.query(Knowledge).filter_by(bot_id=bot_b.id)
+    ) == ["Child", "Parent"]
+
+
 def test_delete_knowledge_not_found(http_client, api_base_url, create_user, login):
     user, password = create_user(role=USER_ROLE)
     headers = login(user.mail, password)
@@ -297,7 +407,13 @@ def test_delete_knowledge_not_found(http_client, api_base_url, create_user, logi
 
 
 def test_delete_all_golden_path(
-    http_client, api_base_url, create_user, create_bot, create_knowledge, login
+    http_client,
+    api_base_url,
+    create_user,
+    create_bot,
+    create_knowledge,
+    login,
+    db_session,
 ):
     user, password = create_user(role=USER_ROLE)
     bot = create_bot(user.id)
@@ -308,6 +424,8 @@ def test_delete_all_golden_path(
 
     assert response.status_code == 200, response.text
     assert response.json()["message"] == "All knowledges deleted successfully"
+    db_session.expire_all()
+    assert db_session.query(Knowledge).filter_by(bot_id=bot.id).count() == 0
 
 
 def test_delete_all_on_empty_bot_still_reports_success(
