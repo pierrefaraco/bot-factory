@@ -1,12 +1,12 @@
 # Bot Factory
 
-A full-stack AI bot creation and management platform that empowers users to create, customize, and deploy intelligent chatbots with advanced features like knowledge base management and token tracking.
+An AI bot creation and management platform built around a production-style FastAPI backend and a containerized deployment: users create, customize, and chat with their own bots, with knowledge base management (RAG) and token tracking.
 
 ![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-teal) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
 
 🔗 **Live demo:** [bot-factory.fr](https://bot-factory.fr)
 
-> 💼 **Portfolio project** — built solo by [Pierre Faraco](https://github.com/pierrefaraco) to showcase full-stack and DevOps skills (Angular, FastAPI, LLM/RAG integration, Docker, production HTTPS deployment). Not maintained as a commercial product.
+> 💼 **Portfolio project** — built solo by [Pierre Faraco](https://github.com/pierrefaraco) to showcase backend and DevOps skills (FastAPI, layered architecture, MySQL + Alembic migrations, LLM/RAG integration, Docker Compose, Nginx and automated HTTPS deployment), with an Angular front end. Not maintained as a commercial product.
 
 ---
 

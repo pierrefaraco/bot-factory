@@ -43,11 +43,11 @@ Une fois toutes les configurations effectuées les utilisateurs peuvent désorma
 
 --- Chapter ID: 64 --- Name: Cette application --- Dad ID: this_is_a_root_chapter --- Indice: 12 --- Children Ref Id: bf2a9163-a13b-4f1b-bfaa-5fa1c56a2445 ---
 Bot Factory
-A full-stack AI bot creation and management platform that empowers users to create, customize, and deploy intelligent chatbots with advanced features like knowledge base management and token tracking.
+An AI bot creation and management platform built around a production-style FastAPI backend and a containerized deployment: users create, customize, and chat with their own bots, with knowledge base management (RAG) and token tracking.
 
 Bot Factory FastAPI Python Docker License
 
-💼 Portfolio project — built solo by Pierre Faraco to showcase full-stack and DevOps skills (Angular, FastAPI, LLM/RAG integration, Docker, production HTTPS deployment). Not maintained as a commercial product.
+💼 Portfolio project — built solo by Pierre Faraco to showcase backend and DevOps skills (FastAPI, layered architecture, MySQL + Alembic migrations, LLM/RAG integration, Docker Compose, Nginx and automated HTTPS deployment), with an Angular front end. Not maintained as a commercial product.
 
 🌟 Features
 Core Capabilities

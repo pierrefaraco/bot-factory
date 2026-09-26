@@ -71,13 +71,50 @@ export class LandingComponent {
     }
   ];
 
+  engineering = [
+    {
+      icon: 'account_tree',
+      title: 'Layered FastAPI Backend',
+      description: 'Routers, services and repositories kept separate, wired together through FastAPI dependency injection.'
+    },
+    {
+      icon: 'schema',
+      title: 'Versioned Database Schema',
+      description: 'SQLAlchemy models on MySQL with Alembic migrations, so every schema change is tracked and reproducible.'
+    },
+    {
+      icon: 'security',
+      title: 'Auth & Usage Limits',
+      description: 'JWT and Google OAuth authentication, per-user data scoping and a configurable 24h token quota.'
+    },
+    {
+      icon: 'hub',
+      title: 'RAG Pipeline',
+      description: 'Document ingestion into ChromaDB and retrieval-augmented answers through LangChain and Mistral AI.'
+    },
+    {
+      icon: 'inventory_2',
+      title: 'Containerized Deployment',
+      description: 'The whole stack runs in Docker Compose, with separate dev and production configurations.'
+    },
+    {
+      icon: 'lock',
+      title: 'Nginx & Automated HTTPS',
+      description: 'Nginx reverse proxy in front of the API, with Let\'s Encrypt certificates renewed automatically by Certbot.'
+    }
+  ];
+
   techStack = [
-    { icon: 'web', name: 'Angular' },
-    { icon: 'bolt', name: 'FastAPI' },
+    { icon: 'bolt', name: 'Python + FastAPI' },
     { icon: 'storage', name: 'MySQL + SQLAlchemy' },
+    { icon: 'history', name: 'Alembic Migrations' },
     { icon: 'hub', name: 'ChromaDB (RAG)' },
     { icon: 'psychology', name: 'LangChain + Mistral AI' },
-    { icon: 'inventory_2', name: 'Docker Compose' }
+    { icon: 'inventory_2', name: 'Docker Compose' },
+    { icon: 'dns', name: 'Nginx' },
+    { icon: 'lock', name: 'Let\'s Encrypt' },
+    { icon: 'verified', name: 'pytest' },
+    { icon: 'web', name: 'Angular' }
   ];
 
   constructor(private router: Router) {}

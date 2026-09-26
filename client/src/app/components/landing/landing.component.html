@@ -18,6 +18,7 @@
 
         <!-- Navigation Links -->
         <div class="nav-links" [class.mobile-open]="mobileMenuOpen">
+          <a (click)="scrollToSection('engineering')" (keydown.enter)="scrollToSection('engineering')" tabindex="0" role="link" class="nav-link">Backend &amp; DevOps</a>
           <a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link" class="nav-link">Features</a>
           <a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link" class="nav-link">How It Works</a>
           <a (click)="scrollToSection('stack')" (keydown.enter)="scrollToSection('stack')" tabindex="0" role="link" class="nav-link">Tech Stack</a>
@@ -41,13 +42,14 @@
       <div class="hero-content">
         <div class="hero-text">
           <h1 class="hero-title">
-            A Full-Stack AI Product,
-            <span class="gradient-text">Built From Scratch</span>
+            Backend &amp; DevOps Engineering,
+            <span class="gradient-text">Shipped to Production</span>
           </h1>
           <p class="hero-subtitle">
-            Bot Factory is a portfolio project by Pierre Faraco: an Angular + FastAPI
-            application to design, customize, and chat with your own AI bots — RAG,
-            JWT + Google OAuth, and Docker Compose included. Try the live demo or read the code.
+            Bot Factory is a portfolio project by Pierre Faraco: a FastAPI backend with a
+            layered architecture, a RAG pipeline, JWT + Google OAuth and versioned MySQL
+            migrations — containerized with Docker Compose and deployed behind Nginx with
+            auto-renewed HTTPS. Try the live demo or read the code.
           </p>
           <div class="hero-cta">
             <app-button [label]="'Try the Live Demo'" [icon]="'arrow_forward'" [type]="'custom-button'"
@@ -77,12 +79,31 @@
     </div>
   </section>
 
+  <!-- Backend & DevOps Section -->
+  <section id="engineering" class="features-section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Under The Hood</h2>
+        <p class="section-subtitle">Where most of the work went: the backend and the infrastructure</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card" *ngFor="let item of engineering">
+          <div class="feature-icon">
+            <span class="material-icons">{{ item.icon }}</span>
+          </div>
+          <h3 class="feature-title">{{ item.title }}</h3>
+          <p class="feature-description">{{ item.description }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Tech Stack Section -->
   <section id="stack" class="stack-section">
     <div class="container">
       <div class="section-header">
         <h2 class="section-title">Built With</h2>
-        <p class="section-subtitle">The stack powering this project, end to end</p>
+        <p class="section-subtitle">Backend and infrastructure first, with an Angular front end on top</p>
       </div>
       <div class="stack-grid">
         <div class="stack-card" *ngFor="let tech of techStack">
@@ -138,7 +159,7 @@
       <div class="cta-content">
         <h2 class="cta-title">Like What You See?</h2>
         <p class="cta-subtitle">
-          I'm actively looking for full-stack / AI engineering opportunities.
+          I'm actively looking for backend / DevOps engineering opportunities.
           Let's talk about how I can bring this level of craft to your team.
         </p>
         <div class="cta-buttons">
@@ -165,13 +186,14 @@
             <span class="logo-text">Bot Factory</span>
           </div>
           <p class="footer-description">
-            A full-stack AI playground — portfolio project by Pierre Faraco
+            A backend &amp; DevOps playground — portfolio project by Pierre Faraco
             showcasing production-style engineering practices.
           </p>
         </div>
         <div class="footer-section">
           <h4 class="footer-title">Project</h4>
           <ul class="footer-links">
+            <li><a (click)="scrollToSection('engineering')" (keydown.enter)="scrollToSection('engineering')" tabindex="0" role="link">Backend &amp; DevOps</a></li>
             <li><a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link">Features</a></li>
             <li><a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link">How It Works</a></li>
             <li><a (click)="scrollToSection('stack')" (keydown.enter)="scrollToSection('stack')" tabindex="0" role="link">Tech Stack</a></li>
