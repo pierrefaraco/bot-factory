@@ -97,13 +97,10 @@ jobs:
       - name: Start MySQL, ChromaDB and the mock LLM
         run: $COMPOSE up -d --wait db chromadb mock-llm
 
-      # The api's startup creates the super admin, so the schema must exist
-      # before it starts.
-      - name: Apply Alembic migrations
-        run: $COMPOSE run --rm --build --no-deps -w /app/db api alembic upgrade head
-
+      # The api container applies the Alembic migrations on startup
+      # (server/docker-entrypoint.sh).
       - name: Start the API
-        run: $COMPOSE up -d --wait api
+        run: $COMPOSE up -d --build --wait api
 
       - name: Run the test suite against the API
         run: $COMPOSE run --rm --build test-runner

@@ -110,22 +110,13 @@ cp .env.example .env
 # Edit .env and configure (optional for development)
 nano .env  # or use your editor
 
-##################### Only if you run the project for the first time, follow these 3 steps  #####################
-# run only mysql container 
-make db-only
-# init the database
-make db-upgrade
-# onece db is created remove all containers
-make down
-###############################################################################################
-
-# Start all services
-make setup
+# Start all services (the api container applies pending database
+# migrations on startup, so the first launch needs no extra step)
 make up
 
 # Services are now running:
 # - Frontend: http://localhost:8080
-# - Backend API: http://localhost:444
+# - Backend API: http://localhost:4444
 # - MySQL: localhost:3306
 ```
 
@@ -206,7 +197,7 @@ make db-only        # docker compose up -d db
 
 ### Initialize Database
 ```bash
-make migrate       # Run all pending migrations (inside the `api` Docker container)
+make migrate       # Run all pending migrations (inside the `api` Docker container; also done automatically each time it starts)
 make db-upgrade     # Run all pending migrations locally via uv (DATABASE_URL built from the root .env's MYSQL_* vars)
 ```
 

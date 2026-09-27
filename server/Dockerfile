@@ -30,6 +30,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 COPY db ./db
 COPY config ./config
+COPY docker-entrypoint.sh ./
 
 # Install the project itself now that its source is present
 RUN uv sync --frozen --no-dev
@@ -49,6 +50,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 
 # Expose port
 EXPOSE 444
+
+# Apply pending database migrations, then run the command below
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
 
 # Run the ASGI application
 CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "444"]
