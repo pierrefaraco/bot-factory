@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch/PR supersedes a run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-lint:
+    name: Server · lint (flake8)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - run: uv run --frozen --extra dev flake8 src/ test/
+
+  server-unit-tests:
+    name: Server · unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      # *_unit.py files mock the database, vector store and LLM: no service needed.
+      - run: uv run --frozen --extra test pytest test/test_*_unit.py -v
+
+  client-tests:
+    name: Client · unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          # Same major version as client/Dockerfile.
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm test -- --watch=false --browsers=ChromeHeadless
+
+  docker-build:
+    name: Docker · build ${{ matrix.image }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # client's image also runs the production Angular build (ng build).
+        image: [server, client]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image }}
+          push: false
+          tags: bot-factory-${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  integration-tests:
+    name: Server · HTTP regression suite (docker compose)
+    needs: [server-lint, server-unit-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE: docker compose -f docker-compose.yml -f docker-compose.test.yml
+      # The default model (multilingual-e5-large) is a 2.2 GB download; the
+      # suite checks the RAG plumbing, not retrieval quality, so the light
+      # model documented in .env.example is enough here.
+      EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Start MySQL, ChromaDB and the mock LLM
+        run: $COMPOSE up -d --wait db chromadb mock-llm
+
+      # The api's startup creates the super admin, so the schema must exist
+      # before it starts.
+      - name: Apply Alembic migrations
+        run: $COMPOSE run --rm --build --no-deps -w /app/db api alembic upgrade head
+
+      - name: Start the API
+        run: $COMPOSE up -d --wait api
+
+      - name: Run the test suite against the API
+        run: $COMPOSE run --rm --build test-runner
+
+      - name: Dump service logs
+        if: failure()
+        run: $COMPOSE logs --no-color api db chromadb mock-llm
+
+      - name: Tear down
+        if: always()
+        run: $COMPOSE down -v

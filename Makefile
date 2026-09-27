@@ -1,4 +1,4 @@
-.PHONY: help setup dev build test clean logs stop start restart up down migrate db-shell db-init db-create db-upgrade db-downgrade db-history db-current db-stamp test-server-http test-server-http-dev
+.PHONY: help setup dev build test clean logs stop start restart up down migrate db-shell db-init db-create db-upgrade db-downgrade db-history db-current db-stamp test-server-unit test-server-http test-server-http-dev lint-server
 
 # Port of an API already running in dev mode (make dev-server / z-run.sh),
 # used by test-server-http-dev. Override: make test-server-http-dev PORT=8080
@@ -37,6 +37,7 @@ help:
 	@echo "Testing:"
 	@echo "  make test           Run all tests"
 	@echo "  make test-server    Run backend tests"
+	@echo "  make test-server-unit  Run backend unit tests only (no service needed)"
 	@echo "  make test-server-http  Run the HTTP regression suite (docker compose + mock LLM)"
 	@echo "  make test-server-http-dev PORT=444  Run it against an API already running in dev mode"
 	@echo "  make test-client    Run frontend tests"
@@ -156,6 +157,10 @@ test: test-server test-client
 test-server:
 	@echo "Running backend tests..."
 	cd server && uv run --extra test pytest test/ -v
+
+test-server-unit:
+	@echo "Running backend unit tests..."
+	cd server && uv run --extra test pytest test/test_*_unit.py -v
 
 test-server-single:
 	@echo "Usage: make test-server-single TEST=test/test_file.py::test_name"
@@ -313,10 +318,10 @@ clean-all: clean clean-docker
 	rm -rf server/.venv
 	@echo "✓ Complete cleanup finished"
 
-# Linting and formatting (optional, for future use)
+# Linting and formatting (lint-server also runs in CI, see .github/workflows/ci.yml)
 lint-server:
 	@echo "Linting Python code..."
-	cd server && uv run --extra dev flake8 src/
+	cd server && uv run --extra dev flake8 src/ test/
 
 lint-client:
 	@echo "Linting TypeScript code..."

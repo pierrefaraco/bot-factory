@@ -2,7 +2,7 @@
 
 An AI bot creation and management platform built around a production-style FastAPI backend and a containerized deployment: users create, customize, and chat with their own bots, with knowledge base management (RAG) and token tracking.
 
-![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-teal) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
+[![CI](https://github.com/pierrefaraco/bot-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/pierrefaraco/bot-factory/actions/workflows/ci.yml) ![Bot Factory](https://img.shields.io/badge/Angular-18-red) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-teal) ![Python](https://img.shields.io/badge/Python-3.12+-blue) ![Docker](https://img.shields.io/badge/Docker-Compose-blue) ![License](https://img.shields.io/badge/License-AGPL--3.0-green)
 
 🔗 **Live demo:** [bot-factory.fr](https://bot-factory.fr)
 
@@ -50,6 +50,7 @@ An AI bot creation and management platform built around a production-style FastA
 - Nginx as reverse proxy
 - Alembic for database migrations
 - pytest for backend testing
+- GitHub Actions CI (lint, unit tests, image builds, HTTP regression suite)
 
 ### System Architecture
 
@@ -256,6 +257,29 @@ Before going live, also:
 
 ---
 
+## 🧪 Tests & CI
+
+Every push to `main` and every pull request runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+
+| Job | What it checks |
+|-----|----------------|
+| Server · lint | `flake8` on `server/src` and `server/test` |
+| Server · unit tests | `server/test/test_*_unit.py` (database, vector store and LLM mocked) |
+| Client · unit tests | Angular unit tests in headless Chrome |
+| Docker · build | the `server` and `client` production images (the latter includes `ng build`) |
+| Server · HTTP regression suite | starts MySQL, ChromaDB and a mock LLM with Docker Compose, applies the Alembic migrations, starts the API, then runs the whole `server/test/` suite over real HTTP |
+
+The same checks run locally:
+
+```bash
+make lint-server        # flake8
+make test-server-unit   # unit tests, no service needed
+make test-client        # Angular unit tests
+make test-server-http   # HTTP regression suite against the Docker Compose stack
+```
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -295,6 +319,7 @@ bot-factory/
 │
 ├── docker-compose.yml           # Multi-container orchestration
 ├── docker-compose.prod.yml      # Production overlay: HTTPS reverse proxy + Certbot
+├── .github/workflows/ci.yml     # CI pipeline (see "Tests & CI")
 ├── deploy/                      # nginx + Let's Encrypt setup (see deploy/README.md)
 ├── .env.example                 # Environment template
 ├── .gitignore                   # Git ignore rules
