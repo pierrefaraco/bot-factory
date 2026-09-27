@@ -1,4 +1,4 @@
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from typing import Optional
 from src.dto.avatar_dto import AvatarDto
 from src.dto.bot_parameters_dto import BotParametersDto

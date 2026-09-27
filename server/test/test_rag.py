@@ -6,11 +6,9 @@ MISTRAL_BASE_URL env var on the api container (see
 docker compose test overlay) -- no real Mistral API key or network call needed.
 """
 
-import json
-
 import pytest
 
-from src.config.constant import ADMIN_ROLE, USER_ROLE
+from src.config.constant import USER_ROLE
 from src.models import Knowledge, Message, Session as SessionModel, TokenUsage
 
 from .helpers import assert_error, read_sse

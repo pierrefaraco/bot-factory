@@ -8,6 +8,7 @@ from src.decorators.singleton import singleton
 # LOG_FORMAT point to the code calling BotFactoryLogger, not to this wrapper.
 _CALLER_STACKLEVEL = 2
 
+
 @singleton
 class BotFactoryLogger():
     def __init__(self):

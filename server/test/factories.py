@@ -69,7 +69,6 @@ def track(registry):
         registry[model].append(row_id)
 
     return _track
-    db_session.commit()
 
 
 @pytest.fixture()

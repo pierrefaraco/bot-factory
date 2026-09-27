@@ -1,15 +1,11 @@
-from langchain_community.llms import Ollama
-
 # from langchain.embeddings.ollama import OllamaEmbeddings
 from langchain_mistralai.chat_models import ChatMistralAI
 from src.config.config import app_config
 from langchain_core.callbacks.base import AsyncCallbackHandler
-from typing import Any, Optional, Dict
+from typing import Any, Optional
 from src.services.token_tracking_svc import TokenTrackingService
 from src.services.user_admin_svc import UserAdminService
 from src.log.bot_factory_logger import BotFactoryLogger
-import json
-import time
 
 
 class TokenCountingCallback(AsyncCallbackHandler):

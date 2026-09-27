@@ -74,7 +74,7 @@ def test_create_missing_content_type(
     # missing fields rather than the handler's dead-code is_json check
     # (same situation as rest_users_admin.py's register()).
     user, password = create_user(role=USER_ROLE)
-    bot = create_bot(user.id)
+    create_bot(user.id)
     headers = login(user.mail, password)
 
     response = http_client.post(

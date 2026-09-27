@@ -30,7 +30,7 @@ def test_create_random_missing_content_type(
     # non-JSON Content-Type reaches spectree's own validation first (same
     # situation as rest_bot_parameters.py).
     user, password = create_user(role=USER_ROLE)
-    bot = create_bot(user.id)
+    create_bot(user.id)
     headers = login(user.mail, password)
 
     response = http_client.post(

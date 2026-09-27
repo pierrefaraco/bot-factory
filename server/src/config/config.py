@@ -76,7 +76,6 @@ class AppConfig(BaseConfig):
     if value == "TRUE":
         VERBOSE = True
 
-
     OPERATIONAL_LOG_FILE = os.environ.get(
         "OPERATIONAL_LOG_FILE", default="/opt/ipc/logs/{}-src_hello.log"
     )
@@ -176,11 +175,10 @@ class AppConfig(BaseConfig):
         "SECRET_KEY", "your-secret-key-change-this-in-production"
     )
 
-
-    MISTRAL_API_KEY  = os.environ.get(
+    MISTRAL_API_KEY = os.environ.get(
         "MISTRAL_API_KEY", "your-secret-key-change-this-in-production"
     )
-    MISTRAL_MODEL  = os.environ.get(
+    MISTRAL_MODEL = os.environ.get(
             "VIBE_MODEL", "your-secret-key-change-this-in-production"
         )
 
@@ -191,5 +189,6 @@ class AppConfig(BaseConfig):
         "GOOGLE_CLIENT_ID",
         "913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com",
     )
+
 
 app_config = AppConfig()

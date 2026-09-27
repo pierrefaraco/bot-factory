@@ -1,0 +1,7 @@
+[flake8]
+# Same line length as [tool.black] in pyproject.toml. E203/W503 conflict with
+# black's formatting. E501 is left to the formatter: the codebase predates
+# black and has not been reformatted in one go yet.
+max-line-length = 88
+extend-ignore = E203, W503, E501
+exclude = .venv, __pycache__, db/alembic/versions
