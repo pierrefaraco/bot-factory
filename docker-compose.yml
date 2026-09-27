@@ -80,7 +80,7 @@ services:
       # Bound to loopback only: in prod, the "reverse-proxy" service
       # (docker-compose.prod.yml) is the sole public entry point, reaching
       # this through the Docker network -- not through the published port.
-      - "127.0.0.1:4444:444"
+      - "127.0.0.1:4444:8000"
     volumes:
       # Embedding model files (2.2 GB for multilingual-e5-large), downloaded
       # on the first startup only: without this volume they would live in the
@@ -95,7 +95,7 @@ services:
     networks:
       - botfactory-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:444/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       timeout: 10s
       retries: 5
       # Long enough for the very first startup, which downloads the embedding

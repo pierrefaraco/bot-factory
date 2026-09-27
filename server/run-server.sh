@@ -17,7 +17,7 @@ if command -v docker &> /dev/null; then
 fi
 
 # Kill existing processes using the same port (safely)
-FLASK_PORT=444
+FLASK_PORT=${FLASK_PORT:-8000}
 echo "Checking for processes using port $FLASK_PORT..."
 PORT_PID=$(ss -ltnp "sport = :$FLASK_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u || true)
 if [ -n "$PORT_PID" ]; then

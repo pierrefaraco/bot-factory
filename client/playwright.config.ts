@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 import * as path from 'path';
 
 // The Angular dev server (ng serve --port 8080, see package.json) proxies
-// /api/* to the Flask backend (proxy.conf.json -> 127.0.0.1:444), so hitting
+// /api/* to the Flask backend (proxy.conf.json -> 127.0.0.1:8000), so hitting
 // this single baseURL exercises the exact same request path a real browser
 // session uses -- no separate API base URL needed.
 const BASE_URL = process.env['E2E_BASE_URL'] || 'http://localhost:8080';

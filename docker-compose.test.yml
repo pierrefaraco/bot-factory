@@ -33,13 +33,13 @@ services:
   #
   # To test an API already running in dev mode (e.g. `make dev-server` /
   # z-run.sh) on a different port instead of the containerized api service,
-  # use `make test-server-http-dev PORT=444` -- it probes both
+  # use `make test-server-http-dev PORT=8000` -- it probes both
   # host.docker.internal (the dev server runs on the real host machine, or
   # a container whose port is published there) and this shell's own
   # hostname (the dev server runs in the same container this Makefile
   # invocation is itself running in, and that container happens to already
   # be attached to botfactory-network -- true for this project's own
-  # sandboxed dev-container, whose port 444 is NOT published to the real
+  # sandboxed dev-container, whose port 8000 is NOT published to the real
   # host, so host.docker.internal alone doesn't reach it). If neither
   # works, set TEST_API_BASE_URL directly to wherever it's reachable from.
   # (MISTRAL_BASE_URL isn't set for a manually-started dev server, so
@@ -65,5 +65,5 @@ services:
       api:
         condition: service_healthy
     environment:
-      TEST_API_BASE_URL: ${TEST_API_BASE_URL:-http://api:444/api}
+      TEST_API_BASE_URL: ${TEST_API_BASE_URL:-http://api:8000/api}
       TEST_DATABASE_URL: ${TEST_DATABASE_URL:-mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@db:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4}

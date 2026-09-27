@@ -2,7 +2,7 @@
 
 # Port of an API already running in dev mode (make dev-server / z-run.sh),
 # used by test-server-http-dev. Override: make test-server-http-dev PORT=8080
-PORT ?= 444
+PORT ?= 8000
 
 # Docker Compose CLI (V2 plugin syntax; requires Docker with the compose plugin)
 DOCKER_COMPOSE := docker compose
@@ -39,7 +39,7 @@ help:
 	@echo "  make test-server    Run backend tests"
 	@echo "  make test-server-unit  Run backend unit tests only (no service needed)"
 	@echo "  make test-server-http  Run the HTTP regression suite (docker compose + mock LLM)"
-	@echo "  make test-server-http-dev PORT=444  Run it against an API already running in dev mode"
+	@echo "  make test-server-http-dev PORT=8000 Run it against an API already running in dev mode"
 	@echo "  make test-client    Run frontend tests"
 	@echo ""
 	@echo "Database:"

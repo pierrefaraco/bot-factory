@@ -90,9 +90,6 @@
                 "serve": {
                     "builder": "@angular-devkit/build-angular:dev-server",
                     "options": {
-                        "ssl": false,
-                        "sslKey": "/etc/letsencrypt/live/virtualfred.com/privkey.pem",
-                        "sslCert": "/etc/letsencrypt/live/virtualfred.com/fullchain.pem",
                         "proxyConfig": "proxy.conf.json"
                     },
                     "configurations": {

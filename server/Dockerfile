@@ -46,13 +46,13 @@ USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
-    CMD curl -f http://localhost:444/api/health || exit 1
+    CMD curl -f http://localhost:8000/api/health || exit 1
 
 # Expose port
-EXPOSE 444
+EXPOSE 8000
 
 # Apply pending database migrations, then run the command below
 ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
 
 # Run the ASGI application
-CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "444"]
+CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -32,7 +32,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml <command>
           ──:443──▶ │   :80  → ACME challenge files, else 301 to https                  │
                     │   :443 → TLS termination ──http──▶ web:8080 (nginx, Angular SPA)  │
                     │                                      │                            │
-                    │                                      └─/api/──▶ api:444 (FastAPI) │
+                    │                                      └─/api/──▶ api:8000 (FastAPI) │
                     │                                                  │       │        │
                     │                                              db:3306  chromadb:8000│
                     │                                                                   │
@@ -165,7 +165,7 @@ trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet;
 - serves the Angular build, with a `try_files ... /index.html` fallback for
   client-side routes; `index.html` is never cached, hashed assets are cached
   for 30 days;
-- proxies `/api/` to `http://${API_HOST}:444` (`API_HOST=api` in Docker),
+- proxies `/api/` to `http://${API_HOST}:8000` (`API_HOST=api` in Docker),
   with buffering off (SSE);
 - sets `client_max_body_size 20M` (PDF uploads), gzip, and the security
   headers `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`.

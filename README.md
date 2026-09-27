@@ -145,7 +145,7 @@ make logs-chromadb   # ChromaDB only
 cd server
 cp .env.example .env   # Fill in real values
 uv sync                # Creates .venv and installs dependencies
-./z-run.sh             # Syncs deps, loads .env, starts on port 444
+./z-run.sh             # Syncs deps, loads .env, starts on port 8000
 ```
 
 **Frontend (separate terminal):**
