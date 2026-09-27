@@ -124,6 +124,26 @@
   }
 }
 
+// Bot creation in progress (isCreatingBot): same style for both "Create"
+// buttons -- white spinner in place of the icon, no hover lift.
+.create-bot-btn,
+.btn-create-first {
+  .mat-mdc-progress-spinner {
+    --mat-progress-spinner-active-indicator-color: currentColor;
+    --mdc-circular-progress-active-indicator-color: currentColor;
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.7;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+}
+
 app-bot-list {
   flex: 1 1 auto;
   min-height: 0;

@@ -24,6 +24,12 @@ export class CommunicationService {
   triggerSubmitPatchBot$ = this.triggerSubmitPatchBot.asObservable();
   triggerAllComponentsReady$ = this.triggerAllComponentsReady.asObservable();
 
+  // true while POST /api/bot is in flight: set by BotListComponent (which
+  // runs the request), read by BotWorkspaceComponent to show a spinner and
+  // disable the "Create" buttons.
+  private botCreating = new BehaviorSubject<boolean>(false);
+  botCreating$ = this.botCreating.asObservable();
+
 
   // Avatar Creation and Editing Communication Subjects
   private triggerSubmitPatchAvatar = new Subject<any>();
@@ -44,6 +50,14 @@ export class CommunicationService {
   private initializedComponents = new Set<string>();
   onCreateBot(): void {
     this.triggerOnCreateBot.next();
+  }
+
+  setBotCreating(creating: boolean): void {
+    this.botCreating.next(creating);
+  }
+
+  isBotCreating(): boolean {
+    return this.botCreating.value;
   }
 
   submitCreateBot(result: any): void {

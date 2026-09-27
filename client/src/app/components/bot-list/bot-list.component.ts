@@ -20,6 +20,7 @@ import { CustomDropDownMenuComponent } from "../base/custom-dropdown-menu/custom
 import { ConfirmDialogComponent } from "../base/confirm-dialog/confirm-dialog.component";
 import { CommunicationService } from "@app/services/communication.service";
 import { Subscription } from "rxjs";
+import { finalize } from "rxjs/operators";
 import { MatListModule } from '@angular/material/list';
 import { BotDrawComponent } from "./bot-draw/bot-draw.component";
 import { UsersService } from "@app/services/users.service";
@@ -250,11 +251,18 @@ export class BotListComponent implements OnInit, OnDestroy {
   }
 
   createBot_random(): void {
-    this.botService.createBot().subscribe((newBot) => {
-      this.bots.push(newBot);
+    // Ignore a second trigger while the first creation is still running.
+    if (this.communicationService.isBotCreating()) {
+      return;
+    }
+    this.communicationService.setBotCreating(true);
+    this.botService.createBot()
+      .pipe(finalize(() => this.communicationService.setBotCreating(false)))
+      .subscribe((newBot) => {
+        this.bots.push(newBot);
 
-      this.onSelectBot(newBot.id);
-    });
+        this.onSelectBot(newBot.id);
+      });
 
   }
 

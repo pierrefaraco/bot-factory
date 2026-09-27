@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy, ViewChild, HostListener } from '@angular/
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router, ActivatedRoute } from '@angular/router';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subscription } from 'rxjs';
 
 // Composants
@@ -29,6 +30,7 @@ import { ConfirmDialogComponent } from '../base/confirm-dialog/confirm-dialog.co
     CommonModule,
     RouterModule,
     MatDialogModule,
+    MatProgressSpinnerModule,
     BotListComponent,
     ChatComponent,
     KnowledgesComponent,
@@ -52,6 +54,9 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
   botListLayout: 'horizontal' | 'vertical' = 'vertical';
   private subscriptionSubmitPatchBot: Subscription;
   private subscriptionSelectBot: Subscription;
+  private subscriptionBotCreating: Subscription;
+  // true while POST /api/bot runs: spinner + "Create" buttons disabled.
+  isCreatingBot = false;
   @ViewChild(BotListComponent) botListComponent!: BotListComponent;
   @ViewChild(ChatComponent) chatComponent!: ChatComponent;
 
@@ -77,6 +82,10 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.subscriptionBotCreating = this.communicationService.botCreating$.subscribe((creating) => {
+      this.isCreatingBot = creating;
+    });
+
     // Écouter les changements de bot sélectionné
 
     this.subscriptionSelectBot = this.communicationService.triggerOnSelectBot$.subscribe((bot) => {
@@ -136,6 +145,7 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
     if (this.subscriptionSelectBot) {
       this.subscriptionSelectBot.unsubscribe();
     }
+    this.subscriptionBotCreating?.unsubscribe();
   }
 
   setActiveTab(tab: 'overview' | 'chat' | 'knowledge' | 'settings' | 'draw'): void {
@@ -164,6 +174,9 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
   }
 
   onCreateBot(): void {
+    if (this.isCreatingBot) {
+      return;
+    }
     this.communicationService.onCreateBot();
   }
 

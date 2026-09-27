@@ -14,9 +14,11 @@
             No bot selected
           </span>
         </p>
-        <button *ngIf="!isGuest" type="button" class="create-bot-btn" (click)="onCreateBot()">
-          <span class="material-icons">add_circle</span>
-          <span>Create a new bot</span>
+        <button *ngIf="!isGuest" type="button" class="create-bot-btn" (click)="onCreateBot()"
+          [disabled]="isCreatingBot" [attr.aria-busy]="isCreatingBot">
+          <mat-spinner *ngIf="isCreatingBot" diameter="20" aria-hidden="true"></mat-spinner>
+          <span *ngIf="!isCreatingBot" class="material-icons">add_circle</span>
+          <span>{{ isCreatingBot ? 'Creating…' : 'Create a new bot' }}</span>
         </button>
       </div>
     </div>
@@ -85,9 +87,11 @@
                 <span class="material-icons">smart_toy</span>
                 <h3>No bot selected</h3>
                 <p>Select a bot from the list or create a new one to get started</p>
-                <button *ngIf="!isGuest" class="btn-create-first" (click)="onCreateBot()">
-                  <span class="material-icons">add_circle</span>
-                  Create my first bot
+                <button *ngIf="!isGuest" class="btn-create-first" (click)="onCreateBot()"
+                  [disabled]="isCreatingBot" [attr.aria-busy]="isCreatingBot">
+                  <mat-spinner *ngIf="isCreatingBot" diameter="24" aria-hidden="true"></mat-spinner>
+                  <span *ngIf="!isCreatingBot" class="material-icons">add_circle</span>
+                  {{ isCreatingBot ? 'Creating…' : 'Create my first bot' }}
                 </button>
               </div>
             </div>
