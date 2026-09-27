@@ -14,11 +14,15 @@ services:
       - web
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN in .env -- the FQDN pointing at this server}
+      # How often nginx reloads to pick up certificates renewed by the
+      # certbot service below (deploy/nginx/40-reload-certificates.sh).
+      CERT_RELOAD_INTERVAL: ${CERT_RELOAD_INTERVAL:-6h}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/nginx/40-reload-certificates.sh:/docker-entrypoint.d/40-reload-certificates.sh:ro
       - certbot-etc:/etc/letsencrypt:ro
       - certbot-www:/var/www/certbot:ro
     networks:
@@ -27,7 +31,8 @@ services:
   # Long-running renewal loop (`certbot renew` is a no-op for certificates
   # not close to expiry, so checking twice a day is cheap and safe). The
   # *first* certificate is obtained by deploy/certbot/init-letsencrypt.sh,
-  # not by this service.
+  # not by this service. It only writes the renewed files: reverse-proxy
+  # picks them up by reloading itself every CERT_RELOAD_INTERVAL.
   certbot:
     image: certbot/certbot
     container_name: botfactory-certbot

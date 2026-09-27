@@ -237,12 +237,22 @@ PERSIST_DIRECTORY=chroma_db_2
 
 ### For Production
 
-1. Use strong, random `JWT_SECRET_KEY`
-2. Configure proper SSL/TLS certificates
-3. Use environment-specific `.env.production`
-4. Configure secret management 
-5. Enable logging and monitoring
-6. Review CORS settings in `server/src/main.py`
+Production runs the same stack plus `docker-compose.prod.yml`: a public nginx
+reverse proxy terminating HTTPS, with Let's Encrypt certificates obtained by
+`deploy/certbot/init-letsencrypt.sh` and renewed by a Certbot container.
+
+```bash
+# .env: DOMAIN=bots.example.com, LETSENCRYPT_EMAIL=you@example.com
+make prod-deploy   # first deploy: build, start, get the first certificate
+make prod-up       # later starts
+```
+
+Full walkthrough (architecture, nginx/TLS settings, certificate lifecycle,
+operations, troubleshooting): **[deploy/README.md](deploy/README.md)**.
+
+Before going live, also:
+1. Set a strong, random `JWT_SECRET_KEY` and non-default database passwords
+2. Review CORS settings in `server/src/asgi.py`
 
 ---
 
@@ -284,6 +294,8 @@ bot-factory/
 │   └── doc/                     # Implementation guides
 │
 ├── docker-compose.yml           # Multi-container orchestration
+├── docker-compose.prod.yml      # Production overlay: HTTPS reverse proxy + Certbot
+├── deploy/                      # nginx + Let's Encrypt setup (see deploy/README.md)
 ├── .env.example                 # Environment template
 ├── .gitignore                   # Git ignore rules
 ├── .dockerignore                # Docker build ignore rules

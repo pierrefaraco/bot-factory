@@ -18,7 +18,9 @@ interval="${CERT_RELOAD_INTERVAL:-6h}"
 
 echo "$0: reloading nginx every $interval to pick up renewed certificates"
 
+# No `set -e` in the loop: a failed sleep or reload must not end it.
 (
+  set +e
   while :; do
     sleep "$interval"
     echo "$0: reloading nginx to pick up renewed certificates"

@@ -36,6 +36,11 @@ server {
 
   add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
 
+  # Same limit as web's own nginx (client/nginx.conf.template), for PDF
+  # uploads: without it, nginx's 1 MB default applies here and larger
+  # uploads get a 413 before ever reaching web.
+  client_max_body_size 20M;
+
   # Still needed here for certbot's renewal HTTP-01 challenge, which hits
   # port 80 and gets redirected to https by the server block above.
   location /.well-known/acme-challenge/ {
