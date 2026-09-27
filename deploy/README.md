@@ -172,6 +172,59 @@ trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet;
 
 ## Certificate lifecycle
 
+### State diagram
+
+States of the certificate, from an empty `certbot-etc` volume to the
+renewals. "On disk" = the files in `/etc/letsencrypt/live/<DOMAIN>/`;
+"served" = what nginx holds in memory and presents to browsers.
+
+```mermaid
+stateDiagram-v2
+    direction TB
+
+    NoCert: No certificate<br/>(nginx can't start)
+    Dummy: Dummy self-signed cert on disk<br/>(1 day, CN=localhost)
+    DummyServed: Dummy cert served<br/>(nginx started, pid file present)
+    DummyInMemory: Dummy only in nginx memory<br/>(files deleted from disk)
+    Challenge: HTTP-01 challenge<br/>(token in certbot-www,<br/>fetched by Let's Encrypt on :80)
+    Failed: Bootstrap failed<br/>(dummy still served, browser warning)
+    IssuedNotServed: Real cert on disk,<br/>dummy still served
+    Valid: Valid cert served<br/>(day 0 to 60)
+    RenewalDue: Renewal window<br/>(30 days or less left)
+    RenewedNotServed: Renewed cert on disk,<br/>old one still served
+    Expired: Expired cert served<br/>(browsers block the site)
+
+    [*] --> NoCert: empty certbot-etc volume
+
+    note right of NoCert
+        Bootstrap: init-letsencrypt.sh
+        (make certbot-init), steps 1 to 5
+    end note
+
+    NoCert --> Dummy: 1. openssl req -x509 (certbot container)
+    Dummy --> DummyServed: 2. up -d reverse-proxy, wait for nginx.pid
+    DummyServed --> DummyInMemory: 3. rm live/ archive/ renewal/
+    DummyInMemory --> Challenge: 4. certbot certonly --webroot
+    Challenge --> IssuedNotServed: validated (archive/ + live/ links)
+    Challenge --> Failed: DNS, port 80 blocked, rate limit
+    Failed --> NoCert: fix, run certbot-init again
+    IssuedNotServed --> Valid: 5. nginx -s reload
+
+    note right of Valid
+        Normal operation: certbot service
+        (every 12 h) + nginx reload loop
+        (every CERT_RELOAD_INTERVAL)
+    end note
+
+    Valid --> Valid: certbot renew, no-op
+    Valid --> RenewalDue: day 60
+    RenewalDue --> RenewedNotServed: certbot renew (new challenge)
+    RenewalDue --> RenewalDue: renewal fails, retried in 12 h
+    RenewedNotServed --> Valid: nginx -s reload (6 h max)
+    RenewalDue --> Expired: day 90, all renewals failed
+    Expired --> NoCert: run certbot-init again
+```
+
 ### 1. First certificate: `init-letsencrypt.sh` (`make certbot-init`)
 
 This is a chicken-and-egg problem: nginx won't start while the certificate
