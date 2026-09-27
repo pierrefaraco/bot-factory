@@ -41,6 +41,15 @@ def test_ingest_text_tags_every_chunk_with_the_metadata():
     assert all(doc.metadata == {"knowledge_id": 1} for doc in docs)
 
 
+def test_ingest_text_with_no_content_stores_nothing_instead_of_raising():
+    # Same path as a PDF with no text layer: zero chunks, and Chroma
+    # rejects an empty upsert.
+    facade, collection = _facade(), _collection()
+
+    assert facade.ingest_text("", collection) == []
+    assert _stored(facade, collection) == []
+
+
 def test_delete_documents_by_metadata_only_removes_the_matching_chunks():
     facade, collection = _facade(), _collection()
     facade.ingest_text("chapitre un", collection, metadata={"knowledge_id": 1})

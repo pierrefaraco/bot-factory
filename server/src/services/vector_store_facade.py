@@ -261,6 +261,11 @@ class VectorStoreFacade:
         return db, mode
 
     def _save(self, docs: List[Document], collection_name: str) -> List[str]:
+        # Nothing to store (empty content, or a PDF with no text layer, e.g.
+        # scanned): Chroma rejects an empty upsert with a ValueError.
+        if not docs:
+            logger.warning(f"No chunks to save to collection '{collection_name}'")
+            return []
         db, _mode = self._open_collection(collection_name)
         start = time.perf_counter()
         try:
