@@ -30,9 +30,22 @@ def track_rag_session(db_session, track):
     also records a TokenUsage row (llm_svc.TokenCountingCallback). None of
     these have an ondelete=CASCADE tying them back to bot or user, so
     without this they'd survive bot/user cleanup and the registry's later
-    `DELETE FROM user_account` would fail on their foreign keys."""
+    `DELETE FROM user_account` would fail on their foreign keys.
+
+    The rows are looked up at teardown, not when _track is called: a
+    streamed answer's Message is only saved once the stream has been fully
+    sent, so looking them up as soon as the response headers arrive misses
+    it, and the registry's `DELETE FROM session` then fails on its foreign
+    key. This teardown runs before the registry's (it depends on it through
+    `track`)."""
+    pairs = []
 
     def _track(bot_id, user_id):
+        pairs.append((bot_id, user_id))
+
+    yield _track
+
+    for bot_id, user_id in pairs:
         sessions = (
             db_session.query(SessionModel)
             .filter_by(bot_id=bot_id, user_id=user_id)
@@ -46,8 +59,6 @@ def track_rag_session(db_session, track):
             bot_id=bot_id, user_id=user_id
         ):
             track(TokenUsage, usage.id)
-
-    return _track
 
 
 def test_chat_golden_path(
@@ -212,9 +223,8 @@ def test_streamchat_golden_path(
         headers=headers,
         stream=True,
     )
-    # ask_with_stream() saves the user Message/Session synchronously before
-    # returning the generator, so this is safe to track before reading the
-    # stream body or asserting on its content.
+    # Registered before any assert, so cleanup still happens if one fails
+    # (the rows themselves are looked up at teardown, see track_rag_session).
     if response.status_code == 200:
         track_rag_session(bot.id, user.id)
 

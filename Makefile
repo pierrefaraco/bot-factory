@@ -167,7 +167,7 @@ test-server-http:
 	@echo "Starting stack with mock LLM for the HTTP regression suite..."
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d --build db chromadb mock-llm api
 	@echo "Running tests in a container on the compose network (reaches api/db by service name, no host networking involved)..."
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm test-runner
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --build test-runner
 	@echo "✓ HTTP regression suite complete (stack left running; 'make down' to stop)"
 	@echo "  Point a future FastAPI server instead: TEST_API_BASE_URL=http://api:<port>/api make test-server-http"
 
@@ -196,7 +196,7 @@ test-server-http-dev:
 	fi; \
 	echo "Reaching dev server via $$TARGET_HOST:$(PORT)"; \
 	TEST_API_BASE_URL="http://$$TARGET_HOST:$(PORT)/api" \
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps test-runner
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --build --no-deps test-runner
 
 test-client:
 	@echo "Running frontend tests..."
