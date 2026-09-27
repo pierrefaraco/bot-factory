@@ -1011,3 +1011,20 @@
 :host {
   scroll-behavior: smooth;
 }
+
+// Meet Me Section: CTA below the cards, same spacing as the hero CTA
+.meet-me-section {
+  .meet-me-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 3rem;
+  }
+
+  .meet-me-note {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+}

@@ -18,6 +18,7 @@
 
         <!-- Navigation Links -->
         <div class="nav-links" [class.mobile-open]="mobileMenuOpen">
+          <a (click)="scrollToSection('meet-me')" (keydown.enter)="scrollToSection('meet-me')" tabindex="0" role="link" class="nav-link">Meet Me</a>
           <a (click)="scrollToSection('engineering')" (keydown.enter)="scrollToSection('engineering')" tabindex="0" role="link" class="nav-link">Backend &amp; DevOps</a>
           <a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link" class="nav-link">Features</a>
           <a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link" class="nav-link">How It Works</a>
@@ -67,14 +68,43 @@
             <span class="material-icons bot-icon">smart_toy</span>
             <div class="chat-bubble chat-bubble-1">
               <span class="material-icons">chat_bubble</span>
-              <span>Hello! How can I help you today?</span>
+              <span>Hi, I'm Pierre. Ask me about my career!</span>
             </div>
             <div class="chat-bubble chat-bubble-2">
               <span class="material-icons">psychology</span>
-              <span>I'm learning and improving every day!</span>
+              <span>Change my settings and I'll adapt.</span>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Meet Me Section: every new bot is a digital twin of Pierre -->
+  <section id="meet-me" class="features-section meet-me-section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Meet My Digital Twin</h2>
+        <p class="section-subtitle">
+          Every bot you create in the demo starts as me: Pierre, a developer who answers
+          from a knowledge base about my real career. Talk to it, then reshape it.
+        </p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card" *ngFor="let item of meetMe">
+          <div class="feature-icon">
+            <span class="material-icons">{{ item.icon }}</span>
+          </div>
+          <h3 class="feature-title">{{ item.title }}</h3>
+          <p class="feature-description">{{ item.description }}</p>
+        </div>
+      </div>
+      <div class="meet-me-cta">
+        <app-button [label]="'Interview Me Now'" [icon]="'arrow_forward'" [type]="'custom-button'"
+          [color]="'var(--text-on-accent)'" [backgroundColor]="'var(--text-accent)'" [size]="'large'"
+          (buttonClickedEvent)="navigateToAuth()" [disabled]="false">
+        </app-button>
+        <p class="meet-me-note">Your changes only apply to your own copy of the bot.</p>
       </div>
     </div>
   </section>
@@ -138,7 +168,7 @@
     <div class="container">
       <div class="section-header">
         <h2 class="section-title">How It Works</h2>
-        <p class="section-subtitle">Three steps from zero to your own AI bot</p>
+        <p class="section-subtitle">Three steps from sign-up to interviewing my digital twin</p>
       </div>
       <div class="steps-container">
         <div class="step-card" *ngFor="let step of steps">
@@ -193,6 +223,7 @@
         <div class="footer-section">
           <h4 class="footer-title">Project</h4>
           <ul class="footer-links">
+            <li><a (click)="scrollToSection('meet-me')" (keydown.enter)="scrollToSection('meet-me')" tabindex="0" role="link">Meet Me</a></li>
             <li><a (click)="scrollToSection('engineering')" (keydown.enter)="scrollToSection('engineering')" tabindex="0" role="link">Backend &amp; DevOps</a></li>
             <li><a (click)="scrollToSection('features')" (keydown.enter)="scrollToSection('features')" tabindex="0" role="link">Features</a></li>
             <li><a (click)="scrollToSection('how-it-works')" (keydown.enter)="scrollToSection('how-it-works')" tabindex="0" role="link">How It Works</a></li>

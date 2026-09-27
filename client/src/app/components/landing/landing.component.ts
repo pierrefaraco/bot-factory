@@ -50,6 +50,27 @@ export class LandingComponent {
     }
   ];
 
+  // "Meet My Digital Twin": a new bot is created with Pierre's persona
+  // (BotParametersService.RANDOM_BOT_PROFILES) and his career knowledge
+  // (server/src/resources/templates/start.txt).
+  meetMe = [
+    {
+      icon: 'record_voice_over',
+      title: 'Interview Me',
+      description: 'Ask about my background, my current job or the projects I\'ve built, the way a recruiter or a technical interviewer would.'
+    },
+    {
+      icon: 'tune',
+      title: 'Change My Parameters',
+      description: 'Change my personality, tone, answer length or who I think I\'m talking to, and see how my answers change.'
+    },
+    {
+      icon: 'auto_stories',
+      title: 'Edit My Knowledge',
+      description: 'Browse, edit or extend the chapters I answer from, or upload a PDF: I only answer from what\'s in there.'
+    }
+  ];
+
   steps = [
     {
       number: '1',
@@ -59,15 +80,15 @@ export class LandingComponent {
     },
     {
       number: '2',
-      icon: 'build',
-      title: 'Customize Your Bot',
-      description: 'Use our visual builder to design your bot\'s appearance and personality.'
+      icon: 'smart_toy',
+      title: 'Create a Bot',
+      description: 'Click "Create a new bot": it starts as my digital twin, with my career as its knowledge base.'
     },
     {
       number: '3',
-      icon: 'rocket_launch',
-      title: 'Start Chatting',
-      description: 'Begin conversations with your AI companion and explore its capabilities.'
+      icon: 'record_voice_over',
+      title: 'Interview or Reshape Me',
+      description: 'Interview me in the chat, or change my parameters, avatar and knowledge to make the bot your own.'
     }
   ];
 
