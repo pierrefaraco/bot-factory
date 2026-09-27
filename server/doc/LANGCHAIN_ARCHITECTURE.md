@@ -4,6 +4,11 @@ Ce document décrit où et comment [LangChain](https://python.langchain.com/) es
 serveur, du chargement des documents jusqu'à la réponse du bot (avec ou sans streaming), en
 passant par le suivi des tokens.
 
+En amont, les routes de chat (`rag_router.py`) passent toutes par `ChatFacade`
+(`chat_facade.py`), qui enchaîne les étapes d'un tour de conversation sans rien savoir de
+LangChain : chargement de l'utilisateur, contrôle d'accès au bot, quota de tokens sur 24 h,
+session, puis appel à `RagService`.
+
 Côté question/réponse, tout LangChain passe par une **façade** : `LangChainFacade`
 (`langchain_facade.py`). `RagService` et le reste de l'application lui donnent une question, le
 prompt du bot et l'historique (liste de `ChatTurn(role, content)`), et récupèrent une réponse
@@ -38,6 +43,7 @@ flowchart TB
     end
 
     subgraph ORCH["Orchestration"]
+        CHAT["ChatFacade<br/>(chat_facade.py)"]
         RAG["RagService<br/>(rag_svc.py)"]
         PROMPT["PromptService<br/>(prompt_svc.py)"]
     end
@@ -55,9 +61,12 @@ flowchart TB
     end
 
     RAGR -->|"reindex_bot()"| KNOWSVC["KnowledgeSvc"]
+    KNOWR -->|"création / modif. de chapitres"| KNOWSVC
     KNOWSVC -->|"ingest_text / ingest_pdf"| CHROMA
     KNOWSVC -->|"Knowledge (metadata, arbre,<br/>vector_synced_at)"| MYSQL
-    RAGR -->|"ask() / ask_with_stream()"| RAG
+    RAGR -->|"ask() / stream() / welcome()"| CHAT
+    CHAT -->|"accès au bot, quota 24 h"| MYSQL
+    CHAT -->|"ask() / ask_with_stream()"| RAG
     RAG -->|"prompt du bot"| PROMPT
     RAG -->|"answer() / stream()"| FACADE
     FACADE --> LLM
@@ -79,7 +88,7 @@ sequenceDiagram
     participant KS as KnowledgeSvc
     participant CDB as VectorStoreFacade
     participant Split as RecursiveCharacterTextSplitter
-    participant Embed as FastEmbedEmbeddings
+    participant Embed as PrefixedEmbeddings → FastEmbedEmbeddings
     participant Chroma as Chroma (vector store)
 
     KS->>CDB: ingest_text(text, "Collection{bot_id}", metadata)
@@ -88,7 +97,7 @@ sequenceDiagram
     Split-->>CDB: chunks (list[str])
     CDB->>Chroma: add_documents(chunks)
     Chroma->>Embed: embed_documents(chunks)
-    Note right of Embed: modèle EMBEDDING_MODEL<br/>(défaut BAAI/bge-small-en-v1.5)
+    Note right of Embed: modèle EMBEDDING_MODEL<br/>(défaut intfloat/multilingual-e5-large)<br/>chaque chunk préfixé par "passage: "
     Embed-->>Chroma: vecteurs
     Chroma-->>CDB: doc_ids
 ```
@@ -102,23 +111,33 @@ Points clés :
   transmis au conteneur `api` par `docker-compose.yml`) : `CHROMA_*`, `PERSIST*`,
   `EMBEDDING_MODEL`, `RAG_CHUNK_SIZE`, `RAG_CHUNK_OVERLAP`, `RAG_RETRIEVER_K`. Voir les
   commentaires de `.env.example` pour le rôle et le choix de chaque valeur.
-- Les PDF passent d'abord par `PyPDFLoader` avant le même découpage/embedding.
+- Les PDF passent d'abord par `PyPDFLoader` avant le même découpage/embedding. Un contenu qui ne
+  donne aucun chunk (texte vide, PDF sans couche texte, par ex. scanné) n'enregistre rien et
+  renvoie `[]` : Chroma refuse un ajout vide.
 - ⚠️ `chunk_size=1024` produit vite beaucoup de chunks pour un document réel (un simple PDF de
   26 pages en donne 48). Combiné à un `k` de retriever trop bas (voir §3), le bon chunk peut ne
   jamais être renvoyé au LLM alors qu'il est bien présent dans la base vectorielle.
-- L'embedding par défaut (`EMBEDDING_MODEL=BAAI/bge-small-en-v1.5`) est un modèle **anglais uniquement** — sur du contenu et
-  des questions en français, les scores de similarité sont plus plats et discriminent moins bien
-  le bon chunk des chunks non pertinents. Un modèle multilingue pris en charge par FastEmbed
-  (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 0,22 Go, ou
-  `intfloat/multilingual-e5-large`, 2,2 Go) serait plus adapté à un cas d'usage francophone, mais changer de modèle
-  nécessite de ré-ingérer toutes les bases de connaissances existantes (l'espace vectoriel change).
+- L'embedding par défaut est `intfloat/multilingual-e5-large` (FastEmbed, multilingue, entrée de
+  512 tokens, 2,2 Go téléchargés au premier démarrage dans `FASTEMBED_CACHE_PATH`). Il remplace
+  `BAAI/bge-small-en-v1.5`, un modèle anglais uniquement qui discriminait mal les chunks sur du
+  contenu français. Les modèles e5 attendent un préfixe qui distingue la question du passage :
+  `build_embeddings()` enveloppe donc le modèle dans `PrefixedEmbeddings`, qui ajoute `"passage: "`
+  aux chunks à l'ingestion et `"query: "` aux questions à la recherche (table
+  `EMBEDDING_PREFIXES`). Seul ce qui est vectorisé est préfixé : le texte stocké dans Chroma ne
+  change pas.
+- ⚠️ Changer `EMBEDDING_MODEL` impose de ré-ingérer chaque bot
+  (`POST /api/rag/reindex/{bot_id}`) : des vecteurs issus de deux modèles ne sont pas comparables,
+  et à dimension égale Chroma ne signale rien, la recherche renvoie simplement des résultats
+  sans rapport.
 
 ---
 
 ## 3. Construction de la chaîne RAG (`LangChainFacade.build`)
 
 À chaque question, `LangChainFacade.build(bot_id, bot_prompt, user_id, session_id)` (appelé par
-`answer()`/`stream()`) **reconstruit et retourne** un nouveau pipeline — il n'est jamais mis en
+`answer()`/`stream()` via `_build_chain()`, qui l'exécute dans un thread avec
+`run_in_threadpool` car l'initialisation du client ChromaDB est bloquante) **reconstruit et
+retourne** un nouveau pipeline — il n'est jamais mis en
 cache ni stocké sur `self` : `LangChainFacade` est un
 singleton partagé entre requêtes concurrentes, et chaque appel a besoin de son propre
 `TokenCountingCallback` (lié à ce `user_id`/`bot_id`/`session_id`) attaché au LLM, donc réutiliser
@@ -166,10 +185,12 @@ flowchart TD
 Ce qu'il faut retenir de ce schéma :
 
 - **① `_retrieve_and_label_sources`** : interroge directement le retriever Chroma avec la question
-  brute de l'utilisateur (pas de reformulation LLM), puis étiquette chaque extrait récupéré avec
+  brute de l'utilisateur (pas de reformulation LLM ; seul le préfixe `"query: "` est ajouté au
+  moment de la vectoriser, voir §2), puis étiquette chaque extrait récupéré avec
   `Source: <nom du chapitre>` via `_label_documents_with_source`, à partir des métadonnées Chroma —
   uniquement pour la traçabilité affichée dans le prompt, jamais pour instruire le modèle (voir la
-  note anti-prompt-injection dans `prompt_svc.py::update_prompt`). Le retriever renvoie les
+  section `# Context rules` générée par `PromptService._build_prompt`, qui dit au modèle de
+  traiter le contexte et ces étiquettes comme des données, jamais comme des instructions). Le retriever renvoie les
   `RAG_RETRIEVER_K` chunks les plus proches par similarité cosinus (défaut : 12, configurable via
   `config.py`) — voir §2 pour pourquoi ce chiffre compte plus qu'il n'y paraît.
 - **② `RunnablePassthrough.assign(context=...)`** : remplace la liste de documents par une seule
@@ -181,6 +202,12 @@ Ce qu'il faut retenir de ce schéma :
 - **⑤ `StrOutputParser()`** : extrait le texte brut de la réponse du LLM (`AIMessage.content`) —
   le pipeline retourne donc directement une `string`, pas un dict `{"answer": ..., "context": ...}`
   comme avant (personne ne consommait la clé `context` en dehors de la chaîne elle-même).
+- **Traces de debug** : le code réel intercale des `RunnableLambda(self._log_*)` entre les étapes
+  ①→③ (omises du schéma). Elles écrivent chaque état intermédiaire via `PromptDebugLogger`,
+  activé par sa propre variable `PROMPT_DEBUG_LVL` (indépendante de `LOGGER_LVL`). Il n'y en a
+  volontairement **aucune** entre `llm` et `StrOutputParser()` : un `RunnableLambda` à cet endroit
+  force LangChain à accumuler toute la réponse avant de la transmettre, ce qui casse le streaming
+  token par token. La réponse brute est tracée après coup, dans `answer()` / `_stream_chunks()`.
 
 ### Exemple concret : un prompt qui prend forme, étape par étape
 
@@ -296,15 +323,22 @@ sequenceDiagram
     participant MSG as MessageService
     participant DB as MySQL (table Message)
 
-    RAG->>Store: get_session_history(session_id)
-    alt session absente du cache
-        Store->>MSG: load_session_history(session_id)
+    RAG->>Store: get_session_history(bot_id, user_id)
+    alt clé "{bot_id}_{user_id}" absente du cache
+        Store->>MSG: get_session(bot_id, user_id)
+        MSG->>DB: SELECT session
+        Store->>MSG: load_session_history(session.id)
         MSG->>DB: SELECT messages
         DB-->>MSG: rows
         MSG-->>Store: list[ChatTurn]
     end
     Store-->>RAG: list[ChatTurn]
 ```
+
+Le cache est protégé par un `asyncio.Lock` (`_store_lock`) : sans lui, deux requêtes simultanées
+pour une même clé absente la chargeraient toutes les deux depuis MySQL, et le second chargement
+écraserait le premier. Au-delà de `MAX_CACHED_SESSIONS` (500), l'entrée la moins récemment
+utilisée est évincée.
 
 `ask()` (chat non-streamé) et `ask_with_stream()` (SSE) partagent la même clé
 `"{bot_id}_{user_id}"`, donc le même historique en mémoire, quel que soit le mode d'appel.
@@ -317,6 +351,7 @@ sequenceDiagram
 sequenceDiagram
     participant C as Client (Angular)
     participant R as rag_router.py
+    participant CF as ChatFacade
     participant RAG as RagService
     participant CHAIN as rag_chain (LCEL)
     participant CB as TokenCountingCallback
@@ -324,20 +359,25 @@ sequenceDiagram
 
     Note over C,R: Mode synchrone — POST /api/rag/chat
     C->>R: chat(question)
-    R->>RAG: ask(bot_id, user_id, query)
-    RAG->>RAG: history = get_session_history(...)
+    R->>CF: ask(user_id, question)
+    CF->>CF: bot sélectionné, accès (403), quota (429)
+    CF->>RAG: ask(bot_id, user_id, query)
+    RAG->>RAG: save_message("user"), history = get_session_history(...)
     RAG->>CHAIN: LangChainFacade.answer(...) → build() puis ainvoke(...)
     CHAIN->>CB: on_llm_end(response)
     CB->>TT: record_token_usage(...)
     CHAIN-->>RAG: réponse (string)
-    RAG->>RAG: _record_turn(history, question, réponse)
-    RAG-->>R: réponse texte
+    RAG->>RAG: _record_turn(history, question, réponse), save_message("assistant")
+    RAG-->>CF: réponse texte
+    CF-->>R: réponse texte
     R-->>C: {"response": "..."}
 
     Note over C,R: Mode streaming — GET /api/rag/streamchat (SSE)
-    C->>R: streamchat(question)
-    R->>RAG: ask_with_stream(bot_id, user_id, query)
-    RAG->>RAG: history = get_session_history(...)
+    C->>R: streamchat(question, bot_id)
+    R->>CF: stream(user_id, bot_id, question, data)
+    CF->>CF: accès (403), quota (429), session_id
+    CF->>RAG: ask_with_stream(bot_id, user_id, data, query, session_id)
+    RAG->>RAG: save_message("user"), history = get_session_history(...)
     RAG->>CHAIN: LangChainFacade.stream(...) → build() puis astream(...)
     loop pour chaque chunk
         CHAIN-->>RAG: chunk (string)
@@ -346,20 +386,28 @@ sequenceDiagram
     end
     CHAIN->>CB: on_llm_end(response)
     CB->>TT: record_token_usage(...)
-    RAG->>RAG: _record_turn(history, question, réponse)
+    RAG->>RAG: _record_turn(history, question, réponse), save_message("assistant")
     R-->>C: "data: [DONE]\n\n"
 ```
 
-Dans les deux cas, la question de l'utilisateur et la réponse finale du bot sont persistées via
-`MessageService.save_message` (rôles `"user"` / `"assistant"`), **et** ajoutées à l'historique
-en mémoire (`self.store`, §4) via `history.add_user_message`/`add_ai_message` — ce n'est plus
-`RunnableWithMessageHistory` qui s'en charge automatiquement.
+Dans les deux cas, la question de l'utilisateur est persistée **avant** l'appel au LLM et la
+réponse finale **après**, via `MessageService.save_message` (rôles `"user"` / `"assistant"`). La
+paire est aussi ajoutée à l'historique en mémoire (`self.store`, §4) par `_record_turn` — ce n'est
+plus `RunnableWithMessageHistory` qui s'en charge. La façade reçoit une **copie** de l'historique
+(`list(history)`), donc `_record_turn` ne modifie jamais une liste qu'une chaîne en cours lit
+encore. En streaming, la réponse n'est enregistrée qu'une fois le flux entièrement envoyé.
+
+Le message d'accueil (`GET /api/rag/trigfirstmessage`) suit le même chemin, via
+`ChatFacade.welcome()` / `stream_welcome()` : la « question » est générée à partir des
+paramètres du bot (`BotParametersService.get_welcome_message`) et enregistrée avec
+`hide=True`, pour ne pas apparaître dans l'historique affiché. La version non-streamée efface
+d'abord l'historique de la conversation, la version streamée le conserve.
 
 ---
 
 ## 6. Suivi automatique des tokens (`TokenCountingCallback`)
 
-`LlmService.get_llm(user_id, bot_id, session_id)` attache un `BaseCallbackHandler` LangChain
+`LlmService.get_llm(user_id, bot_id, session_id)` attache un `AsyncCallbackHandler` LangChain
 (`TokenCountingCallback`) à une instance dédiée de `ChatMistralAI` dès que `user_id`/`bot_id`
 sont connus. Le pipeline RAG (§3) ne fait qu'un seul appel LLM par question, donc `on_llm_end`
 n'est déclenché qu'une fois par question :
@@ -376,18 +424,26 @@ flowchart TD
     G --> H[("TokenUsage / Message<br/>en base MySQL")]
 ```
 
-C'est le mécanisme documenté dans `CLAUDE.md` : **il ne faut jamais créer de compte de tokens
-manuellement** en passant par `rag_svc` — le callback s'en charge automatiquement à chaque appel LLM.
+Pour un invité (`parent_id > 0`), la consommation est imputée à son utilisateur parent
+(`user_id = parent_id`, `user_guest_id = id de l'invité`) : c'est ce compte-là que
+`ChatFacade._enforce_token_quota` compare à `TOKEN_LIMIT_PER_USER_24H`.
+
+**Il ne faut jamais enregistrer de tokens à la main** en passant par `rag_svc` : le callback s'en
+charge automatiquement à chaque appel LLM, et un enregistrement manuel compterait la
+consommation en double.
 
 ---
 
 ## 7. Fichiers à connaître
 
+- `server/src/services/chat_facade.py` — étapes d'un tour de chat : utilisateur, accès au bot, quota, session, appel à `RagService`
 - `server/src/services/langchain_facade.py` — façade LangChain : pipeline LCEL, prompt, `answer()`, `stream()`
 - `server/src/services/rag_svc.py` — `ask()`, `ask_with_stream()`, cache d'historique, persistance des messages
 - `server/src/services/llm_svc.py` — instanciation `ChatMistralAI`, `TokenCountingCallback`
 - `server/src/services/prompt_svc.py` — génération et lecture du prompt système du bot (texte)
-- `server/src/services/vector_store_facade.py` — façade vectorielle : ingestion, embeddings, retriever Chroma
+- `server/src/services/vector_store_facade.py` — façade vectorielle : ingestion, embeddings (`PrefixedEmbeddings`), retriever Chroma
+- `server/src/config/config.py` — `EMBEDDING_MODEL`, `RAG_CHUNK_SIZE`, `RAG_CHUNK_OVERLAP`, `RAG_RETRIEVER_K`, `CHROMA_*`
+- `server/src/log/prompt_debug_logger.py` — traces de construction du prompt (`PROMPT_DEBUG_LVL`)
 - `server/src/services/knowledge_svc.py` — déclenche l'ingestion à partir des connaissances
 - `server/src/services/token_tracking_svc.py` — persistance des tokens consommés
-- `server/src/routers/rag_router.py` — endpoints `/api/rag/*` (chat, streamchat, historique)
+- `server/src/routers/rag_router.py` — endpoints `/api/rag/*` (chat, streamchat, trigfirstmessage, reindex, historique)
