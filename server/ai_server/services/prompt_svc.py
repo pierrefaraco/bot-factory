@@ -1,8 +1,3 @@
-from langchain_core.prompts import (
-    ChatPromptTemplate,
-    MessagesPlaceholder,
-)
-
 from ai_server.log.bot_factory_logger import BotFactoryLogger
 from ai_server.repositories import BotRepository
 from ai_server.config.prompt_constants import (
@@ -35,20 +30,6 @@ class PromptService:
     async def get_bot_prompt(self, bot_id) -> str:
         bot = await self.bot_repo.get(bot_id)
         return bot.prompt or ""
-
-    def get_qa_prompt(self, bot_id, prompt: str):
-        # The stored prompt contains user-provided text (bot name, goal, ...):
-        # escape braces so LangChain does not treat them as template variables.
-        escaped_prompt = prompt.replace("{", "{{").replace("}", "}}")
-        bot_prompt = f"{escaped_prompt}\n\n<context>\n{{context}}\n</context>"
-        self.logger.debug(f"QA prompt created for bot_id {bot_id}")
-        return ChatPromptTemplate.from_messages(
-            [
-                ("system", bot_prompt),
-                MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
-            ]
-        )
 
     def welcome_message_trigger(self, user_name, params, behaviour_dict) -> str:
         self.logger.debug(f"Building welcome_message_trigger for bot_type={params.bot_type}")

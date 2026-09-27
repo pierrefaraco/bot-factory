@@ -15,7 +15,7 @@ import time
 class TokenCountingCallback(AsyncCallbackHandler):
     """Callback pour compter les tokens consommés lors des appels LLM.
 
-    Async (not BaseCallbackHandler): rag_svc.py's chain only ever runs via
+    Async (not BaseCallbackHandler): langchain_facade.py's chain only ever runs via
     .ainvoke()/.astream() now, and LangChain's async callback manager
     awaits an async handler's on_llm_end directly -- same task, no thread
     hop (see langchain_core.callbacks.manager._ahandle_event_for_handler's

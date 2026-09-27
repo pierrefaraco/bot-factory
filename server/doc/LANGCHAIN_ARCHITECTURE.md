@@ -4,14 +4,23 @@ Ce document décrit où et comment [LangChain](https://python.langchain.com/) es
 serveur, du chargement des documents jusqu'à la réponse du bot (avec ou sans streaming), en
 passant par le suivi des tokens.
 
-LangChain n'intervient que dans 4 services, tous dans `server/ai_server/services/` :
+Côté question/réponse, tout LangChain passe par une **façade** : `LangChainFacade`
+(`langchain_facade.py`). `RagService` et le reste de l'application lui donnent une question, le
+prompt du bot et l'historique (liste de `ChatTurn(role, content)`), et récupèrent une réponse
+(`answer()`) ou un flux de morceaux de texte (`stream()`) — sans jamais importer LangChain.
+Le stockage vectoriel a lui aussi sa façade, `VectorStoreFacade` (`vector_store_facade.py`) :
+client ChromaDB, `Chroma`, loader PDF, découpage et embeddings derrière six méthodes
+(`check_connection`, `build_retriever`, `ingest_text`, `ingest_pdf`, `delete_all`,
+`delete_documents_by_metadata`). `KnowledgeSvc` l'utilise pour l'ingestion, `LangChainFacade` pour
+la recherche.
+
+LangChain n'intervient que dans 3 services, tous dans `server/ai_server/services/` :
 
 | Service | Rôle | Composants LangChain utilisés |
 |---|---|---|
-| `chroma_db_svc.py` | Ingestion et recherche vectorielle | `Chroma`, loaders de documents, text splitters, `FastEmbedEmbeddings` |
-| `prompt_svc.py` | Construction des prompts | `ChatPromptTemplate`, `MessagesPlaceholder` |
-| `llm_svc.py` | Accès au LLM + tracking tokens | `ChatMistralAI`, `BaseCallbackHandler` |
-| `rag_svc.py` | Orchestration (pipeline RAG) | LCEL (`|`), `RunnableLambda`, `RunnablePassthrough`, `StrOutputParser` |
+| `vector_store_facade.py` | Façade : ingestion et recherche vectorielle | `Chroma`, loaders de documents, text splitters, `FastEmbedEmbeddings` |
+| `llm_svc.py` | Accès au LLM + tracking tokens | `ChatMistralAI`, `AsyncCallbackHandler` |
+| `langchain_facade.py` | Façade : pipeline RAG + prompt | LCEL (`|`), `RunnableLambda`, `RunnablePassthrough`, `StrOutputParser`, `ChatPromptTemplate`, `MessagesPlaceholder`, `HumanMessage`/`AIMessage` |
 
 Le seul fournisseur LLM réellement branché aujourd'hui est **Mistral AI** (`ChatMistralAI`).
 `llm_svc.py` importe encore `langchain_community.llms.Ollama` mais ne l'instancie nulle part —
@@ -30,12 +39,13 @@ flowchart TB
 
     subgraph ORCH["Orchestration"]
         RAG["RagService<br/>(rag_svc.py)"]
+        PROMPT["PromptService<br/>(prompt_svc.py)"]
     end
 
     subgraph LC["Services LangChain"]
+        FACADE["LangChainFacade<br/>(langchain_facade.py)"]
         LLM["LlmService<br/>(llm_svc.py)"]
-        PROMPT["PromptService<br/>(prompt_svc.py)"]
-        CHROMA["ChromaDbService<br/>(chroma_db_svc.py)"]
+        CHROMA["VectorStoreFacade<br/>(vector_store_facade.py)"]
     end
 
     subgraph EXT["Systèmes externes"]
@@ -44,13 +54,14 @@ flowchart TB
         MYSQL[("MySQL<br/>Message / Session / Knowledge")]
     end
 
-    KNOWR -->|"recordChaptersToVectorDB()"| KNOWSVC["KnowledgeSvc"]
+    RAGR -->|"reindex_bot()"| KNOWSVC["KnowledgeSvc"]
     KNOWSVC -->|"ingest_text / ingest_pdf"| CHROMA
     KNOWSVC -->|"Knowledge (metadata, arbre,<br/>vector_synced_at)"| MYSQL
     RAGR -->|"ask() / ask_with_stream()"| RAG
-    RAG --> LLM
-    RAG --> PROMPT
-    RAG --> CHROMA
+    RAG -->|"prompt du bot"| PROMPT
+    RAG -->|"answer() / stream()"| FACADE
+    FACADE --> LLM
+    FACADE --> CHROMA
     RAG -->|"historique de session"| MYSQL
     LLM -->|"ChatMistralAI"| MISTRAL
     CHROMA -->|"embeddings + similarity search"| CHROMADB
@@ -61,24 +72,23 @@ flowchart TB
 ## 2. Ingestion : du document texte/PDF aux vecteurs
 
 Déclenchée quand une connaissance est créée/modifiée (`KnowledgeSvc._ingest_knowledge_node`)
-ou en masse via `POST /api/rag/transmit_to_alfred/{bot_id}` (`recordChaptersToVectorDB`).
+ou en masse via `POST /api/rag/reindex/{bot_id}` (`KnowledgeSvc.reindex_bot`).
 
 ```mermaid
 sequenceDiagram
     participant KS as KnowledgeSvc
-    participant CDB as ChromaDbService
+    participant CDB as VectorStoreFacade
     participant Split as RecursiveCharacterTextSplitter
     participant Embed as FastEmbedEmbeddings
     participant Chroma as Chroma (vector store)
 
     KS->>CDB: ingest_text(text, "Collection{bot_id}", metadata)
     Note over KS,CDB: metadata = {knowledge_id, bot_id, name}
-    CDB->>Split: split_text(content)<br/>chunk_size=1024, overlap=100
+    CDB->>Split: split_text(content)<br/>chunk_size=RAG_CHUNK_SIZE (1024)<br/>overlap=RAG_CHUNK_OVERLAP (150)
     Split-->>CDB: chunks (list[str])
-    CDB->>CDB: filter_complex_metadata(chunks)
     CDB->>Chroma: add_documents(chunks)
     Chroma->>Embed: embed_documents(chunks)
-    Note right of Embed: modèle BAAI/bge-small-en-v1.5
+    Note right of Embed: modèle EMBEDDING_MODEL<br/>(défaut BAAI/bge-small-en-v1.5)
     Embed-->>Chroma: vecteurs
     Chroma-->>CDB: doc_ids
 ```
@@ -88,22 +98,28 @@ Points clés :
   ce qui permet de le retrouver et de le supprimer individuellement lors d'une resynchronisation
   (`sync_knowledge_to_vector_db`) sans devoir vider toute la collection du bot.
 - Une collection ChromaDB par bot : `f"Collection{bot_id}"`.
+- Les paramètres de la base vectorielle se règlent dans le `.env` racine (lus par `config.py`,
+  transmis au conteneur `api` par `docker-compose.yml`) : `CHROMA_*`, `PERSIST*`,
+  `EMBEDDING_MODEL`, `RAG_CHUNK_SIZE`, `RAG_CHUNK_OVERLAP`, `RAG_RETRIEVER_K`. Voir les
+  commentaires de `.env.example` pour le rôle et le choix de chaque valeur.
 - Les PDF passent d'abord par `PyPDFLoader` avant le même découpage/embedding.
 - ⚠️ `chunk_size=1024` produit vite beaucoup de chunks pour un document réel (un simple PDF de
   26 pages en donne 48). Combiné à un `k` de retriever trop bas (voir §3), le bon chunk peut ne
   jamais être renvoyé au LLM alors qu'il est bien présent dans la base vectorielle.
-- L'embedding (`BAAI/bge-small-en-v1.5`) est un modèle **anglais uniquement** — sur du contenu et
+- L'embedding par défaut (`EMBEDDING_MODEL=BAAI/bge-small-en-v1.5`) est un modèle **anglais uniquement** — sur du contenu et
   des questions en français, les scores de similarité sont plus plats et discriminent moins bien
-  le bon chunk des chunks non pertinents. Un modèle multilingue (`intfloat/multilingual-e5-large`,
-  `BAAI/bge-m3`, ...) serait plus adapté à un cas d'usage francophone, mais changer de modèle
+  le bon chunk des chunks non pertinents. Un modèle multilingue pris en charge par FastEmbed
+  (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 0,22 Go, ou
+  `intfloat/multilingual-e5-large`, 2,2 Go) serait plus adapté à un cas d'usage francophone, mais changer de modèle
   nécessite de ré-ingérer toutes les bases de connaissances existantes (l'espace vectoriel change).
 
 ---
 
-## 3. Construction de la chaîne RAG (`RagService.build`)
+## 3. Construction de la chaîne RAG (`LangChainFacade.build`)
 
-À chaque question, `RagService.build(bot_id, user_id, session_id)` **reconstruit et retourne**
-un nouveau pipeline — il n'est jamais mis en cache ni stocké sur `self` : `RagService` est un
+À chaque question, `LangChainFacade.build(bot_id, bot_prompt, user_id, session_id)` (appelé par
+`answer()`/`stream()`) **reconstruit et retourne** un nouveau pipeline — il n'est jamais mis en
+cache ni stocké sur `self` : `LangChainFacade` est un
 singleton partagé entre requêtes concurrentes, et chaque appel a besoin de son propre
 `TokenCountingCallback` (lié à ce `user_id`/`bot_id`/`session_id`) attaché au LLM, donc réutiliser
 un pipeline stocké sur l'instance risquerait de mélanger le tracking de tokens de deux requêtes
@@ -124,8 +140,8 @@ flowchart TD
     classDef final fill:#fde68a,stroke:#b45309,color:#451a03,stroke-width:1px;
 
     LLM["🧠 LLM\nChatMistralAI\n(LlmService.get_llm)"]:::ingredient
-    RETR["🔎 Retriever (k=RAG_RETRIEVER_K)\nChromaDbService.get_retriever()"]:::ingredient
-    QAPROMPT["📝 Prompt système du bot\nget_qa_prompt(bot_id)"]:::ingredient
+    RETR["🔎 Retriever (k=RAG_RETRIEVER_K)\nVectorStoreFacade.build_retriever()"]:::ingredient
+    QAPROMPT["📝 Prompt système du bot\n_qa_prompt(bot_id, bot_prompt)"]:::ingredient
 
     Q(["input: question brute\n+ chat_history"])
 
@@ -172,7 +188,8 @@ Pour rendre le schéma ci-dessus tangible, voici comment le prompt évolue réel
 étape, pour une question posée à un bot "concierge d'hôtel" dont le prompt système a été généré
 par `PromptService.update_prompt()` (§ ci-dessus).
 
-**Entrée (`Q`)** — ce que `RagService.ask()` reçoit :
+**Entrée (`Q`)** — ce que la chaîne reçoit (l'historique `ChatTurn` déjà converti en messages
+LangChain par la façade) :
 
 ```python
 {
@@ -209,7 +226,7 @@ seule string via `_format_docs` ; `input` et `chat_history` traversent inchangé
 }
 ```
 
-**③ après `qa_prompt`** — `get_qa_prompt(bot_id)` (`prompt_svc.py`) remplit le `ChatPromptTemplate`
+**③ après `qa_prompt`** — `_qa_prompt(bot_id, bot_prompt)` (`langchain_facade.py`) remplit le `ChatPromptTemplate`
 avec ce dict et produit la liste de messages réellement envoyée au LLM :
 
 ```
@@ -236,7 +253,7 @@ Deux détails importants qui ne sautent pas aux yeux sur le schéma :
   d'être injecté dans le template — sinon une accolade tapée par l'utilisateur dans le nom ou le
   goal du bot serait interprétée par LangChain comme une variable de template.
 - `context` n'est **pas** un message séparé : il est concaténé *à l'intérieur* du `SystemMessage`,
-  entre les balises `<context>...</context>` ajoutées par `get_qa_prompt` — le LLM ne voit donc
+  entre les balises `<context>...</context>` ajoutées par `_qa_prompt` — le LLM ne voit donc
   qu'un seul message système, jamais un message "context" à part.
 
 **④ après le LLM** — `ChatMistralAI` reçoit ces messages et répond :
@@ -246,7 +263,7 @@ AIMessage("Le petit-déjeuner est servi de 7h00 à 10h30 tous les jours au resta
 ```
 
 **⑤ après `StrOutputParser()`** — c'est cette string, et seulement elle, que `rag_chain.invoke(...)`
-/ `.stream(...)` renvoie à `RagService` :
+/ `.astream(...)` renvoie à la façade, puis à `RagService` :
 
 ```python
 "Le petit-déjeuner est servi de 7h00 à 10h30 tous les jours au restaurant de l'hôtel."
@@ -259,17 +276,17 @@ toujours tout `chat_history` (§4). Le `TokenCountingCallback` (§6) n'est donc 
 qu'**une seule fois par question**, au lieu de deux.
 
 L'historique de conversation (`chat_history`) n'est plus injecté/persisté automatiquement par une
-enveloppe LangChain : `ask()`/`invoke_and_save()` et `ask_with_stream()` appellent maintenant
-`get_session_history(session_id)` (§4) explicitement avant d'invoquer le pipeline, puis
-`history.add_user_message(...)` / `history.add_ai_message(...)` juste après avoir obtenu la
-réponse.
+enveloppe LangChain : `RagService.ask()` et `ask_with_stream()` appellent
+`get_session_history(bot_id, user_id)` (§4) explicitement, en passent une copie à la façade, puis
+y ajoutent la question et la réponse (`_record_turn`) une fois la réponse obtenue.
 
 ---
 
 ## 4. Historique de conversation
 
-`get_session_history` maintient un cache en mémoire (`self.store: dict`) de
-`BaseChatMessageHistory` par `session_id`, initialisé depuis MySQL via `MessageService` au
+`get_session_history` maintient un cache LRU en mémoire (`self.store`, `OrderedDict` borné à
+`MAX_CACHED_SESSIONS`) d'historiques par clé `"{bot_id}_{user_id}"` — de simples listes de
+`ChatTurn(role, content)`, sans type LangChain — initialisé depuis MySQL via `MessageService` au
 premier accès (`load_session_history`) :
 
 ```mermaid
@@ -284,19 +301,13 @@ sequenceDiagram
         Store->>MSG: load_session_history(session_id)
         MSG->>DB: SELECT messages
         DB-->>MSG: rows
-        MSG-->>Store: ChatMessageHistory rempli
+        MSG-->>Store: list[ChatTurn]
     end
-    Store-->>RAG: BaseChatMessageHistory
+    Store-->>RAG: list[ChatTurn]
 ```
 
-⚠️ Les deux points d'entrée du chat n'utilisent pas la même clé de session :
-- `ask()` (chat non-streamé) invoque la chaîne avec `session_id = f"{bot_id}_{user_id}"`.
-- `ask_with_stream()` (SSE) invoque la chaîne avec `session_id = f"Collection{bot_id}"`
-  (le nom de la collection Chroma, sans le `user_id`).
-
-Chaque chemin a donc sa propre entrée dans `self.store`/l'historique en mémoire process ; c'est
-un détail d'implémentation existant à garder en tête si l'historique semble "sauter" en passant
-du mode streamé au non-streamé.
+`ask()` (chat non-streamé) et `ask_with_stream()` (SSE) partagent la même clé
+`"{bot_id}_{user_id}"`, donc le même historique en mémoire, quel que soit le mode d'appel.
 
 ---
 
@@ -314,22 +325,20 @@ sequenceDiagram
     Note over C,R: Mode synchrone — POST /api/rag/chat
     C->>R: chat(question)
     R->>RAG: ask(bot_id, user_id, query)
-    RAG->>RAG: build() → nouveau rag_chain
     RAG->>RAG: history = get_session_history(...)
-    RAG->>CHAIN: invoke({"input": query, "chat_history": history.messages})
+    RAG->>CHAIN: LangChainFacade.answer(...) → build() puis ainvoke(...)
     CHAIN->>CB: on_llm_end(response)
     CB->>TT: record_token_usage(...)
     CHAIN-->>RAG: réponse (string)
-    RAG->>RAG: history.add_user_message / add_ai_message
+    RAG->>RAG: _record_turn(history, question, réponse)
     RAG-->>R: réponse texte
     R-->>C: {"response": "..."}
 
     Note over C,R: Mode streaming — GET /api/rag/streamchat (SSE)
     C->>R: streamchat(question)
     R->>RAG: ask_with_stream(bot_id, user_id, query)
-    RAG->>RAG: build() → nouveau rag_chain
     RAG->>RAG: history = get_session_history(...)
-    RAG->>CHAIN: stream({"input": query, "chat_history": history.messages})
+    RAG->>CHAIN: LangChainFacade.stream(...) → build() puis astream(...)
     loop pour chaque chunk
         CHAIN-->>RAG: chunk (string)
         RAG-->>R: "data: {answer}\n\n"
@@ -337,7 +346,7 @@ sequenceDiagram
     end
     CHAIN->>CB: on_llm_end(response)
     CB->>TT: record_token_usage(...)
-    RAG->>RAG: history.add_user_message / add_ai_message
+    RAG->>RAG: _record_turn(history, question, réponse)
     R-->>C: "data: [DONE]\n\n"
 ```
 
@@ -374,10 +383,11 @@ manuellement** en passant par `rag_svc` — le callback s'en charge automatiquem
 
 ## 7. Fichiers à connaître
 
-- `server/ai_server/services/rag_svc.py` — pipeline LCEL, `ask()`, `ask_with_stream()`
+- `server/ai_server/services/langchain_facade.py` — façade LangChain : pipeline LCEL, prompt, `answer()`, `stream()`
+- `server/ai_server/services/rag_svc.py` — `ask()`, `ask_with_stream()`, cache d'historique, persistance des messages
 - `server/ai_server/services/llm_svc.py` — instanciation `ChatMistralAI`, `TokenCountingCallback`
-- `server/ai_server/services/prompt_svc.py` — `ChatPromptTemplate` du prompt système du bot
-- `server/ai_server/services/chroma_db_svc.py` — ingestion, embeddings, retriever Chroma
+- `server/ai_server/services/prompt_svc.py` — génération et lecture du prompt système du bot (texte)
+- `server/ai_server/services/vector_store_facade.py` — façade vectorielle : ingestion, embeddings, retriever Chroma
 - `server/ai_server/services/knowledge_svc.py` — déclenche l'ingestion à partir des connaissances
 - `server/ai_server/services/token_tracking_svc.py` — persistance des tokens consommés
 - `server/ai_server/routers/rag_router.py` — endpoints `/api/rag/*` (chat, streamchat, historique)

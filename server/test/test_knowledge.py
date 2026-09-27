@@ -2,7 +2,7 @@
 
 Every knowledge write (create/update/delete) re-indexes the bot's whole
 knowledge tree into ChromaDB under collection `Collection{bot_id}`
-(knowledge_svc.recordChaptersToVectorDB). That collection is not cleaned up
+(knowledge_svc.reindex_bot). That collection is not cleaned up
 here -- bot ids are never reused, so leftover per-bot Chroma collections
 from deleted test bots don't corrupt other tests, they just accumulate in
 the dev ChromaDB instance.

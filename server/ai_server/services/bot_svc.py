@@ -103,7 +103,7 @@ class BotService(BaseService[BotDto]):
             user.name, bot.id
         )
         await self.template_svc.importTemplateInDB(bot.id, "start")
-        await self.knowledge_svc.recordChaptersToVectorDB(bot.id)
+        await self.knowledge_svc.reindex_bot(bot.id)
         self.logger.info(
             f"create_random_bot succeeded bot_id={bot.id} user_account_id={user_account_id}"
         )

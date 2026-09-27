@@ -48,7 +48,7 @@ export class KnowledgeService {
     return this.http.post(`${this.apiUrl}/save_knowledges/${bot_id}`, { importedChapters: chapters });
   }
 
-  transmitToAlfred(bot_id): Observable<any> {
-    return this.http.post(`${API_URL}/rag/transmit_to_alfred/${bot_id}`,HTTP_OPTIONS);
+  reindexKnowledge(bot_id): Observable<any> {
+    return this.http.post(`${API_URL}/rag/reindex/${bot_id}`,HTTP_OPTIONS);
   }
 }

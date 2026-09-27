@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
 
     # Fail fast if the vector store RAG depends on isn't reachable,
     # instead of starting up and only failing later on the first chat.
-    services.chroma_db.check_connection()
+    services.vector_store.check_connection()
 
     async with async_db_session_scope():
         user_admin_svc = services.user_admin

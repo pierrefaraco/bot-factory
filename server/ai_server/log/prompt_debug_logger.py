@@ -12,7 +12,7 @@ _CALLER_STACKLEVEL = 2
 @singleton
 class PromptDebugLogger:
     """Dedicated logger for tracing prompt construction step by step (see
-    RagService.build and server/doc/LANGCHAIN_ARCHITECTURE.md#3), kept
+    LangChainFacade.build and server/doc/LANGCHAIN_ARCHITECTURE.md#3), kept
     separate from BotFactoryLogger's general-purpose app logging.
 
     Routed through its own named logger (PROMPT_DEBUG_LOGGER) controlled by

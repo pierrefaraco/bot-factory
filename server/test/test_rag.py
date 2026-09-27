@@ -310,7 +310,7 @@ def test_trigfirstmessage_no_bot_selected(http_client, api_base_url, create_user
     assert_error(response, 400, "Bot_id is required")
 
 
-def test_transmit_to_alfred_golden_path(
+def test_reindex_knowledge_golden_path(
     http_client, api_base_url, create_user, create_bot, login
 ):
     user, password = create_user(role=USER_ROLE)
@@ -318,14 +318,14 @@ def test_transmit_to_alfred_golden_path(
     headers = login(user.mail, password)
 
     response = http_client.post(
-        f"{api_base_url}/rag/transmit_to_alfred/{bot.id}", json={}, headers=headers
+        f"{api_base_url}/rag/reindex/{bot.id}", json={}, headers=headers
     )
 
     assert response.status_code == 200, response.text
-    assert response.json()["message"] == "Chapters transmitted to Alfred successfully"
+    assert response.json()["message"] == "Knowledge base reindexed successfully"
 
 
-def test_transmit_to_alfred_marks_chapters_synced(
+def test_reindex_knowledge_marks_chapters_synced(
     http_client,
     api_base_url,
     create_user,
@@ -341,7 +341,7 @@ def test_transmit_to_alfred_marks_chapters_synced(
     headers = login(user.mail, password)
 
     response = http_client.post(
-        f"{api_base_url}/rag/transmit_to_alfred/{bot.id}", json={}, headers=headers
+        f"{api_base_url}/rag/reindex/{bot.id}", json={}, headers=headers
     )
 
     assert response.status_code == 200, response.text

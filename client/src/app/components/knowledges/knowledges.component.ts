@@ -517,10 +517,10 @@ export class KnowledgesComponent implements OnInit, OnDestroy, OnChanges {
       this.createEmptyKnowledge(this.selected_bot.id, dadKnowledge.children_ref_id, node)
     });
   }
-  transmitToAlfred() {
-    this.knowledgeService.transmitToAlfred(this.selected_bot.id).subscribe({
+  reindexKnowledge() {
+    this.knowledgeService.reindexKnowledge(this.selected_bot.id).subscribe({
       next: () => {
-        this.showMessage('Data transmitted to Alfred successfully', 'success');
+        this.showMessage('Knowledge base reindexed successfully', 'success');
       },
       // Errors are already surfaced globally by the HTTP error interceptor.
       error: () => {}

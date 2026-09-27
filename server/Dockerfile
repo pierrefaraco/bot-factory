@@ -7,7 +7,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
-    PATH="/opt/venv/bin:$PATH"
+    PATH="/opt/venv/bin:$PATH" \
+    FASTEMBED_CACHE_PATH=/home/appuser/.cache/fastembed
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -34,8 +35,12 @@ COPY config ./config
 RUN uv sync --frozen --no-dev
 
 # Create non-root user for security
+# The embedding model cache dir is created here, owned by appuser, so the
+# fastembed_cache volume (docker-compose.yml) mounted on it inherits that
+# ownership on first use instead of being root-owned and unwritable.
 RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+    mkdir -p "$FASTEMBED_CACHE_PATH" && \
+    chown -R appuser:appuser /app /home/appuser/.cache
 USER appuser
 
 # Health check

@@ -7,7 +7,7 @@ role/ownership checks.
 Every route here is `async def`: this is the "dedicated RAG-phase pass"
 bot_svc.py's delete() previously deferred to, covering rag_svc.py,
 message_svc.py and the handful of bot_svc/bot_assignment_svc/
-bot_parameters_svc lookups this router needs, transmit_to_alfred
+bot_parameters_svc lookups this router needs, reindex_knowledge
 included. Genuinely
 blocking, non-DB-async work with no async equivalent (ChromaDB, the LLM's
 own retriever step) is pushed onto FastAPI's threadpool explicitly via
@@ -50,11 +50,14 @@ directly on these two Response objects is dropped: asgi.py's
 CORSMiddleware now adds that header to every response uniformly (see
 its own module docstring), so keeping both would emit two ACAO headers
 on a stream response instead of one.
+
+The chat routes go through ChatFacade (services/chat_facade.py) for every
+step of a conversation turn -- user lookup, bot access check, token
+quota, session lookup, RAG call. This module only parses the request and
+turns the facade's results into HTTP responses.
 """
 
-import json
 import time
-from typing import Callable
 
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import StreamingResponse
@@ -67,23 +70,8 @@ from ai_server.dependencies.db_session import (
     async_db_session_dependency,
     stream_with_async_db_session,
 )
-from ai_server.dependencies.services import (
-    BotAssignmentServiceDep,
-    BotParametersServiceDep,
-    BotServiceDep,
-    KnowledgeServiceDep,
-    MessageServiceDep,
-    RagServiceDep,
-    TokenTrackingServiceDep,
-    UserAdminServiceDep,
-)
-from ai_server.dto.user_dto import UserDto
-from ai_server.exceptions.api_error import ApiError
+from ai_server.dependencies.services import ChatFacadeDep, KnowledgeServiceDep
 from ai_server.log.bot_factory_logger import BotFactoryLogger
-from ai_server.services.bot_assignment_svc import BotAssignmentService
-from ai_server.services.bot_svc import BotService
-from ai_server.services.message_svc import MessageService
-from ai_server.services.token_tracking_svc import TokenTrackingService
 
 router = APIRouter(
     prefix="/api/rag",
@@ -109,211 +97,7 @@ class ChatRequest(BaseModel):
     question: str = Field(min_length=1)
 
 
-async def _check_bot_access_permission(
-    user: UserDto,
-    bot_id: int,
-    bot_assignment_svc: BotAssignmentService,
-    bot_svc: BotService,
-) -> bool:
-    if user.roles == ADMIN_ROLE:
-        return True
-    elif user.roles == USER_ROLE:
-        return await bot_svc.is_bot_belong_to_user(bot_id, user.id)
-    elif user.roles == GUEST_ROLE:
-        return await bot_assignment_svc.is_bot_assigned_to_user(bot_id, user.id)
-    return False
-
-
-async def _enforce_token_quota(
-    user: UserDto, token_tracking_svc: TokenTrackingService
-) -> None:
-    """Refuse the request with a 429 once the user's billed account has
-    reached TOKEN_LIMIT_PER_USER_24H (see TokenTrackingService.get_token_quota).
-    Checked before the LLM call, so the request that crosses the limit is
-    still served in full: this is a soft cap, not an exact one."""
-    quota = await token_tracking_svc.get_token_quota(user)
-    if quota["exceeded"]:
-        logger.warning(
-            f"LLM call rejected: user {user.id} (billed to {quota['billed_user_id']}) "
-            f"used {quota['used_24h']}/{quota['limit_24h']} tokens in the last 24h"
-        )
-        raise ApiError(
-            f"Token limit reached ({quota['limit_24h']} tokens per 24h). Please try again later.",
-            status_code=429,
-        )
-
-
-@router.post("/chat", dependencies=[Depends(require_json_body(ChatRequest))])
-async def chat(
-    body: ChatRequest,
-    rag_svc: RagServiceDep,
-    user_svc: UserAdminServiceDep,
-    bot_assignment_svc: BotAssignmentServiceDep,
-    bot_svc: BotServiceDep,
-    token_tracking_svc: TokenTrackingServiceDep,
-    claims: dict = Depends(any_role),
-):
-    """Basic chat endpoint"""
-    logger.info("POST /rag/chat - chat called")
-    user_id = claims["sub"]
-    user = await user_svc.get_user_dto_by_id(user_id)
-    if not user:
-        logger.warning(f"chat rejected: user {user_id} not found")
-        raise ApiError("User not found", status_code=401)
-
-    selected_bot_id = user.selected_bot_id
-    if not selected_bot_id:
-        logger.warning(f"chat rejected: user {user_id} has no selected bot")
-        raise ApiError("You have to select a bot on the app", status_code=409)
-
-    if not await _check_bot_access_permission(
-        user, selected_bot_id, bot_assignment_svc, bot_svc
-    ):
-        logger.warning(f"chat forbidden: user {user_id} has no access to bot {selected_bot_id}")
-        raise ApiError(f"You don't have permission to access bot {selected_bot_id}", status_code=403)
-
-    await _enforce_token_quota(user, token_tracking_svc)
-
-    started_at = time.perf_counter()
-    response = await rag_svc.ask(selected_bot_id, user_id, body.question)
-    elapsed_ms = (time.perf_counter() - started_at) * 1000
-    logger.info(
-        f"chat succeeded for user_id={user_id} bot_id={selected_bot_id} elapsed_ms={elapsed_ms:.1f}"
-    )
-    return {"response": response}
-
-
-@router.get("/trigfirstmessage")
-async def trigfirstmessage(
-    rag_svc: RagServiceDep,
-    user_svc: UserAdminServiceDep,
-    bot_parameters_svc: BotParametersServiceDep,
-    message_service: MessageServiceDep,
-    bot_assignment_svc: BotAssignmentServiceDep,
-    bot_svc: BotServiceDep,
-    token_tracking_svc: TokenTrackingServiceDep,
-    claims: dict = Depends(any_role),
-    stream: str = Query(default="TRUE"),
-    data: str = Query(default="{}"),
-):
-    """Trigger first welcome message for a bot"""
-    logger.info("GET /rag/trigfirstmessage - trigfirstmessage called")
-    user_id = claims["sub"]
-    user = await user_svc.get_user_dto_by_id(user_id)
-    if not user:
-        logger.warning(f"trigfirstmessage rejected: user {user_id} not found")
-        raise ApiError("User not found", status_code=401)
-
-    bot_id = user.selected_bot_id
-    if not bot_id:
-        logger.warning(f"trigfirstmessage rejected: user {user_id} has no selected bot")
-        raise ApiError("Bot_id is required", status_code=400)
-
-    try:
-        bot_id = int(bot_id)
-    except ValueError:
-        logger.warning(f"trigfirstmessage rejected: invalid bot_id format {bot_id!r}")
-        raise ApiError("Invalid bot_id format", status_code=400)
-
-    if not await _check_bot_access_permission(
-        user, bot_id, bot_assignment_svc, bot_svc
-    ):
-        logger.warning(f"trigfirstmessage forbidden: user {user_id} has no access to bot {bot_id}")
-        raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
-
-    await _enforce_token_quota(user, token_tracking_svc)
-
-    question = await bot_parameters_svc.get_welcome_message(user.name, bot_id)
-    stream_response = stream.upper() == "TRUE"
-    logger.debug(f"trigfirstmessage params: bot_id={bot_id} stream={stream_response}")
-
-    if stream_response:
-        try:
-            parsed_data = json.loads(data)
-        except json.JSONDecodeError:
-            logger.warning("trigfirstmessage rejected: invalid JSON in data parameter")
-            raise ApiError("Invalid JSON in data parameter", status_code=400)
-
-        session = await message_service.get_session(bot_id, user_id)
-        generate: Callable = await rag_svc.ask_with_stream(
-            bot_id, user_id, parsed_data, question, hide=True,
-            session_id=session.id if session else -1,
-        )
-        response_iterator = generate()
-
-        logger.info(f"trigfirstmessage streaming started for user_id={user_id} bot_id={bot_id}")
-        return StreamingResponse(
-            stream_with_async_db_session(response_iterator),
-            media_type="text/event-stream",
-            headers=SSE_HEADERS,
-        )
-    else:
-        await _delete_session_history(bot_id, user_id, message_service)
-        started_at = time.perf_counter()
-        response = await rag_svc.ask(bot_id, user_id, question, hide=True)
-        elapsed_ms = (time.perf_counter() - started_at) * 1000
-        logger.info(
-            f"trigfirstmessage succeeded for user_id={user_id} bot_id={bot_id} elapsed_ms={elapsed_ms:.1f}"
-        )
-        return {"response": response}
-
-
-@router.get("/streamchat")
-async def streamchat(
-    rag_svc: RagServiceDep,
-    user_svc: UserAdminServiceDep,
-    message_service: MessageServiceDep,
-    bot_assignment_svc: BotAssignmentServiceDep,
-    bot_svc: BotServiceDep,
-    token_tracking_svc: TokenTrackingServiceDep,
-    claims: dict = Depends(any_role),
-    question: str = Query(default=None),
-    bot_id: str = Query(default=None),
-    data: str = Query(default="{}"),
-):
-    """Stream chat endpoint with real-time responses"""
-    logger.info("GET /rag/streamchat - streamchat called")
-    user_id = claims["sub"]
-    user = await user_svc.get_user_dto_by_id(user_id)
-    if not user:
-        logger.warning(f"streamchat rejected: user {user_id} not found")
-        raise ApiError("User not found", status_code=401)
-
-    if not question or not question.strip():
-        logger.warning(f"streamchat rejected: missing question for user {user_id}")
-        raise ApiError("Question parameter is required", status_code=400)
-    if not bot_id:
-        logger.warning(f"streamchat rejected: missing bot_id for user {user_id}")
-        raise ApiError("Bot_id is required", status_code=400)
-
-    try:
-        bot_id = int(bot_id)
-    except ValueError:
-        logger.warning(f"streamchat rejected: invalid bot_id format {bot_id!r}")
-        raise ApiError("Invalid bot_id format", status_code=400)
-
-    if not await _check_bot_access_permission(
-        user, bot_id, bot_assignment_svc, bot_svc
-    ):
-        logger.warning(f"streamchat forbidden: user {user_id} has no access to bot {bot_id}")
-        raise ApiError(f"You don't have permission to access bot {bot_id}", status_code=403)
-
-    await _enforce_token_quota(user, token_tracking_svc)
-
-    try:
-        parsed_data = json.loads(data)
-    except json.JSONDecodeError:
-        logger.warning("streamchat rejected: invalid JSON in data parameter")
-        raise ApiError("Invalid JSON in data parameter", status_code=400)
-
-    logger.debug(f"streamchat question length={len(question)}")
-    session = await message_service.get_session(bot_id, user_id)
-    generate: Callable = await rag_svc.ask_with_stream(
-        bot_id, user_id, parsed_data, question, session_id=session.id if session else -1
-    )
-    response_iterator = generate()
-
-    logger.info(f"streamchat streaming started for user_id={user_id} bot_id={bot_id}")
+def _sse_response(response_iterator) -> StreamingResponse:
     return StreamingResponse(
         stream_with_async_db_session(response_iterator),
         media_type="text/event-stream",
@@ -321,38 +105,75 @@ async def streamchat(
     )
 
 
-@router.post("/transmit_to_alfred/{bot_id:int}")
-async def transmit_to_alfred(
+@router.post("/chat", dependencies=[Depends(require_json_body(ChatRequest))])
+async def chat(
+    body: ChatRequest,
+    chat_facade: ChatFacadeDep,
+    claims: dict = Depends(any_role),
+):
+    """Basic chat endpoint"""
+    logger.info("POST /rag/chat - chat called")
+    response = await chat_facade.ask(claims["sub"], body.question)
+    return {"response": response}
+
+
+@router.get("/trigfirstmessage")
+async def trigfirstmessage(
+    chat_facade: ChatFacadeDep,
+    claims: dict = Depends(any_role),
+    stream: str = Query(default="TRUE"),
+    data: str = Query(default="{}"),
+):
+    """Trigger first welcome message for a bot"""
+    logger.info("GET /rag/trigfirstmessage - trigfirstmessage called")
+    user_id = claims["sub"]
+    if stream.upper() == "TRUE":
+        return _sse_response(await chat_facade.stream_welcome(user_id, data))
+    return {"response": await chat_facade.welcome(user_id)}
+
+
+@router.get("/streamchat")
+async def streamchat(
+    chat_facade: ChatFacadeDep,
+    claims: dict = Depends(any_role),
+    question: str = Query(default=None),
+    bot_id: str = Query(default=None),
+    data: str = Query(default="{}"),
+):
+    """Stream chat endpoint with real-time responses"""
+    logger.info("GET /rag/streamchat - streamchat called")
+    return _sse_response(
+        await chat_facade.stream(claims["sub"], bot_id, question, data)
+    )
+
+
+@router.post("/reindex/{bot_id:int}")
+async def reindex_knowledge(
     bot_id: int,
     knowledge_svc: KnowledgeServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Rebuild the bot's vector collection from its chapters."""
-    logger.info(f"POST /rag/transmit_to_alfred/{bot_id} - transmit_to_alfred called")
+    logger.info(f"POST /rag/reindex/{bot_id} - reindex_knowledge called")
     user_id = claims["sub"]
-    logger.info(f"User {user_id} transmitting chapters for bot {bot_id} to vector DB")
+    logger.info(f"User {user_id} reindexing the knowledge of bot {bot_id}")
 
     started_at = time.perf_counter()
-    await knowledge_svc.recordChaptersToVectorDB(bot_id)
+    await knowledge_svc.reindex_bot(bot_id)
     elapsed_ms = (time.perf_counter() - started_at) * 1000
-    logger.info(f"transmit_to_alfred succeeded for bot_id={bot_id} elapsed_ms={elapsed_ms:.1f}")
-    return {"message": "Chapters transmitted to Alfred successfully"}
+    logger.info(f"reindex_knowledge succeeded for bot_id={bot_id} elapsed_ms={elapsed_ms:.1f}")
+    return {"message": "Knowledge base reindexed successfully"}
 
 
 @router.get("/{bot_id:int}")
 async def get_session_history(
     bot_id: int,
-    message_service: MessageServiceDep,
+    chat_facade: ChatFacadeDep,
     claims: dict = Depends(any_role),
 ):
     """Get session history for a bot"""
     logger.info(f"GET /rag/{bot_id} - get_session_history called")
-    user_id = claims["sub"]
-    session = await message_service.get_session(bot_id, user_id)
-    if session is None:
-        logger.info(f"get_session_history({bot_id}) no session")
-        return Response(status_code=204)
-    messages = await message_service.load_session_history(session_id=session.id)
+    messages = await chat_facade.history(bot_id, claims["sub"])
     if not messages:
         logger.info(f"get_session_history({bot_id}) no messages")
         return Response(status_code=204)
@@ -363,46 +184,22 @@ async def get_session_history(
 
 @router.delete("")
 async def delete_selected_bot_session_history(
-    user_svc: UserAdminServiceDep,
-    message_service: MessageServiceDep,
+    chat_facade: ChatFacadeDep,
     claims: dict = Depends(any_role),
 ):
     """Delete session history for the selected bot"""
     logger.info("DELETE /rag - delete_selected_bot_session_history called")
-    user_id = claims["sub"]
-    user = await user_svc.get_user_dto_by_id(user_id)
-    if not user:
-        logger.warning(f"delete_selected_bot_session_history rejected: user {user_id} not found")
-        raise ApiError("User not found", status_code=401)
-
-    bot_id = user.selected_bot_id
-    if not bot_id:
-        logger.warning(f"delete_selected_bot_session_history rejected: user {user_id} has no selected bot")
-        raise ApiError("Bot_id is required", status_code=400)
-
-    return await _delete_session_history(int(bot_id), user_id, message_service)
+    deleted = await chat_facade.delete_selected_bot_history(claims["sub"])
+    return {"deleted_message_count": deleted}
 
 
 @router.delete("/{bot_id:int}")
 async def delete_session_history(
     bot_id: int,
-    message_service: MessageServiceDep,
+    chat_facade: ChatFacadeDep,
     claims: dict = Depends(any_role),
 ):
     """Delete session history for a bot"""
     logger.info(f"DELETE /rag/{bot_id} - delete_session_history called")
-    return await _delete_session_history(bot_id, claims["sub"], message_service)
-
-
-async def _delete_session_history(
-    bot_id: int, user_id, message_service: MessageService
-):
-    logger.info(f"User {user_id} deleting session history for bot {bot_id}")
-    session = await message_service.get_session(bot_id, user_id)
-    if session is None:
-        logger.info(f"_delete_session_history({bot_id}) no session")
-        return {"deleted_message_count": 0}
-
-    deleted_message_count = await message_service.delete_session_history(session.id)
-    logger.info(f"_delete_session_history({bot_id}) succeeded deleted_message_count={deleted_message_count}")
-    return {"deleted_message_count": deleted_message_count}
+    deleted = await chat_facade.delete_history(bot_id, claims["sub"])
+    return {"deleted_message_count": deleted}

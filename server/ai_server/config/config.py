@@ -11,6 +11,23 @@ logger = BotFactoryLogger()
 API_URL_PREFIX = "/api"
 
 
+def _int_env(name: str, default: int, minimum: int = 1) -> int:
+    """Integer env var, falling back to `default` (with a warning) when
+    it isn't a number or is below `minimum`."""
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        logger.warning(f"Invalid {name}={value!r}, using {default}")
+        return default
+    if parsed < minimum:
+        logger.warning(f"{name}={parsed} is below {minimum}, using {default}")
+        return default
+    return parsed
+
+
 class BaseConfig:
     """Core application properties (auth, database)."""
 
@@ -46,7 +63,7 @@ class AppConfig(BaseConfig):
     if value in list(_nameToLevel.keys()):
         LOGGER_LVL = value
 
-    # Prompt-construction tracing (RagService.build / PromptDebugLogger):
+    # Prompt-construction tracing (LangChainFacade.build / PromptDebugLogger):
     # independent of LOGGER_LVL so it can be switched on/off without
     # enabling full app-wide DEBUG logging. Defaults to LOGGER_LVL.
     PROMPT_DEBUG_LVL = LOGGER_LVL
@@ -93,21 +110,54 @@ class AppConfig(BaseConfig):
     if isinstance(value, str) and value.strip():
         LOCAL_USER_PASSWORD = value
 
-    CHROMA_CONTAINER = os.environ.get("CHROMA_CONTAINER", "false").lower() in ("true")
-    CHROMA_HOST = os.environ.get("CHROMA_HOST", "localhost")
-    CHROMA_PORT = int(os.environ.get("CHROMA_PORT", "8000"))
-    COLLECTION = "BOOKS"
-    PERSIST = os.environ.get("PERSIST", "false").lower() in ("true")
-    PERSIST_DIRECTORY = os.environ.get("PERSIST_DIRECTORY", "./chroma_db")
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/tmp/pdf")
     MAX_PDF_SIZE_BYTES = int(os.environ.get("MAX_PDF_SIZE_BYTES", 20 * 1024 * 1024))
+
+    # ===== Vector store (see services/vector_store_facade.py) =====
+
+    # Where ChromaDB runs: CHROMA_CONTAINER=true -> a Chroma server at
+    # CHROMA_HOST:CHROMA_PORT (docker compose's "chromadb" service);
+    # otherwise in-process, persisted under PERSIST_DIRECTORY if
+    # PERSIST=true, in memory only (lost on restart) if not.
+    CHROMA_CONTAINER = os.environ.get("CHROMA_CONTAINER", "false").lower() == "true"
+    CHROMA_HOST = os.environ.get("CHROMA_HOST", "localhost")
+    CHROMA_PORT = _int_env("CHROMA_PORT", 8000)
+    PERSIST = os.environ.get("PERSIST", "false").lower() == "true"
+    PERSIST_DIRECTORY = os.environ.get("PERSIST_DIRECTORY", "./chroma_db")
+
+    # FastEmbed model turning text into vectors, at ingestion and at query
+    # time alike. multilingual-e5-large: multilingual (the knowledge bases
+    # are in French; the former default, BAAI/bge-small-en-v1.5, was
+    # English-only), 512-token input, 2.2 GB -- downloaded once into
+    # FASTEMBED_CACHE_PATH. Changing it makes every existing collection
+    # unusable (vectors from two models can't be compared -- and with the
+    # same dimension, Chroma won't even complain, retrieval just silently
+    # returns junk) until each bot is re-ingested (POST /api/rag/reindex/{bot_id}).
+    EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "intfloat/multilingual-e5-large")
+
+    # Chunking at ingestion, in characters. 1024 is ~270 tokens of French
+    # text: well under the embedding model's 512-token input limit (longer
+    # chunks get truncated before being embedded), yet long enough to hold
+    # a full paragraph. The overlap repeats the end of a chunk at the start
+    # of the next one, so a sentence cut at a boundary still appears whole
+    # in one of them. Only applies to what gets ingested next.
+    RAG_CHUNK_SIZE = _int_env("RAG_CHUNK_SIZE", 1024, minimum=100)
+    RAG_CHUNK_OVERLAP = _int_env("RAG_CHUNK_OVERLAP", 150, minimum=0)
+    if RAG_CHUNK_OVERLAP >= RAG_CHUNK_SIZE:
+        logger.warning(
+            f"RAG_CHUNK_OVERLAP={RAG_CHUNK_OVERLAP} must be < RAG_CHUNK_SIZE="
+            f"{RAG_CHUNK_SIZE}, using {RAG_CHUNK_SIZE // 10}"
+        )
+        RAG_CHUNK_OVERLAP = RAG_CHUNK_SIZE // 10
+
     # Number of chunks the RAG retriever pulls per question. LangChain's
     # Chroma retriever defaults to 4, which is too small once a knowledge
     # base grows past a handful of chunks: on a real 26-page hotel PDF
     # (48 chunks at the default 1024-char chunk size), the chunk actually
     # answering a specific question ranked #11 by cosine similarity and
-    # was silently dropped every time.
-    RAG_RETRIEVER_K = int(os.environ.get("RAG_RETRIEVER_K", 12))
+    # was silently dropped every time. Each chunk ends up in the prompt:
+    # 12 x ~250 tokens is ~3k tokens of context per question.
+    RAG_RETRIEVER_K = _int_env("RAG_RETRIEVER_K", 12, minimum=1)
 
     # Max tokens an account (itself + its guests, who are billed to their
     # parent -- see TokenCountingCallback in llm_svc.py) may consume over a

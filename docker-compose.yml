@@ -64,6 +64,10 @@ services:
       CHROMA_PORT: ${CHROMA_PORT:-8000}
       PERSIST: ${PERSIST:-true}
       PERSIST_DIRECTORY: ${PERSIST_DIRECTORY:-chroma_db_2}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-large}
+      RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-1024}
+      RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-150}
+      RAG_RETRIEVER_K: ${RAG_RETRIEVER_K:-12}
       LOGGER_LVL: ${LOGGER_LVL:-INFO}
       OPERATIONAL_LOG_FILE: ${OPERATIONAL_LOG_FILE:-ai-server.log}
       SUPER_ADMIN_LOGIN: ${SUPER_ADMIN_LOGIN:-pierre.faraco@gmail.com}
@@ -77,6 +81,11 @@ services:
       # (docker-compose.prod.yml) is the sole public entry point, reaching
       # this through the Docker network -- not through the published port.
       - "127.0.0.1:4444:444"
+    volumes:
+      # Embedding model files (2.2 GB for multilingual-e5-large), downloaded
+      # on the first startup only: without this volume they would live in the
+      # container's /tmp and be downloaded again on every container recreation.
+      - fastembed_cache:/home/appuser/.cache/fastembed
     # volumes:
     #   # HOST_PROJECT_PATH: absolute path of this project as seen by the Docker
     #   # daemon. Needed when compose runs inside a dev-container whose paths
@@ -89,7 +98,10 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:444/api/health"]
       timeout: 10s
       retries: 5
-      start_period: 30s
+      # Long enough for the very first startup, which downloads the embedding
+      # model (2.2 GB) before serving; later startups only load it from
+      # the fastembed_cache volume (~10-20 s). "healthy" as soon as a check passes.
+      start_period: 600s
 
   # Angular Frontend
   web:
@@ -120,6 +132,7 @@ services:
 volumes:
   mysql_data:
   chroma_data:
+  fastembed_cache:
 
 networks:
   botfactory-network:

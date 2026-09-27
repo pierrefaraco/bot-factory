@@ -1,7 +1,7 @@
 import time
 import uuid
 from ai_server.config.config import app_config
-from ai_server.services.chroma_db_svc import ChromaDbService
+from ai_server.services.vector_store_facade import VectorStoreFacade
 from ai_server.models import Knowledge
 from ai_server.dto.knowledge_dto import KnowledgeDto
 from ai_server.log.bot_factory_logger import BotFactoryLogger
@@ -29,12 +29,12 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
     committed before the matching vector write, as before."""
 
     def __init__(
-        self, chroma_db_svc: ChromaDbService, knowledge_repo: KnowledgeRepository
+        self, vector_store: VectorStoreFacade, knowledge_repo: KnowledgeRepository
     ):
         super().__init__()
         self.upload_folder = app_config.UPLOAD_FOLDER
         self.config = app_config
-        self.chroma_db_svc = chroma_db_svc
+        self.vector_store = vector_store
         self.knowledge_repo = knowledge_repo
         os.makedirs(self.upload_folder, exist_ok=True)
 
@@ -107,7 +107,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
     ) -> None:
         """
         Save multiple knowledges from DTOs (no vector indexing: see
-        recordChaptersToVectorDB).
+        reindex_bot).
         """
         for dto in knowledges_dto:
             knowledge_date = (
@@ -405,7 +405,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         try:
             start = time.perf_counter()
             await run_in_threadpool(
-                self.chroma_db_svc.delete_all, f"Collection{bot_id}"
+                self.vector_store.delete_all, f"Collection{bot_id}"
             )
             elapsed_ms = (time.perf_counter() - start) * 1000
             logger.debug(
@@ -439,12 +439,12 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         text = f"{knowledge.name}\n{knowledge.content}".strip()
         if text:
             await run_in_threadpool(
-                self.chroma_db_svc.ingest_text, text, collection_name, metadata=metadata
+                self.vector_store.ingest_text, text, collection_name, metadata=metadata
             )
         if knowledge.pdf_file:
             pdf_path = os.path.join(self.upload_folder, knowledge.pdf_file)
             await run_in_threadpool(
-                self.chroma_db_svc.ingest_pdf,
+                self.vector_store.ingest_pdf,
                 pdf_path,
                 collection_name=collection_name,
                 metadata=metadata,
@@ -456,7 +456,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         self, bot_id: int, knowledge_id: int
     ) -> None:
         await run_in_threadpool(
-            self.chroma_db_svc.delete_documents_by_metadata,
+            self.vector_store.delete_documents_by_metadata,
             f"Collection{bot_id}",
             {"knowledge_id": knowledge_id},
         )
@@ -467,23 +467,23 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         await self._remove_knowledge_from_vector_db(knowledge.bot_id, knowledge.id)
         await self._ingest_knowledge_node(knowledge)
 
-    async def recordChaptersToVectorDB(self, bot_id: int) -> None:
+    async def reindex_bot(self, bot_id: int) -> None:
         """
         Rebuild the bot's whole vector collection from its knowledges.
         """
         start = time.perf_counter()
         knowledges = await self.knowledge_repo.list_for_bot(bot_id)
         logger.info(
-            f"recordChaptersToVectorDB: resyncing {len(knowledges)} knowledges "
+            f"reindex_bot: resyncing {len(knowledges)} knowledges "
             f"for bot_id={bot_id}"
         )
 
-        await run_in_threadpool(self.chroma_db_svc.delete_all, f"Collection{bot_id}")
+        await run_in_threadpool(self.vector_store.delete_all, f"Collection{bot_id}")
         for knowledge in knowledges:
             await self._ingest_knowledge_node(knowledge)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info(
-            f"recordChaptersToVectorDB: bot_id={bot_id} - "
+            f"reindex_bot: bot_id={bot_id} - "
             f"resynced {len(knowledges)} knowledges in {elapsed_ms:.1f}ms"
         )
