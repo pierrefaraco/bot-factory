@@ -9,8 +9,8 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from ai_server.services.langchain_facade import ChatTurn, LangChainFacade
-from ai_server.services.rag_svc import RagService
+from src.services.langchain_facade import ChatTurn, LangChainFacade
+from src.services.rag_svc import RagService
 
 BOT_ID, USER_ID = 10, 1
 HISTORY = [ChatTurn("user", "bonjour"), ChatTurn("assistant", "salut")]

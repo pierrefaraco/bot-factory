@@ -7,14 +7,14 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Ajouter le répertoire "server" (racine contenant le package ai_server) au
+# Ajouter le répertoire "server" (racine contenant le package src) au
 # path pour pouvoir importer les modules. Ce fichier vit à
 # server/db/alembic/env.py, donc il faut remonter trois niveaux : alembic -> db -> server.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Importer la configuration et les modèles
-from ai_server.config.config import app_config
-from ai_server.models import Base
+from src.config.config import app_config
+from src.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

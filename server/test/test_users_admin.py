@@ -4,8 +4,8 @@ This is the largest blueprint (~25 routes) and the reference for the
 self/guest/admin role-matrix pattern reused by later blueprints.
 """
 
-from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.models import BotAssignment, User
+from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
+from src.models import BotAssignment, User
 
 from .helpers import assert_error, unique
 

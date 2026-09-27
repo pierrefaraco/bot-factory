@@ -10,8 +10,8 @@ the dev ChromaDB instance.
 
 from pathlib import Path
 
-from ai_server.config.constant import GUEST_ROLE, USER_ROLE
-from ai_server.models import Knowledge
+from src.config.constant import GUEST_ROLE, USER_ROLE
+from src.models import Knowledge
 
 from .helpers import assert_error
 

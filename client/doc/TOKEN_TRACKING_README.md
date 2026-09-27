@@ -14,7 +14,7 @@ The token counting system enables:
 
 ### 1. Database table
 
-A new `token_usage` table has been added in [ai_server/dao/database.py](ai_server/dao/database.py#L331-L360):
+A new `token_usage` table has been added in [src/dao/database.py](src/dao/database.py#L331-L360):
 
 ```python
 class TokenUsage(db.Model):
@@ -31,7 +31,7 @@ class TokenUsage(db.Model):
 
 ### 2. Tracking service
 
-The service [token_tracking_svc.py](ai_server/services/token_tracking_svc.py) provides the following methods:
+The service [token_tracking_svc.py](src/services/token_tracking_svc.py) provides the following methods:
 
 - `record_token_usage()` - Record a token usage entry
 - `get_user_total_tokens()` - Retrieve the total tokens for a user
@@ -42,11 +42,11 @@ The service [token_tracking_svc.py](ai_server/services/token_tracking_svc.py) pr
 
 ### 3. LLM callback
 
-An automatic callback was added in [llm_svc.py](ai_server/services/llm_svc.py#L13-L48) that records token usage automatically after each LLM call.
+An automatic callback was added in [llm_svc.py](src/services/llm_svc.py#L13-L48) that records token usage automatically after each LLM call.
 
 ### 4. Integration into the RAG service
 
-The RAG service was updated in [rag_svc.py](ai_server/services/rag_svc.py) to automatically enable token tracking for requests.
+The RAG service was updated in [rag_svc.py](src/services/rag_svc.py) to automatically enable token tracking for requests.
 
 ## REST API
 
@@ -202,7 +202,7 @@ flask db upgrade
 ## Usage example in Python
 
 ```python
-from ai_server.services.token_tracking_svc import TokenTrackingService
+from src.services.token_tracking_svc import TokenTrackingService
 
 # Create an instance of the service
 token_svc = TokenTrackingService()

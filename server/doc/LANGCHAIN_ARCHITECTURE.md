@@ -14,7 +14,7 @@ client ChromaDB, `Chroma`, loader PDF, découpage et embeddings derrière six m�
 `delete_documents_by_metadata`). `KnowledgeSvc` l'utilise pour l'ingestion, `LangChainFacade` pour
 la recherche.
 
-LangChain n'intervient que dans 3 services, tous dans `server/ai_server/services/` :
+LangChain n'intervient que dans 3 services, tous dans `server/src/services/` :
 
 | Service | Rôle | Composants LangChain utilisés |
 |---|---|---|
@@ -383,11 +383,11 @@ manuellement** en passant par `rag_svc` — le callback s'en charge automatiquem
 
 ## 7. Fichiers à connaître
 
-- `server/ai_server/services/langchain_facade.py` — façade LangChain : pipeline LCEL, prompt, `answer()`, `stream()`
-- `server/ai_server/services/rag_svc.py` — `ask()`, `ask_with_stream()`, cache d'historique, persistance des messages
-- `server/ai_server/services/llm_svc.py` — instanciation `ChatMistralAI`, `TokenCountingCallback`
-- `server/ai_server/services/prompt_svc.py` — génération et lecture du prompt système du bot (texte)
-- `server/ai_server/services/vector_store_facade.py` — façade vectorielle : ingestion, embeddings, retriever Chroma
-- `server/ai_server/services/knowledge_svc.py` — déclenche l'ingestion à partir des connaissances
-- `server/ai_server/services/token_tracking_svc.py` — persistance des tokens consommés
-- `server/ai_server/routers/rag_router.py` — endpoints `/api/rag/*` (chat, streamchat, historique)
+- `server/src/services/langchain_facade.py` — façade LangChain : pipeline LCEL, prompt, `answer()`, `stream()`
+- `server/src/services/rag_svc.py` — `ask()`, `ask_with_stream()`, cache d'historique, persistance des messages
+- `server/src/services/llm_svc.py` — instanciation `ChatMistralAI`, `TokenCountingCallback`
+- `server/src/services/prompt_svc.py` — génération et lecture du prompt système du bot (texte)
+- `server/src/services/vector_store_facade.py` — façade vectorielle : ingestion, embeddings, retriever Chroma
+- `server/src/services/knowledge_svc.py` — déclenche l'ingestion à partir des connaissances
+- `server/src/services/token_tracking_svc.py` — persistance des tokens consommés
+- `server/src/routers/rag_router.py` — endpoints `/api/rag/*` (chat, streamchat, historique)

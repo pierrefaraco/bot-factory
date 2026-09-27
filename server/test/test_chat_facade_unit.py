@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.exceptions.api_error import ApiError
-from ai_server.services.chat_facade import ChatFacade
+from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
+from src.exceptions.api_error import ApiError
+from src.services.chat_facade import ChatFacade
 
 OWNER_ID, GUEST_ID, STRANGER_ID, ADMIN_ID = 1, 2, 3, 4
 BOT_ID = 10

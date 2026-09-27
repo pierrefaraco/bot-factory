@@ -7,10 +7,10 @@ import asyncio
 import pytest
 from sqlalchemy.exc import OperationalError
 
-from ai_server.config.config import app_config
-from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.dto.user_dto import UserDto
-from ai_server.services.token_tracking_svc import TokenTrackingService
+from src.config.config import app_config
+from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
+from src.dto.user_dto import UserDto
+from src.services.token_tracking_svc import TokenTrackingService
 
 
 class FakeTokenUsageRepository:

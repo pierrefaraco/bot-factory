@@ -7,7 +7,7 @@ const BASE_URL = process.env['E2E_BASE_URL'] || 'http://localhost:8080';
 const AUTH_DIR = path.join(__dirname, '.auth');
 const RUN_ID = Date.now();
 
-// There is no API to promote a fresh account to Admin (server/ai_server/
+// There is no API to promote a fresh account to Admin (server/src/
 // api_controllers/rest_users_admin.py's role-change route itself requires an
 // existing Admin caller) -- the only Admin identity available is the one
 // seeded at server startup from SUPER_ADMIN_LOGIN/SUPER_ADMIN_PASSWORD
@@ -33,7 +33,7 @@ export default async function globalSetup(): Promise<void> {
 
   const adminToken = await login(api, ADMIN_EMAIL, ADMIN_PASSWORD);
 
-  // Pydantic's EmailStr (server/ai_server/api_controllers/rest_users_admin.py)
+  // Pydantic's EmailStr (server/src/api_controllers/rest_users_admin.py)
   // rejects RFC 2606 special-use TLDs (.local, .test, .example, .invalid) as
   // syntactically invalid, not just undeliverable -- .dev is a real gTLD, so
   // it passes that check without needing a reachable mailbox.

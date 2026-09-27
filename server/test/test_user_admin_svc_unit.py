@@ -7,9 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.exceptions.api_error import ApiError
-from ai_server.services.user_admin_svc import UserAdminService
+from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
+from src.exceptions.api_error import ApiError
+from src.services.user_admin_svc import UserAdminService
 
 ADMIN, OTHER_ADMIN, PARENT, GUEST, OTHER_GUEST = 1, 2, 3, 4, 5
 

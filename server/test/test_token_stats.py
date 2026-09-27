@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from ai_server.config.constant import ADMIN_ROLE, USER_ROLE
+from src.config.constant import ADMIN_ROLE, USER_ROLE
 
 from .helpers import assert_error
 

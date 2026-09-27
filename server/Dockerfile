@@ -27,7 +27,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy application code
-COPY ai_server ./ai_server
+COPY src ./src
 COPY db ./db
 COPY config ./config
 
@@ -51,4 +51,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
 EXPOSE 444
 
 # Run the ASGI application
-CMD ["uvicorn", "ai_server.asgi:app", "--host", "0.0.0.0", "--port", "444"]
+CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "444"]

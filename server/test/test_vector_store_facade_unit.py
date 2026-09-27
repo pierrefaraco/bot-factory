@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 from langchain_core.embeddings import DeterministicFakeEmbedding
 
-from ai_server.services import vector_store_facade
-from ai_server.services.vector_store_facade import PrefixedEmbeddings, VectorStoreFacade
+from src.services import vector_store_facade
+from src.services.vector_store_facade import PrefixedEmbeddings, VectorStoreFacade
 
 
 def _facade():

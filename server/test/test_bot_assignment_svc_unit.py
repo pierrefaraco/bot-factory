@@ -6,10 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_server.config.constant import GUEST_ROLE, USER_ROLE
-from ai_server.exceptions.service_exceptions import NotFoundError, ServiceError
-from ai_server.models import BotAssignment
-from ai_server.services.bot_assignment_svc import BotAssignmentService
+from src.config.constant import GUEST_ROLE, USER_ROLE
+from src.exceptions.service_exceptions import NotFoundError, ServiceError
+from src.models import BotAssignment
+from src.services.bot_assignment_svc import BotAssignmentService
 
 PARENT_ID, GUEST_ID, STRANGER_ID = 1, 2, 3
 

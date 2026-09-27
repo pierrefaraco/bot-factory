@@ -6,8 +6,8 @@ all three have ondelete=CASCADE to bot.id, so tracking just the Bot row for
 cleanup is enough.
 """
 
-from ai_server.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from ai_server.models import Bot, BotAvatar, BotParameters, Knowledge, User
+from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
+from src.models import Bot, BotAvatar, BotParameters, Knowledge, User
 
 from .helpers import assert_error
 

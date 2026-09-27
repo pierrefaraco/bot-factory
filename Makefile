@@ -316,7 +316,7 @@ clean-all: clean clean-docker
 # Linting and formatting (optional, for future use)
 lint-server:
 	@echo "Linting Python code..."
-	cd server && uv run --extra dev flake8 ai_server/
+	cd server && uv run --extra dev flake8 src/
 
 lint-client:
 	@echo "Linting TypeScript code..."
@@ -324,7 +324,7 @@ lint-client:
 
 format-server:
 	@echo "Formatting Python code..."
-	cd server && uv run --extra dev black ai_server/
+	cd server && uv run --extra dev black src/
 
 format-client:
 	@echo "Formatting TypeScript code..."

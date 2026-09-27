@@ -74,7 +74,7 @@ test = [
 ]
 
 [tool.setuptools]
-packages = ["ai_server"]
+packages = ["src"]
 
 [tool.black]
 line-length = 88
@@ -127,7 +127,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["ai_server"]
+source = ["src"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

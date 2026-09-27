@@ -242,7 +242,7 @@ PERSIST_DIRECTORY=chroma_db_2
 3. Use environment-specific `.env.production`
 4. Configure secret management 
 5. Enable logging and monitoring
-6. Review CORS settings in `server/ai_server/main.py`
+6. Review CORS settings in `server/src/main.py`
 
 ---
 
@@ -266,7 +266,7 @@ bot-factory/
 │   └── nginx.conf
 │
 ├── server/                       # Python FastAPI Backend
-│   ├── ai_server/
+│   ├── src/
 │   │   ├── routers/             # REST endpoints
 │   │   ├── services/            # Business logic
 │   │   ├── models/              # SQLAlchemy ORM models (one module per aggregate)

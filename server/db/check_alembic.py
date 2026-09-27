@@ -61,11 +61,11 @@ def check_models():
     print("\n🔍 Vérification des modèles SQLAlchemy...")
 
     try:
-        # ai_server vit dans server/, un niveau au-dessus de ce script (server/db/)
+        # src vit dans server/, un niveau au-dessus de ce script (server/db/)
         server_dir = str(Path(__file__).resolve().parent.parent)
         if server_dir not in sys.path:
             sys.path.insert(0, server_dir)
-        from ai_server.models import Base
+        from src.models import Base
 
         tables = Base.metadata.tables
         print(f"  ✅ {len(tables)} tables détectées:")

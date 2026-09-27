@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script launches the ai_server Flask server using uv.
+# This script launches the src Flask server using uv.
 # uv manages the virtual environment and dependencies automatically —
 # no manual activation needed (replaces z-activate.sh + venv activation).
 
@@ -47,8 +47,8 @@ source .env
 set +a
 
 # == ASGI run ==
-# Serves ai_server/asgi.py's FastAPI app, which mounts the existing Flask
+# Serves src/asgi.py's FastAPI app, which mounts the existing Flask
 # app for every route not yet migrated (see server/CLAUDE.md migration
 # notes) -- same port, same URLs as the previous `flask run`.
 echo "Starting ASGI server on port $FLASK_PORT..."
-uv run uvicorn ai_server.asgi:app --host 0.0.0.0 --port $FLASK_PORT --reload
+uv run uvicorn src.asgi:app --host 0.0.0.0 --port $FLASK_PORT --reload

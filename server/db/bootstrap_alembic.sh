@@ -1,7 +1,7 @@
 #!/bin/bash
 # Recrée le dossier server/db/alembic/ (env.py, script.py.mako, versions/) s'il
 # est manquant, puis personnalise env.py pour qu'il importe les modèles
-# ai_server et lise DATABASE_URL (server/.env). Ne fait rien si alembic/
+# src et lise DATABASE_URL (server/.env). Ne fait rien si alembic/
 # existe déjà et n'est pas vide — ne l'écrase jamais.
 set -e
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -14,7 +14,7 @@ fi
 echo "🏗️  Création du dossier de scripts Alembic (alembic/)..."
 uv run alembic init alembic
 
-echo "🔧 Personnalisation de alembic/env.py (import des modèles ai_server + DATABASE_URL)..."
+echo "🔧 Personnalisation de alembic/env.py (import des modèles src + DATABASE_URL)..."
 cat > alembic/env.py <<'PYEOF'
 from logging.config import fileConfig
 import os
@@ -25,14 +25,14 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Ajouter le répertoire "server" (racine contenant le package ai_server) au
+# Ajouter le répertoire "server" (racine contenant le package src) au
 # path pour pouvoir importer les modules. Ce fichier vit à
 # server/db/alembic/env.py, donc il faut remonter trois niveaux : alembic -> db -> server.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Importer la configuration et les modèles
-from ai_server.config.config import flask_config
-from ai_server.models import Base
+from src.config.config import flask_config
+from src.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

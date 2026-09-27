@@ -1,13 +1,13 @@
 """Per-model DB factories for the HTTP regression suite.
 
 Each factory inserts a row directly via the real ORM models (imported
-straight from ai_server.models, usable outside Flask's app context
+straight from src.models, usable outside Flask's app context
 since they're plain SQLAlchemy 2.0 Mapped[] models) and registers its id
 for automatic cleanup at the end of the test.
 
 Cleanup deletes explicitly, in reverse dependency order, rather than relying
 on ondelete=CASCADE: Message/Session/TokenUsage reference bot_id as a plain
-int with no foreign key at all (see ai_server/models/), so they
+int with no foreign key at all (see src/models/), so they
 would be orphaned rather than cascade-deleted if we only removed the Bot.
 """
 
@@ -16,8 +16,8 @@ from datetime import datetime, timezone
 import pytest
 from werkzeug.security import generate_password_hash
 
-from ai_server.config.constant import USER_ROLE
-from ai_server.models import (
+from src.config.constant import USER_ROLE
+from src.models import (
     Bot,
     BotAssignment,
     BotAvatar,

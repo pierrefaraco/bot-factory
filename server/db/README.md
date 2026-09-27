@@ -6,7 +6,7 @@ All Alembic configuration (config, environment scripts, migrations) lives in `se
 server/db/
 ├── alembic.ini          # Alembic config (script_location = %(here)s/alembic)
 ├── alembic/
-│   ├── env.py            # Bootstrap: import ai_server models + DATABASE_URL
+│   ├── env.py            # Bootstrap: import src models + DATABASE_URL
 │   ├── script.py.mako     # Template used to generate a new revision
 │   └── versions/          # Migration history (one file per revision)
 ├── check_alembic.py        # Diagnostic script for configuration
@@ -27,7 +27,7 @@ uv sync
 
 ## 2. Configure `DATABASE_URL`
 
-`alembic/env.py` reads `DATABASE_URL` via `ai_server.config.config.flask_config`. This is the same variable used by the Flask server and is defined in `server/.env`:
+`alembic/env.py` reads `DATABASE_URL` via `src.config.config.flask_config`. This is the same variable used by the Flask server and is defined in `server/.env`:
 
 ```
 DATABASE_URL=******127.0.0.1:3306/botcraft?charset=utf8mb4
@@ -43,7 +43,7 @@ If the `alembic/` folder (containing `env.py`, `script.py.mako`, `versions/`) is
 make db-init
 ```
 
-This command (see `server/db/bootstrap_alembic.sh`) does nothing if `alembic/` already exists and is not empty (it never overwrites). If the folder does not exist, it runs `alembic init alembic` and then rewrites `alembic/env.py` with a customized version (imports `ai_server` models and reads `DATABASE_URL`) — no git required.
+This command (see `server/db/bootstrap_alembic.sh`) does nothing if `alembic/` already exists and is not empty (it never overwrites). If the folder does not exist, it runs `alembic init alembic` and then rewrites `alembic/env.py` with a customized version (imports `src` models and reads `DATABASE_URL`) — no git required.
 
 > ⚠️ `server/db/` (including `alembic/`) is currently not tracked by git in this repository (`git ls-files server/db` returns nothing). Consider `git add server/db` if you want to version this configuration and migration history.
 
@@ -55,7 +55,7 @@ A diagnostic script is provided:
 cd server && uv run db/check_alembic.py
 ```
 
-It checks: `DATABASE_URL`, presence of Alembic files, the `alembic` command, SQLAlchemy models import (`ai_server.models.Base`) and existing migrations.
+It checks: `DATABASE_URL`, presence of Alembic files, the `alembic` command, SQLAlchemy models import (`src.models.Base`) and existing migrations.
 
 ## 5. First run — apply migrations
 
@@ -79,7 +79,7 @@ make db-stamp REV=head
 
 ## 6. Creating a new migration
 
-After modifying a model in `server/ai_server/models/`:
+After modifying a model in `server/src/models/`:
 
 ```bash
 make db-create MSG="Description of the change"
@@ -145,7 +145,7 @@ cd server/db
 
 Several adjustments were applied when moving files into `server/db/`:
 - `alembic.ini` now uses `%(here)s` for `script_location` to resolve paths reliably
-- `alembic/env.py` sys.path calculation was updated to find the `ai_server` package from the new location
+- `alembic/env.py` sys.path calculation was updated to find the `src` package from the new location
 - `check_alembic.py` adds the parent `server/` directory to `sys.path` before importing models
 - `drop_table.sh` adjusted relative paths to `../tool/drop_tables.py`
 - `make db-*` wrappers now load `server/.env` and run `uv run alembic` from the correct directory
