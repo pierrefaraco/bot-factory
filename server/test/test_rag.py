@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/rag/* (rest_rag.py).
+"""HTTP regression tests for /api/rag/* (rag_router.py).
 
 Chat/streaming endpoints call the real LLM via langchain_mistralai, which is
 redirected to the deterministic mock server (server/test/mock_llm/) via the

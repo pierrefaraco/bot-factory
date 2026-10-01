@@ -1,20 +1,7 @@
-"""Token Statistics REST API -- native FastAPI port of the former
-src/rest/rest_token_stats.py Flask blueprint (Phase 1 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-checks; unhandled exceptions fall through to asgi.py's catch-all 500
-handler instead of each function repeating its own try/except.
+"""Token usage statistics REST API.
 
-Query validation note: the original endpoints declared a
-TokenHistoryQuery(limit, last24h) SpecTree/Pydantic model for docs, but
-then re-parsed request.args by hand instead of using the validated
-values -- and did so inconsistently between the two /history/* routes:
-`/history/me` compared the raw string against "true", while
-`/history/user/<id>` used Werkzeug's `type=bool` (Python's `bool("false")
-is True`, so any non-empty value there was truthy). This port uses one
-consistent, correctly-parsed `last24h: bool` query param for both routes
-via FastAPI/Pydantic -- flagging this as a deliberate behavior fix, not a
-silent change: the Werkzeug `type=bool` reading was very likely an
-unintentional bug, not a documented contract.
+Both /history/* routes take the same `last24h: bool` query parameter,
+parsed by FastAPI ("false" is False).
 """
 
 from fastapi import APIRouter, Depends, Query

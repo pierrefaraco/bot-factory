@@ -188,16 +188,8 @@ All endpoints require JWT authentication. Allowed roles:
 
 ## Database migration
 
-After deploying these changes, create the new table:
-
-```bash
-# If using Flask-Migrate
-flask db migrate -m "Add token_usage table"
-flask db upgrade
-
-# Or if using db.create_all()
-# The table will be created automatically at application startup
-```
+The `token_usage` table is created by the Alembic migrations, applied
+automatically when the `api` container starts (or by hand with `make migrate`).
 
 ## Usage example in Python
 

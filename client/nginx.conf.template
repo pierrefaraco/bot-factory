@@ -100,7 +100,7 @@ http {
       # upstream response in its own buffers and only flushes it to the
       # browser once full/closed. For the SSE chat endpoints
       # (/api/rag/streamchat, /api/rag/trigfirstmessage) this silently
-      # turns real token-by-token streaming from Flask into one single
+      # turns real token-by-token streaming from the API into one single
       # delivery at the end -- the backend and frontend were both already
       # correct, this proxy setting was erasing the effect between them.
       # Harmless to disable for the rest of /api/ too (plain JSON

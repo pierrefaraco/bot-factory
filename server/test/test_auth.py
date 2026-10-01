@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/auth/* (rest_authent.py)."""
+"""HTTP regression tests for /api/auth/* (authent_router.py)."""
 
 import hashlib
 import os

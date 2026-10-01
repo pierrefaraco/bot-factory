@@ -1,9 +1,7 @@
 """Per-model DB factories for the HTTP regression suite.
 
-Each factory inserts a row directly via the real ORM models (imported
-straight from src.models, usable outside Flask's app context
-since they're plain SQLAlchemy 2.0 Mapped[] models) and registers its id
-for automatic cleanup at the end of the test.
+Each factory inserts a row directly via the real ORM models (src.models)
+and registers its id for automatic cleanup at the end of the test.
 
 Cleanup deletes explicitly, in reverse dependency order, rather than relying
 on ondelete=CASCADE: Message/Session/TokenUsage reference bot_id as a plain

@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/bot/* (rest_bot.py).
+"""HTTP regression tests for /api/bot/* (bot_router.py).
 
 Bots created via POST /bot also insert BotAvatar/BotParameters/Knowledge
 rows (bot_svc.create_random_bot -> avatar/parameters/template import), but

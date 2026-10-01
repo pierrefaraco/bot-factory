@@ -27,7 +27,7 @@ uv sync
 
 ## 2. Configure `DATABASE_URL`
 
-`alembic/env.py` reads `DATABASE_URL` via `src.config.config.flask_config`. This is the same variable used by the Flask server and is defined in `server/.env`:
+`alembic/env.py` reads `DATABASE_URL` via `src.config.config.app_config`. This is the same variable the API uses, defined in `server/.env`:
 
 ```
 DATABASE_URL=******127.0.0.1:3306/botcraft?charset=utf8mb4
@@ -44,8 +44,6 @@ make db-init
 ```
 
 This command (see `server/db/bootstrap_alembic.sh`) does nothing if `alembic/` already exists and is not empty (it never overwrites). If the folder does not exist, it runs `alembic init alembic` and then rewrites `alembic/env.py` with a customized version (imports `src` models and reads `DATABASE_URL`) — no git required.
-
-> ⚠️ `server/db/` (including `alembic/`) is currently not tracked by git in this repository (`git ls-files server/db` returns nothing). Consider `git add server/db` if you want to version this configuration and migration history.
 
 ## 4. Verify the configuration
 
@@ -67,7 +65,7 @@ Apply all migrations from scratch:
 make db-upgrade
 ```
 
-This creates all tables defined by the initial migration `d2d0def68081_start.py` and any subsequent migrations.
+This creates all tables defined by the initial migration `41a7c3440110_first_db_model.py` and any subsequent migrations.
 
 ### Case B — database already exists (tables created manually)
 

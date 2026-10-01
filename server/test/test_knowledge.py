@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/knowledge/* (rest_knowledge.py).
+"""HTTP regression tests for /api/knowledge/* (knowledge_router.py).
 
 Every knowledge write (create/update/delete) re-indexes the bot's whole
 knowledge tree into ChromaDB under collection `Collection{bot_id}`
@@ -171,7 +171,7 @@ def test_save_imported_golden_path(
     # Knowledge_svc._perform_save_imported_knowledges reads knowledge_name/
     # knowledge_content/knowledge_dad_id/indice/children_ref_id verbatim
     # (KeyError if any is missing) -- these field names differ from the
-    # KnowledgeRequest DTO used elsewhere in this blueprint (name/content).
+    # KnowledgeRequest DTO used elsewhere in this router (name/content).
     user, password = create_user(role=USER_ROLE)
     bot = create_bot(user.id)
     headers = login(user.mail, password)

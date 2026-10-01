@@ -1,25 +1,7 @@
-"""Bot Guest Assignment REST API -- native FastAPI port of the former
-src/rest/rest_bot_assignment.py Flask blueprint (Phase 5 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-and ownership checks; unhandled exceptions fall through to asgi.py's
-catch-all 500 handler.
+"""Bot guest assignment REST API: which guests may use which bot.
 
-Every body model in this blueprint (BotGuestAssignmentRequest,
-BotGuestAssignmentUpdateRequest, BotGuestAssignmentRefRequest) has only
-required fields, so a wrong Content-Type always falls into the "Field
-required" branch of require_json_body() -- the original's explicit
-`if not request.is_json` checks were dead code, and so were
-remove_assignment/check_assignment's manual `if "bot_id" not in data`
-presence checks (SpecTree's own required-field gate already rejects a
-body missing either field before the handler runs). This port skips
-reproducing that unreachable code and reads straight off the validated
-body model instead.
-
-Every route here is `async def`, as is every BotAssignmentService method
-it calls (the service sits on repositories/bot_assignment_repository.py).
-DB session scoping is wired once, at the router level, via
-Depends(async_db_session_dependency) -- see that dependency's own
-docstring.
+Every body model here has only required fields, so a wrong Content-Type
+is rejected by require_json_body() with a "Field required" message.
 """
 
 from fastapi import APIRouter, Depends, Response

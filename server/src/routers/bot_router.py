@@ -1,36 +1,12 @@
-"""Bot CRUD REST API -- native FastAPI port of the former
-src/rest/rest_bot.py Flask blueprint (Phase 4 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-checks and ownership rules; unhandled exceptions fall through to
-asgi.py's catch-all 500 handler.
+"""Bot CRUD REST API.
 
-Two deliberate, flagged departures from the original, both on paths no
-test exercises:
+Path params use the `{bot_id:int}` converter: a non-numeric segment
+falls through to the next route (e.g. "/me", "/owned") instead of
+matching here and failing validation.
 
-- The original's blanket `except Exception as e: return jsonify({"error":
-  str(e)}), 500` leaked the raw exception text, unlike every other
-  migrated blueprint (which returned a generic "Internal server error").
-  This port uses the same generic message everywhere instead, for a
-  consistent contract and to stop leaking internal error detail -- an
-  intentional normalization, not a silent slip.
-- update_bot_admin's `BotUpdateRequest.model_validate(data).model_dump(...)
-  if data else {}` special-cased an empty/absent JSON body to `{}`
-  without validating it; FastAPI's own body parsing will instead 400 on
-  a genuinely empty body even with a correct Content-Type header (every
-  test here only exercises the *wrong* Content-Type case, which behaves
-  identically via require_json_content_type below).
-
-Path params use the `{bot_id:int}` Starlette converter (not a bare
-`{bot_id}`) to match Flask's `<int:bot_id>` exactly: a non-numeric
-segment falls through to the next route (e.g. "/me", "/owned") instead
-of matching here and 422ing.
-
-Every route here is `async def`, as is every BotService method it calls.
-create_bot/delete_bot still end up in KnowledgeSvc (knowledge chapters +
-ChromaDB, which has no async client), which BotService runs through
-run_in_threadpool -- see bot_svc.py. DB session scoping is wired once,
-at the router level, via Depends(async_db_session_dependency) -- see
-that dependency's own docstring.
+create_bot/delete_bot end up in KnowledgeSvc (knowledge chapters +
+ChromaDB, which has no async client), run through run_in_threadpool --
+see bot_svc.py.
 """
 
 from typing import List, Optional

@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/bot-parameters/* (rest_bot_parameters.py)."""
+"""HTTP regression tests for /api/bot-parameters/* (bot_parameters_router.py)."""
 
 from src.config.constant import GUEST_ROLE, USER_ROLE
 from src.models import Bot, BotParameters
@@ -69,10 +69,8 @@ def test_create_without_interlocutor_identity_defaults_to_user(
 def test_create_missing_content_type(
     http_client, api_base_url, create_user, create_bot, login
 ):
-    # No before_request Content-Type hook on this blueprint: a non-JSON
-    # Content-Type reaches spectree's own validation first, which reports
-    # missing fields rather than the handler's dead-code is_json check
-    # (same situation as rest_users_admin.py's register()).
+    # require_json_body(): a non-JSON body is treated as absent, so the
+    # required fields are reported missing.
     user, password = create_user(role=USER_ROLE)
     create_bot(user.id)
     headers = login(user.mail, password)

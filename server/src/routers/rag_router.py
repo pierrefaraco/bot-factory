@@ -1,60 +1,18 @@
-"""RAG (Retrieval-Augmented Generation) REST API -- native FastAPI port of
-the former src/rest/rest_rag.py Flask blueprint (Phase 8 of the
-Flask -> FastAPI migration; rest_authent.py is the one remaining
-blueprint after this). Same URLs, same response shapes, same
-role/ownership checks.
-
-Every route here is `async def`: this is the "dedicated RAG-phase pass"
-bot_svc.py's delete() previously deferred to, covering rag_svc.py,
-message_svc.py and the handful of bot_svc/bot_assignment_svc/
-bot_parameters_svc lookups this router needs, reindex_knowledge
-included. Genuinely
-blocking, non-DB-async work with no async equivalent (ChromaDB, the LLM's
-own retriever step) is pushed onto FastAPI's threadpool explicitly via
-run_in_threadpool from inside rag_svc.py/knowledge_svc.py, or -- for the
-retriever, invoked from deep inside the LCEL chain -- picked up
-automatically by LangChain's own executor-offloading default for a sync
-RunnableLambda under .ainvoke()/.astream().
-
-DB session scoping uses no decorator at all: since every route is `async
-def`, the router declares `dependencies=[Depends(async_db_session_dependency)]`
-once, applying it to every path operation -- see
-dependencies/db_session.py's module docstring for why an async-generator
-Depends is safe here (no thread hop between it and the endpoint call)
-where it wouldn't be for a sync `def` route.
-
-Streaming (trigfirstmessage?stream=TRUE, streamchat): rag_svc.py's
-ask_with_stream() returns an *async* generator now (rag_chain.astream()
-instead of .stream()), which changes how the per-chunk DB scope has to
-work. A sync generator only reaches StreamingResponse via Starlette's
-iterate_in_threadpool, which dispatches every next() call through its own
-independent threadpool call -- a scope entered on one such call is
-invisible on the next regardless of when the endpoint function itself
-returns, which is why the old sync path needed dependencies.db_session.
-stream_with_db_session to push/pop a fresh scope around every single
-next(). An async generator gets no such treatment: StreamingResponse
-drives it with a plain `async for`, directly on the one task already
-handling this request (see starlette.responses.StreamingResponse), so
-dependencies.db_session.stream_with_async_db_session only needs to open
-the scope once, around the whole generator -- it naturally stays entered
-across every `yield`.
-
-The original had no @api.validate on either streaming route specifically
-because SpecTree's Flask integration drains a streamed Response into
-memory via response.get_data() before Werkzeug can stream it (see the
-git history on rest_rag.py) -- moot here since there's no SpecTree
-layer for native routes at all.
-
-The manual `Access-Control-Allow-Origin: "*"` header the original set
-directly on these two Response objects is dropped: asgi.py's
-CORSMiddleware now adds that header to every response uniformly (see
-its own module docstring), so keeping both would emit two ACAO headers
-on a stream response instead of one.
+"""RAG chat REST API.
 
 The chat routes go through ChatFacade (services/chat_facade.py) for every
 step of a conversation turn -- user lookup, bot access check, token
 quota, session lookup, RAG call. This module only parses the request and
 turns the facade's results into HTTP responses.
+
+Blocking work with no async equivalent (ChromaDB, the retriever step of
+the LCEL chain) runs in the threadpool, from rag_svc.py/knowledge_svc.py
+or through LangChain's own offloading of sync RunnableLambdas.
+
+Streaming routes (trigfirstmessage?stream=TRUE, streamchat) return an
+async generator that saves the assistant's reply on its last step, after
+the endpoint has returned: stream_with_async_db_session keeps a DB scope
+open around the whole generator (see dependencies/db_session.py).
 """
 
 import time

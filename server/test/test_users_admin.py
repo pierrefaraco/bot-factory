@@ -1,7 +1,7 @@
-"""HTTP regression tests for /api/users/* (rest_users_admin.py).
+"""HTTP regression tests for /api/users/* (users_admin_router.py).
 
-This is the largest blueprint (~25 routes) and the reference for the
-self/guest/admin role-matrix pattern reused by later blueprints.
+The largest router (~25 routes), and the reference for the
+self/guest/admin role-matrix pattern used by the other test modules.
 """
 
 from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
@@ -37,13 +37,8 @@ def test_register_duplicate_email(http_client, api_base_url, create_user):
 
 
 def test_register_missing_content_type(http_client, api_base_url):
-    # Unlike rest_authent.py (which has a blueprint-level before_request
-    # hook checking Content-Type ahead of everything else), this blueprint
-    # has no such hook, so a non-JSON Content-Type reaches spectree's own
-    # @api.validate() first: it can't parse the body as JSON regardless of
-    # what's in it, so Pydantic reports every field as missing rather than
-    # the handler's own "Content-Type must be application/json" message
-    # (that check is effectively dead code for this route).
+    # require_json_body(): a non-JSON body is treated as absent, so every
+    # required field is reported missing.
     response = http_client.post(
         f"{api_base_url}/users",
         data='{"name": "X", "email": "x@example.com", "password": "x"}',

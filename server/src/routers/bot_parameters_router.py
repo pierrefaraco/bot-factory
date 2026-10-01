@@ -1,29 +1,11 @@
-"""Bot Parameters REST API -- native FastAPI port of the former
-src/rest/rest_bot_parameters.py Flask blueprint (Phase 3 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-checks; unhandled exceptions fall through to asgi.py's catch-all 500
-handler.
+"""Bot parameters REST API.
 
-Content-Type contract: same situation as rest_avatar.py (no
-@bp.before_request guard) -- see dependencies/content_type.py's
-require_json_body() docstring. BotParametersPatchRequest has zero
-declared fields (extra="allow" only), so like AvatarPatchRequest a wrong
-Content-Type falls through to the explicit "Content-Type must be
-application/json" message rather than a "Field required" one.
+BotParametersPatchRequest declares no field (extra="allow"), so
+require_json_body() rejects a wrong Content-Type with an explicit
+"Content-Type must be application/json" message.
 
-The original patch handler's `if user.roles not in [ADMIN_ROLE,
-USER_ROLE]: 403` and its "TODO: Add proper permission check for bot
-ownership" are both left exactly as they were: the role check is
-unreachable dead code (role_required's FastAPI equivalent,
-require_roles(), already rejects any other role before this handler
-runs), and bot-ownership scoping was never implemented in the original
-either -- not something to add silently as part of a framework-only
-migration.
-
-Every route here is `async def`, as is every BotParametersService method
-it calls. DB session scoping is wired once, at the router level, via
-Depends(async_db_session_dependency) -- see that dependency's own
-docstring.
+TODO: the PATCH route checks the caller's role but not that they own
+the bot.
 """
 
 from typing import Optional
