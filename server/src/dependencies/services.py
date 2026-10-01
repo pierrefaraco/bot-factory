@@ -36,6 +36,7 @@ from src.repositories import (
     BotRepository,
     ConversationRepository,
     KnowledgeRepository,
+    MagicLinkRepository,
     TokenUsageRepository,
     UserRepository,
 )
@@ -49,6 +50,7 @@ from src.services.google_authent_svc import GoogleAuthentSvc
 from src.services.knowledge_svc import KnowledgeSvc
 from src.services.langchain_facade import LangChainFacade
 from src.services.llm_svc import LlmService
+from src.services.magic_link_svc import MagicLinkService
 from src.services.message_svc import MessageService
 from src.services.prompt_svc import PromptService
 from src.services.rag_svc import RagService
@@ -79,6 +81,7 @@ class Services:
     chat: ChatFacade
     authent: AuthenticationService
     google_authent: GoogleAuthentSvc
+    magic_link: MagicLinkService
 
 
 def build_services() -> Services:
@@ -143,6 +146,7 @@ def build_services() -> Services:
         chat=chat,
         authent=AuthenticationService(user_admin, user_repo),
         google_authent=GoogleAuthentSvc(user_admin),
+        magic_link=MagicLinkService(MagicLinkRepository(), user_repo),
     )
 
 
@@ -202,6 +206,10 @@ async def get_google_authent_service(request: Request) -> GoogleAuthentSvc:
     return _services(request).google_authent
 
 
+async def get_magic_link_service(request: Request) -> MagicLinkService:
+    return _services(request).magic_link
+
+
 AvatarServiceDep = Annotated[AvatarService, Depends(get_avatar_service)]
 BotAssignmentServiceDep = Annotated[
     BotAssignmentService, Depends(get_bot_assignment_service)
@@ -225,3 +233,4 @@ AuthenticationServiceDep = Annotated[
 GoogleAuthentServiceDep = Annotated[
     GoogleAuthentSvc, Depends(get_google_authent_service)
 ]
+MagicLinkServiceDep = Annotated[MagicLinkService, Depends(get_magic_link_service)]

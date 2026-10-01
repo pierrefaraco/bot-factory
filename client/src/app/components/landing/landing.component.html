@@ -27,7 +27,7 @@
           <div class="nav-buttons">
             <app-button [label]="'Try the Demo'" [type]="'custom-button'" [color]="'var(--text-on-accent)'"
               [backgroundColor]="'var(--text-accent)'" [disabled]="false"
-              (buttonClickedEvent)="navigateToAuth(); closeMobileMenu()">
+              (buttonClickedEvent)="tryDemo(); closeMobileMenu()">
             </app-button>
 
           </div>
@@ -55,7 +55,7 @@
           <div class="hero-cta">
             <app-button [label]="'Try the Live Demo'" [icon]="'arrow_forward'" [type]="'custom-button'"
               [color]="'var(--text-on-accent)'" [backgroundColor]="'var(--text-accent)'" [size]="'large'"
-              (buttonClickedEvent)="navigateToAuth()" [disabled]="false">
+              (buttonClickedEvent)="tryDemo()" [disabled]="false">
             </app-button>
             <a class="external-link-button size-large" [href]="githubUrl" target="_blank" rel="noopener noreferrer">
               <span class="material-icons">code</span>
@@ -102,7 +102,7 @@
       <div class="meet-me-cta">
         <app-button [label]="'Interview Me Now'" [icon]="'arrow_forward'" [type]="'custom-button'"
           [color]="'var(--text-on-accent)'" [backgroundColor]="'var(--text-accent)'" [size]="'large'"
-          (buttonClickedEvent)="navigateToAuth()" [disabled]="false">
+          (buttonClickedEvent)="tryDemo()" [disabled]="false">
         </app-button>
         <p class="meet-me-note">Your changes only apply to your own copy of the bot.</p>
       </div>

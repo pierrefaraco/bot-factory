@@ -98,3 +98,17 @@ def require_roles(roles: list):
         return claims
 
     return dependency
+
+
+def reject_demo_account(claims: dict = Depends(get_current_claims)) -> dict:
+    """Refuses routes that change the account itself (delete it, rename it,
+    change its email or password, add guests to it) to the shared demo
+    account: anyone can log into it from the landing page (POST
+    /api/auth/demo), and one visitor must not be able to break it for the
+    next ones. Matched on the JWT's mail claim, so it holds however the
+    session was opened. An admin can still manage it through the
+    /users/<id> routes."""
+    demo_mail = AppConfig.DEMO_ACCOUNT_EMAIL
+    if demo_mail and claims.get("mail", "").lower() == demo_mail.lower():
+        raise ApiError("Not available with the demo account", status_code=403)
+    return claims

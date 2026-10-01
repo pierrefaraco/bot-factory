@@ -12,6 +12,7 @@ from src.models.bot import Bot, BotAvatar, BotParameters, InterlocutorIdentity
 from src.models.bot_assignment import BotAssignment
 from src.models.conversation import Message, Session
 from src.models.knowledge import ROOT_CHAPTER_ID, Knowledge
+from src.models.magic_link import MagicLink
 from src.models.token_usage import TokenUsage
 from src.models.user import User
 
@@ -23,6 +24,7 @@ __all__ = [
     "BotParameters",
     "InterlocutorIdentity",
     "Knowledge",
+    "MagicLink",
     "Message",
     "ROOT_CHAPTER_ID",
     "Session",

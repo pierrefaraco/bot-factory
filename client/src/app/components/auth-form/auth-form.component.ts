@@ -5,7 +5,7 @@ import { trigger, state, style, transition, animate } from '@angular/animations'
 import { FormFieldComponent } from '../base/form-field/form-field.component';
 import { ButtonComponent } from '../base/button/button.component';
 import { AuthService } from '@app/services/auth.service';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { User } from '@app/models/user.model';
 import { UsersService } from '@app/services/users.service';
 declare const google: any;
@@ -79,6 +79,7 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
   signupForm!: FormGroup;
   loginSubmitting = false;
   signupSubmitting = false;
+  magicLinkError = '';
   // Loaded from assets/env.js (see index.html), itself generated from the
   // GOOGLE_CLIENT_ID env var at container start (client/docker-entrypoint.sh)
   // -- keep this in sync with the backend's GOOGLE_CLIENT_ID (same .env var).
@@ -86,6 +87,7 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
   constructor(private fb: FormBuilder,
     private authService: AuthService,
     private router: Router,
+    private route: ActivatedRoute,
     private usersService: UsersService) {
     // Diagnostic au démarrage
     console.log('🔍 Configuration Google OAuth:');
@@ -96,6 +98,29 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.initializeForms();
+    const magicToken = this.route.snapshot.queryParamMap.get('token');
+    if (magicToken) {
+      this.loginWithMagicLink(magicToken);
+    }
+  }
+
+  // Lien de connexion à usage unique : /auth?token=...
+  private loginWithMagicLink(token: string): void {
+    // Retire le jeton de la barre d'adresse et de l'historique tout de suite,
+    // avant même la réponse du serveur.
+    this.router.navigate([], { relativeTo: this.route, queryParams: {}, replaceUrl: true });
+    this.loginSubmitting = true;
+    this.authService.loginWithMagicLink(token)
+      .subscribe({
+        next: () => {
+          this.loginSubmitting = false;
+          this.go_to_app();
+        },
+        error: () => {
+          this.loginSubmitting = false;
+          this.magicLinkError = 'This login link is invalid, expired or has already been used.';
+        }
+      });
   }
 
   ngAfterViewInit(): void {

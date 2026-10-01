@@ -1,4 +1,4 @@
-.PHONY: help setup dev build test clean logs stop start restart up down migrate db-shell db-init db-create db-upgrade db-downgrade db-history db-current db-stamp test-server-unit test-server-http test-server-http-dev lint-server
+.PHONY: help setup dev build test clean logs stop start restart up down migrate db-shell db-init db-create db-upgrade db-downgrade db-history db-current db-stamp test-server-unit test-server-http test-server-http-dev lint-server magic-link
 
 # Port of an API already running in dev mode (make dev-server / z-run.sh),
 # used by test-server-http-dev. Override: make test-server-http-dev PORT=8080
@@ -52,6 +52,7 @@ help:
 	@echo "  make db-history     Show migration history"
 	@echo "  make db-current     Show current database revision"
 	@echo "  make db-stamp REV=head  Mark database at a revision without running SQL"
+	@echo "  make magic-link EMAIL=a@b.c [TTL=72]  Print a one-time login link (api container)"
 	@echo ""
 	@echo "Production (HTTPS -- see deploy/README.md):"
 	@echo "  make prod-deploy    First deploy on a fresh host: build, start, get HTTPS cert"
@@ -205,7 +206,7 @@ test-server-http-dev:
 
 test-client:
 	@echo "Running frontend tests..."
-	cd client && npm test -- --watch=false --browsers=ChromeHeadless
+	cd client && npm test -- --watch=false --browsers=ChromeHeadlessCI
 
 test-client-watch:
 	@echo "Running frontend tests in watch mode..."
@@ -220,6 +221,14 @@ migrate:
 db-shell:
 	@echo "Connecting to MySQL database..."
 	$(DOCKER_COMPOSE) exec db mysql -u $${MYSQL_USER:-botcraft_user} -p$${MYSQL_PASSWORD:-123456789} $${MYSQL_DATABASE:-botcraft}
+
+# One-time login link for an existing account, built on the api's PUBLIC_URL
+# (see server/src/services/magic_link_svc.py). TTL in hours, 72 by default.
+magic-link:
+ifndef EMAIL
+	$(error Usage: make magic-link EMAIL=user@example.com [TTL=72])
+endif
+	@$(DOCKER_COMPOSE) exec -T api python -m src.scripts.create_magic_link "$(EMAIL)" $(TTL)
 
 # Alembic migrations, run locally via uv (DATABASE_URL built from the root
 # .env's MYSQL_* vars). Host comes from MYSQL_HOST in .env (defaults to "db"):

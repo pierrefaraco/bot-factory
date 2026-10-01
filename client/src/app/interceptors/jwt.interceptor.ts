@@ -20,6 +20,8 @@ export function errorInterceptor(req: HttpRequest<unknown>, next: HttpHandlerFn)
   const isCredentialCheckRequest = req.url.includes('/auth/login') ||
     req.url.includes('/auth/register') ||
     req.url.includes('/auth/google') ||
+    req.url.endsWith('/auth/magic-link') ||
+    req.url.endsWith('/auth/demo') ||
     req.url.includes('/users/password/');
 
   return next(req).pipe(
@@ -54,6 +56,9 @@ export const jwtInterceptor:HttpInterceptorFn  = (req: HttpRequest<unknown>, nex
   const isUnauthenticatedRequest = req.url.includes('/auth/login') ||
     req.url.includes('/auth/register') ||
     req.url.includes('/auth/google') ||
+    // endsWith : /auth/magic-links (création, admin) a besoin du Bearer.
+    req.url.endsWith('/auth/magic-link') ||
+    req.url.endsWith('/auth/demo') ||
     req.url.includes('api.elevenlabs.io');
 
   if (token && !isUnauthenticatedRequest) {

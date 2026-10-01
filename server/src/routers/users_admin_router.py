@@ -50,7 +50,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr, Field
 
 from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
-from src.dependencies.auth import require_roles
+from src.dependencies.auth import reject_demo_account, require_roles
 from src.dependencies.content_type import require_json_body
 from src.dependencies.db_session import async_db_session_dependency
 from src.dependencies.services import UserAdminServiceDep
@@ -136,7 +136,13 @@ async def register(body: UserRegistrationRequest, user_admin_svc: UserAdminServi
     return {"message": "User registered successfully", "user": user}
 
 
-@router.put("/me", dependencies=[Depends(require_json_body(UserUpdateRequest))])
+@router.put(
+    "/me",
+    dependencies=[
+        Depends(reject_demo_account),
+        Depends(require_json_body(UserUpdateRequest)),
+    ],
+)
 async def update_users_self(
     body: UserUpdateRequest,
     user_admin_svc: UserAdminServiceDep,
@@ -181,7 +187,12 @@ async def _register_guest(
 
 
 @router.post(
-    "/guest", status_code=201, dependencies=[Depends(require_json_body(UserRegistrationRequest))]
+    "/guest",
+    status_code=201,
+    dependencies=[
+        Depends(reject_demo_account),
+        Depends(require_json_body(UserRegistrationRequest)),
+    ],
 )
 async def register_guest(
     body: UserRegistrationRequest,
@@ -276,7 +287,7 @@ async def delete_user(user_id, user_admin_svc: UserAdminService):
     return {"msg": "User deleted successfully"}
 
 
-@router.delete("/me")
+@router.delete("/me", dependencies=[Depends(reject_demo_account)])
 async def delete_user_self(
     user_admin_svc: UserAdminServiceDep,
     claims: dict = Depends(any_role),
@@ -333,7 +344,11 @@ async def change_password(
 
 
 @router.put(
-    "/password/me", dependencies=[Depends(require_json_body(PasswordChangeRequest))]
+    "/password/me",
+    dependencies=[
+        Depends(reject_demo_account),
+        Depends(require_json_body(PasswordChangeRequest)),
+    ],
 )
 async def change_password_self(
     body: PasswordChangeRequest,

@@ -6,6 +6,7 @@
       <p class="auth-subtitle">
         {{ isLoginMode ? 'Sign in to continue' : 'Join us today' }}
       </p>
+      <p *ngIf="magicLinkError" class="magic-link-error" role="alert">{{ magicLinkError }}</p>
     </div>
 
     <!-- Toggle buttons to switch between Login and Signup -->

@@ -57,6 +57,10 @@ class AppConfig(BaseConfig):
 
     URL_SUBDIRECTORY = value
 
+    # Public URL of the Angular frontend, used to build login links
+    # (magic_link_svc.py). No trailing slash.
+    PUBLIC_URL = os.environ.get("PUBLIC_URL", default="http://localhost:8080").rstrip("/")
+    DEMO_ACCOUNT_EMAIL = os.environ.get("DEMO_ACCOUNT_EMAIL", default="").strip()
     # Logger properties
     LOGGER_LVL = "INFO"
     value = os.environ.get("LOGGER_LVL", default="INFO").upper()

@@ -23,6 +23,8 @@ services:
         condition: service_healthy
     environment:
       MISTRAL_BASE_URL: http://mock-llm:9999/v1
+      # Fixed account test_auth.py's demo tests create and delete themselves.
+      DEMO_ACCOUNT_EMAIL: demo-account-test@example.com
 
   # Runs server/test/ as its own container on botfactory-network, so it
   # reaches db/api by service name -- no host-networking ambiguity, works
@@ -66,4 +68,5 @@ services:
         condition: service_healthy
     environment:
       TEST_API_BASE_URL: ${TEST_API_BASE_URL:-http://api:8000/api}
+      TEST_DEMO_ACCOUNT_EMAIL: demo-account-test@example.com
       TEST_DATABASE_URL: ${TEST_DATABASE_URL:-mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@db:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4}

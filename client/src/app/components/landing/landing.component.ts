@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { ButtonComponent } from '../base/button/button.component';
+import { AuthService } from '@app/services/auth.service';
 
 @Component({
   selector: 'app-landing',
@@ -10,8 +11,10 @@ import { ButtonComponent } from '../base/button/button.component';
   templateUrl: './landing.component.html',
   styleUrl: './landing.component.scss'
 })
-export class LandingComponent {
+export class LandingComponent implements OnInit {
   mobileMenuOpen = false;
+  private demoEnabled = false;
+  demoLoading = false;
 
   readonly githubUrl = 'https://github.com/pierrefaraco/bot-factory';
   readonly linkedinUrl = 'https://www.linkedin.com/in/pierre-faraco-03088149/';
@@ -138,7 +141,43 @@ export class LandingComponent {
     { icon: 'web', name: 'Angular' }
   ];
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private authService: AuthService) {}
+
+  ngOnInit(): void {
+    // Démo non configurée ou serveur injoignable : les boutons "Try the
+    // demo" retombent sur la page de connexion, comme avant.
+    this.authService.isDemoEnabled().subscribe({
+      next: enabled => this.demoEnabled = enabled,
+      error: () => this.demoEnabled = false,
+    });
+  }
+
+  // Boutons "Try the demo" : connexion directe au compte de démo partagé.
+  tryDemo() {
+    if (this.authService.isAuthenticated()) {
+      // Déjà connecté : on ne remplace pas sa session par celle de la démo.
+      this.router.navigate(['/workspace']);
+      return;
+    }
+    if (!this.demoEnabled) {
+      this.navigateToAuth();
+      return;
+    }
+    if (this.demoLoading) {
+      return;
+    }
+    this.demoLoading = true;
+    this.authService.loginDemo().subscribe({
+      next: () => {
+        this.demoLoading = false;
+        this.router.navigate(['/workspace']);
+      },
+      error: () => {
+        this.demoLoading = false;
+        this.navigateToAuth();
+      }
+    });
+  }
 
 
   navigateToAuth() {

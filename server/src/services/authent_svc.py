@@ -6,6 +6,8 @@ from typing import Optional
 from starlette.concurrency import run_in_threadpool
 from werkzeug.security import check_password_hash
 
+from src.config.config import AppConfig
+from src.config.constant import ADMIN_ROLE
 from src.models import User
 from src.dependencies.auth import create_access_token
 from src.exceptions.service_exceptions import AuthenticationError, NotFoundError
@@ -64,6 +66,33 @@ class AuthenticationService(BaseService):
 
         self.logger.info(f"{mail} (user_id={user.id}) successfully authenticated")
 
+        return self.build_token(user)
+
+    async def login_demo(self) -> str:
+        """
+        Log into the shared demo account (AppConfig.DEMO_ACCOUNT_EMAIL),
+        no password asked: that's the point of the landing page's
+        "Try the demo" buttons. What visitors can do with it is limited by
+        the account's own role, and by reject_demo_account on the routes
+        that change the account itself (users_admin_router.py).
+
+        Raises:
+            NotFoundError: demo disabled, or its account doesn't exist
+            AuthenticationError: the account is inactive, or an admin
+        """
+        mail = AppConfig.DEMO_ACCOUNT_EMAIL
+        if not mail:
+            raise NotFoundError("Demo account", "<disabled>")
+        user: User = await self.user_repo.get_by_email(mail)
+        if not user:
+            raise NotFoundError("Demo account", mail)
+        if not user.is_active:
+            raise AuthenticationError(f"Demo account {mail} is not active")
+        # An admin account behind a password-free public button would hand
+        # admin rights to anyone: refuse, whatever the configuration says.
+        if ADMIN_ROLE in user.roles:
+            raise AuthenticationError(f"Demo account {mail} is an admin account")
+        self.logger.info(f"Demo login (user_id={user.id})")
         return self.build_token(user)
 
     def build_token(self, user):

@@ -6,7 +6,7 @@ An AI bot creation and management platform built around a production-style FastA
 
 🔗 **Live demo:** [bot-factory.fr](https://bot-factory.fr)
 
-> 💼 **Portfolio project** — built solo by [Pierre Faraco](https://github.com/pierrefaraco) to showcase backend and DevOps skills (FastAPI, layered architecture, MySQL + Alembic migrations, LLM/RAG integration, Docker Compose, Nginx and automated HTTPS deployment), with an Angular front end. Not maintained as a commercial product.
+> 💼 **Portfolio project** — built  by [Pierre Faraco](https://github.com/pierrefaraco) to showcase backend and DevOps skills (FastAPI, layered architecture, MySQL + Alembic migrations, LLM/RAG integration, Docker Compose, Nginx and automated HTTPS deployment), with an Angular front end. Not maintained as a commercial product.
 
 ---
 

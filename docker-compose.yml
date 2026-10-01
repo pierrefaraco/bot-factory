@@ -76,6 +76,8 @@ services:
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
       TOKEN_LIMIT_PER_USER_24H: ${TOKEN_LIMIT_PER_USER_24H:-0}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${WEB_PORT:-8080}}
+      DEMO_ACCOUNT_EMAIL: ${DEMO_ACCOUNT_EMAIL:-}
     ports:
       # Bound to loopback only: in prod, the "reverse-proxy" service
       # (docker-compose.prod.yml) is the sole public entry point, reaching
