@@ -1,33 +1,14 @@
-"""Authentication REST API -- native FastAPI port of the former
-src/rest/rest_authent.py Flask blueprint (Phase 9, the last
-blueprint of the Flask -> FastAPI migration). Same URLs, same response
-shapes.
+"""Authentication REST API.
 
-This blueprint had a real @bp.before_request Content-Type guard
-(unlike avatar/bot_parameters/bot_assignment/knowledge/users_admin,
-which never had one) that ran before SpecTree/the handler either way --
-require_json_content_type() reproduces that unconditional check exactly,
-same as bot_router.py's POST/PUT routes.
+Anti-enumeration: a wrong password, an inactive account and an unknown
+email all get the same "Invalid email or password" 401, on /login as on
+/google.
 
-refresh()/logout() use get_current_claims (any authenticated user, no
-role restriction) rather than require_roles(...): the original used
-plain @jwt_required() with no role check at all. Both routes needed a
-small AuthenticationService refactor (see authent_svc.py) since
-refresh_token()/logout() used to read the jti/identity straight off
-Flask-JWT-Extended's own token context via get_jwt()/get_jwt_identity()
--- unavailable to a native route that never ran @jwt_required().
+Blocking work (password hashing, the HTTP fetch of Google's signing
+certificates) runs through run_in_threadpool inside the services.
 
-Anti-enumeration: login()'s AuthenticationError/NotFoundError (wrong
-password, inactive account, unknown email) all collapse to the same
-"Invalid email or password" 401, same as the original. login_with_google()
-applies the same collapse for its own AuthenticationError case (inactive
-account) so a disabled Google-linked account isn't distinguishable either.
-
-Every route is `async def`. The genuinely blocking parts -- login()'s
-deliberately CPU-heavy check_password_hash(), and login_with_google()'s
-verify_oauth2_token() HTTP round-trip to Google's cert endpoint (a sync
-transport) -- run through run_in_threadpool inside the services
-(authent_svc.py, google_authent_svc.py), off the event loop.
+There is no refresh token: an access token lasts JWT_ACCESS_TOKEN_EXPIRES
+seconds, after which the user logs in again.
 """
 
 from fastapi import APIRouter, Depends
@@ -189,19 +170,6 @@ async def login_demo(auth_svc: AuthenticationServiceDep):
     return {"token": access_token}
 
 
-@router.post("/refresh", dependencies=[Depends(require_json_content_type)])
-async def refresh(
-    auth_svc: AuthenticationServiceDep,
-    claims: dict = Depends(get_current_claims),
-):
-    """Refresh JWT access token"""
-    user_id = claims["sub"]
-    app_logger.info(f"POST /auth/refresh - refresh called for user_id={user_id}")
-    access_token = await auth_svc.refresh_token(claims["jti"], user_id)
-    app_logger.info(f"Token refresh succeeded for user_id={user_id}")
-    return {"access_token": access_token}
-
-
 @router.post("/logout", dependencies=[Depends(require_json_content_type)])
 async def logout(
     auth_svc: AuthenticationServiceDep,
@@ -211,6 +179,6 @@ async def logout(
     app_logger.info("POST /auth/logout - logout called")
     user_id = claims["sub"]
     app_logger.info(f"User {user_id} logging out")
-    auth_svc.logout(claims["jti"])
+    await auth_svc.logout(claims)
     app_logger.info(f"User {user_id} logged out successfully")
     return {"message": "Logged out successfully"}

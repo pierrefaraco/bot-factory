@@ -1,7 +1,6 @@
 from typing import List, Optional, Dict, Any
 
 from starlette.concurrency import run_in_threadpool
-from werkzeug.security import generate_password_hash, check_password_hash
 
 from src.log.bot_factory_logger import BotFactoryLogger
 from src.models import User
@@ -18,6 +17,7 @@ from src.repositories import (
 )
 from src.services.base_service import BaseService
 from src.services.bot_assignment_svc import BotAssignmentService
+from src.services.passwords import hash_password, verify_password
 
 
 logger = BotFactoryLogger()
@@ -26,8 +26,8 @@ logger = BotFactoryLogger()
 class UserAdminService(BaseService[UserDto]):
     """Service for managing user entities.
 
-    Password hashing/checking (werkzeug's generate_password_hash/
-    check_password_hash) is deliberately CPU-heavy: it always runs through
+    Password hashing/checking (services/passwords.py) is deliberately
+    CPU-heavy: it always runs through
     run_in_threadpool, so it never blocks the event loop while the rest of
     each use case stays plain async."""
 
@@ -142,7 +142,7 @@ class UserAdminService(BaseService[UserDto]):
             Created UserDto instance
         """
         password_hash = await run_in_threadpool(
-            generate_password_hash, user_data["password"]
+            hash_password, user_data["password"]
         )
         user = User(
             name=user_data["name"],
@@ -455,7 +455,7 @@ class UserAdminService(BaseService[UserDto]):
         user = await self._get_user_or_404(user_id, "change_password")
 
         if not await run_in_threadpool(
-            check_password_hash, user.password_hash, old_password
+            verify_password, user.password_hash, old_password
         ):
             # Never log password/hash values, only the outcome.
             self.logger.warning(
@@ -464,7 +464,7 @@ class UserAdminService(BaseService[UserDto]):
             raise ApiError("Invalid old password", 401)
 
         user.password_hash = await run_in_threadpool(
-            generate_password_hash, new_password
+            hash_password, new_password
         )
         await self.user_repo.commit()
         self.logger.info(f"Password changed for user {user_id}")

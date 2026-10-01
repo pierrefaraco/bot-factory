@@ -1,47 +1,18 @@
-"""User Administration REST API -- native FastAPI port of the former
-src/rest/rest_users_admin.py Flask blueprint (Phase 7 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-and ownership checks.
+"""User administration REST API.
 
-Two consistent simplifications versus the original, both flagged rather
-than silent:
+The "own it or be admin" check of every <id> route is
+UserAdminService.authorize_user_scope(). Password hashing runs in the
+threadpool inside the service (see services/passwords.py).
 
-- Several handlers (delete_user*, change_role, change_password*,
-  (de)activate_user*, reassign_children, get_user*) wrapped their own
-  `except ApiError as exc: raise ApiError(f"Exception while X: {exc}",
-  code)` -- re-raising the *same* ApiError with an extra prefix glued
-  onto its message but the same status code. Every genuine ApiError
-  raised deep in user_admin_svc (invalid old password, user not found,
-  etc.) now simply propagates to asgi.py's own ApiError handler
-  unchanged -- same status, and every test here only substring-matches
-  the message, so nothing observable changes; it also stops rewrapping
-  service-layer NotFoundError/ServiceError into a 500 that is generic
-  either way (that part already matched the original's own `except
-  Exception` fallback).
-- Kept consistent with bot_router.py's earlier normalization: no route
-  here manually catches an unexpected Exception to leak str(exc) --
-  asgi.py's shared catch-all's generic "Internal server error" covers it.
+Service-level ApiErrors (invalid old password, user not found...)
+propagate unchanged to asgi.py's ApiError handler; anything unexpected
+gets asgi.py's generic 500.
 
-Every dead `if not request.is_json` check (a body model with only
-required fields, where SpecTree's own gate already 400s first) is
-dropped, same as every prior phase. The ones that *are* live --
-_update_users (UserUpdateRequest, all-optional) and _patch_user
-(PatchBotRequest, all-optional) -- use require_json_body() same as
-avatar/bot_parameters' PATCH routes.
+All-optional body models (UserUpdateRequest, PatchBotRequest) use
+require_json_body() to still reject a wrong Content-Type.
 
-reassign_children's `if not old_parent_id or not new_parent_id` is
-NOT dropped even though ReassignChildrenRequest requires both fields:
-a legitimate `old_parent_id: 0` is falsy in Python, so this check can
-still reject a validly-present-but-zero id that pydantic already
-accepted -- a real (if obscure) behavior of the original, not dead code.
-
-Every route here is `async def`, as is every UserAdminService method it
-calls; the CPU-heavy password hashing behind register*/change_password*
-runs in a threadpool inside the service (see user_admin_svc.py). The
-"own it or be admin" check of every <id> route is
-UserAdminService.authorize_user_scope(). DB session scoping is wired
-once, at the router level, via Depends(async_db_session_dependency) --
-see that dependency's own docstring.
+reassign_children keeps an explicit `if not old_parent_id or not
+new_parent_id` check: pydantic accepts an id of 0, which is never valid.
 """
 
 from typing import List, Literal, Optional
@@ -96,7 +67,7 @@ class RoleChangeRequest(BaseModel):
     # Admin account at all (the only one is the pre-seeded super-admin from
     # SUPER_ADMIN_LOGIN/PASSWORD) -- authorize_user_scope's "no admin acts
     # on another admin" rule stays in place as defense-in-depth regardless.
-    role: Literal[USER_ROLE, GUEST_ROLE]
+    role: Literal["User", "Guest"]  # USER_ROLE, GUEST_ROLE
 
 
 class PasswordChangeRequest(BaseModel):

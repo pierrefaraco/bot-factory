@@ -1,20 +1,7 @@
-"""Avatar Management REST API -- native FastAPI port of the former
-src/rest/rest_avatar.py Flask blueprint (Phase 2 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-checks; unhandled exceptions fall through to asgi.py's catch-all 500
-handler.
+"""Bot avatar REST API.
 
-Content-Type contract: this blueprint had no @bp.before_request guard, so
-a wrong Content-Type only ever showed up via SpecTree's automatic
-@api.validate(json=...) treating the body as absent -- see
-dependencies/content_type.py's require_json_body() docstring for exactly
-how that plays out differently for the required-bot_id models here vs.
-the all-optional AvatarPatchRequest.
-
-Every route here is `async def`, as is every AvatarService method it
-calls. DB session scoping is wired once, at the router level, via
-Depends(async_db_session_dependency) -- see that dependency's own
-docstring.
+A wrong Content-Type is rejected by require_json_body() (see
+dependencies/content_type.py).
 """
 
 from typing import Optional

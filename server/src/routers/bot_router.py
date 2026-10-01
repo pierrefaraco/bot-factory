@@ -1,36 +1,12 @@
-"""Bot CRUD REST API -- native FastAPI port of the former
-src/rest/rest_bot.py Flask blueprint (Phase 4 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-checks and ownership rules; unhandled exceptions fall through to
-asgi.py's catch-all 500 handler.
+"""Bot CRUD REST API.
 
-Two deliberate, flagged departures from the original, both on paths no
-test exercises:
+Path params use the `{bot_id:int}` converter: a non-numeric segment
+falls through to the next route (e.g. "/me", "/owned") instead of
+matching here and failing validation.
 
-- The original's blanket `except Exception as e: return jsonify({"error":
-  str(e)}), 500` leaked the raw exception text, unlike every other
-  migrated blueprint (which returned a generic "Internal server error").
-  This port uses the same generic message everywhere instead, for a
-  consistent contract and to stop leaking internal error detail -- an
-  intentional normalization, not a silent slip.
-- update_bot_admin's `BotUpdateRequest.model_validate(data).model_dump(...)
-  if data else {}` special-cased an empty/absent JSON body to `{}`
-  without validating it; FastAPI's own body parsing will instead 400 on
-  a genuinely empty body even with a correct Content-Type header (every
-  test here only exercises the *wrong* Content-Type case, which behaves
-  identically via require_json_content_type below).
-
-Path params use the `{bot_id:int}` Starlette converter (not a bare
-`{bot_id}`) to match Flask's `<int:bot_id>` exactly: a non-numeric
-segment falls through to the next route (e.g. "/me", "/owned") instead
-of matching here and 422ing.
-
-Every route here is `async def`, as is every BotService method it calls.
-create_bot/delete_bot still end up in KnowledgeSvc (knowledge chapters +
-ChromaDB, which has no async client), which BotService runs through
-run_in_threadpool -- see bot_svc.py. DB session scoping is wired once,
-at the router level, via Depends(async_db_session_dependency) -- see
-that dependency's own docstring.
+create_bot/delete_bot end up in KnowledgeSvc (knowledge chapters +
+ChromaDB, which has no async client), run through run_in_threadpool --
+see bot_svc.py.
 """
 
 from typing import List, Optional
@@ -44,10 +20,8 @@ from src.dependencies.content_type import require_json_content_type
 from src.dependencies.db_session import async_db_session_dependency
 from src.dependencies.services import BotServiceDep, UserAdminServiceDep
 from src.dto.bot_dto import BotDto
-from src.dto.user_dto import UserDto
 from src.exceptions.api_error import ApiError
 from src.log.bot_factory_logger import BotFactoryLogger
-from src.services.bot_svc import BotService
 
 router = APIRouter(
     prefix="/api/bot",
@@ -76,13 +50,6 @@ class BotUpdateRequest(BaseModel):
         if value is not None and not value.strip():
             raise ValueError("name must not be blank")
         return value
-
-
-async def _can_modify_bot(user: UserDto, bot_id: int, bot_svc: BotService) -> bool:
-    if user.roles == ADMIN_ROLE:
-        return True
-    bot_dto: BotDto = await bot_svc.get_dto_by_id(bot_id)
-    return bot_dto and bot_dto.user_account_id == user.id
 
 
 @router.post("", status_code=201, dependencies=[Depends(require_json_content_type)])
@@ -217,7 +184,7 @@ async def update_bot_admin(
         logger.warning(f"update_bot_admin({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    if not await _can_modify_bot(user, bot_id, bot_svc):
+    if not await bot_svc.can_modify(user, bot_id):
         logger.warning(f"update_bot_admin({bot_id}) forbidden for user_id={user_id}")
         raise ApiError(f"You don't have rights to update bot {bot_id}.", status_code=403)
 
@@ -246,7 +213,7 @@ async def delete_bot(
         logger.warning(f"delete_bot({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    if not await _can_modify_bot(user, bot_id, bot_svc):
+    if not await bot_svc.can_modify(user, bot_id):
         logger.warning(f"delete_bot({bot_id}) forbidden for user_id={user_id}")
         raise ApiError(f"You don't have rights to delete bot {bot_id}", status_code=403)
 

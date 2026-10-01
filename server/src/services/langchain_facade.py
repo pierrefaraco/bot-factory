@@ -16,7 +16,6 @@ covered: KnowledgeSvc drives VectorStoreFacade directly for that.
 from dataclasses import dataclass
 from typing import AsyncIterator
 
-import langchain
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -27,8 +26,6 @@ from src.log.bot_factory_logger import BotFactoryLogger
 from src.log.prompt_debug_logger import PromptDebugLogger
 from src.services.vector_store_facade import VectorStoreFacade
 from src.services.llm_svc import LlmService
-
-langchain.debug = False
 
 # ===== LOGGERS INIT =====
 logger = BotFactoryLogger()
@@ -145,16 +142,13 @@ class LangChainFacade:
         retriever = self.vector_store.build_retriever(f"Collection{bot_id}")
         qa_prompt = self._qa_prompt(bot_id, bot_prompt)
 
+        def add_context(inputs: dict) -> dict:
+            context = self._retrieve_and_label_sources(retriever, inputs["input"])
+            return {**inputs, "context": context}
+
         return (
             RunnableLambda(self._log_initial_input)
-            | RunnableLambda(
-                lambda inputs: {
-                    **inputs,
-                    "context": self._retrieve_and_label_sources(
-                        retriever, inputs["input"]
-                    ),
-                }
-            )
+            | RunnableLambda(add_context)
             | RunnableLambda(self._log_retrieved_context)
             | RunnablePassthrough.assign(context=lambda x: self._format_docs(x["context"]))
             | RunnableLambda(self._log_formatted_context)

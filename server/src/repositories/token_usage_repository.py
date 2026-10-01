@@ -32,13 +32,13 @@ class TokenUsageRepository(BaseRepository):
 
     async def totals_for_user(
         self, user_id: int, since: Optional[datetime] = None
-    ) -> Row:
+    ) -> Optional[Row]:
         stmt = select(*self._totals_columns()).where(TokenUsage.user_id == user_id)
         if since is not None:
             stmt = stmt.where(TokenUsage.timestamp >= since)
         return (await self.session.execute(stmt)).first()
 
-    async def totals_for_bot(self, bot_id: int) -> Row:
+    async def totals_for_bot(self, bot_id: int) -> Optional[Row]:
         stmt = select(
             *self._totals_columns(),
             func.count(func.distinct(TokenUsage.user_id)).label("unique_users"),

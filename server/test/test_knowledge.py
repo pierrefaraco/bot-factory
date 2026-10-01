@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/knowledge/* (rest_knowledge.py).
+"""HTTP regression tests for /api/knowledge/* (knowledge_router.py).
 
 Every knowledge write (create/update/delete) re-indexes the bot's whole
 knowledge tree into ChromaDB under collection `Collection{bot_id}`
@@ -54,9 +54,8 @@ def test_save_with_pdf_golden_path(http_client, api_base_url, create_user, creat
     bot = create_bot(user.id)
     headers = login(user.mail, password)
 
-    # knowledge_svc.save_pdf() saves under the pdf_file *string field* from
-    # the JSON data blob, not the uploaded file's own name -- both must be
-    # supplied and they must agree, or it 500s on `None.endswith(".pdf")`.
+    # pdf_file in the JSON data blob is the name shown to the user; the file
+    # itself is stored under a generated <bot_id>/<uuid4>.pdf path.
     with open(SAMPLE_PDF, "rb") as f:
         response = http_client.post(
             f"{api_base_url}/knowledge/save/{bot.id}",
@@ -172,7 +171,7 @@ def test_save_imported_golden_path(
     # Knowledge_svc._perform_save_imported_knowledges reads knowledge_name/
     # knowledge_content/knowledge_dad_id/indice/children_ref_id verbatim
     # (KeyError if any is missing) -- these field names differ from the
-    # KnowledgeRequest DTO used elsewhere in this blueprint (name/content).
+    # KnowledgeRequest DTO used elsewhere in this router (name/content).
     user, password = create_user(role=USER_ROLE)
     bot = create_bot(user.id)
     headers = login(user.mail, password)

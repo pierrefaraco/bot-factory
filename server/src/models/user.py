@@ -41,7 +41,7 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
-        return f"User(id={self.id!r}, name={self.name!r}, password_hash={self.password_hash!r}, mail={self.mail!r}), roles={self.roles!r}, parent_id={self.parent_id!r}, is_active={self.is_active!r}, selected_bot_id={self.selected_bot_id!r}, created_at={self.created_at!r})"
+        return f"User(id={self.id!r}, name={self.name!r}, mail={self.mail!r}), roles={self.roles!r}, parent_id={self.parent_id!r}, is_active={self.is_active!r}, selected_bot_id={self.selected_bot_id!r}, created_at={self.created_at!r})"
 
     def __init__(
         self,

@@ -18,7 +18,7 @@ help:
 	@echo "Development:"
 	@echo "  make dev            Start development servers (Docker Compose)"
 	@echo "  make dev-client     Start only Angular dev server"
-	@echo "  make dev-server     Start only Flask dev server"
+	@echo "  make dev-server     Start only the API dev server"
 	@echo "  make db-only        Start only Mysql"
 	@echo "  make chromadb-only  Start only Chroma db"
 	@echo ""
@@ -97,7 +97,7 @@ dev-client:
 	cd client && npm start
 
 dev-server:
-	@echo "Starting Flask development server..."
+	@echo "Starting API development server..."
 	cd server && bash z-run.sh
 
 # Docker commands

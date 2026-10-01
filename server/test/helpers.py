@@ -22,7 +22,7 @@ def assert_error(response, status_code: int, substring: str | None = None) -> di
 
 def read_sse(response) -> str:
     """Accumulates the `answer` field of each SSE chunk emitted by
-    rest_rag.py's streaming endpoints (ask_with_stream's `generate()`
+    rag_router.py's streaming endpoints (ask_with_stream's `generate()`
     yields `data: {"answer": "..."}\\n\\n` per chunk, terminated by
     `data: [DONE]` -- this is the app's own event shape, not the raw
     upstream LLM/mock-server chunk format)."""

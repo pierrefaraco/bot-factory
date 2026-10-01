@@ -1,9 +1,7 @@
 """Per-model DB factories for the HTTP regression suite.
 
-Each factory inserts a row directly via the real ORM models (imported
-straight from src.models, usable outside Flask's app context
-since they're plain SQLAlchemy 2.0 Mapped[] models) and registers its id
-for automatic cleanup at the end of the test.
+Each factory inserts a row directly via the real ORM models (src.models)
+and registers its id for automatic cleanup at the end of the test.
 
 Cleanup deletes explicitly, in reverse dependency order, rather than relying
 on ondelete=CASCADE: Message/Session/TokenUsage reference bot_id as a plain
@@ -14,7 +12,7 @@ would be orphaned rather than cascade-deleted if we only removed the Bot.
 from datetime import datetime, timezone
 
 import pytest
-from werkzeug.security import generate_password_hash
+from src.services.passwords import hash_password
 
 from src.config.constant import USER_ROLE
 from src.models import (
@@ -76,7 +74,7 @@ def create_user(db_session, registry):
     def _create(role=USER_ROLE, password=DEFAULT_PASSWORD, parent_id=-1, is_active=True, **overrides):
         user = User(
             name=overrides.pop("name", unique("Name")),
-            password_hash=generate_password_hash(password),
+            password_hash=hash_password(password),
             mail=overrides.pop("mail", unique("user") + "@example.com"),
             roles=role,
             parent_id=parent_id,

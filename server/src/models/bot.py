@@ -85,7 +85,7 @@ class BotParameters(Base):
             f"used_sources={self.used_sources!r}, context_type={self.context_type!r}, "
             f"answer_style={self.answer_style!r}, "
             f"answer_length={self.answer_length!r}, interlocutor_type={self.interlocutor_type!r}, "
-            f"goal={self.goal!r}, behaviour={self.behaviour!r}, "
+            f"goal={self.goal!r}, "
             f"behaviour_when_ignore={self.behaviour_when_ignore!r}, "
             f"behaviour_with_language={self.behaviour_with_language!r}, "
             f"localisation={self.localisation!r}, "

@@ -31,10 +31,11 @@ def _int_env(name: str, default: int, minimum: int = 1) -> int:
 class BaseConfig:
     """Core application properties (auth, database)."""
 
-    # Application session secret key
-    JWT_SECRET_KEY = os.environ.get(
-        "JWT_SECRET_KEY", '^ZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2x")sZQjGKyBVf2xx'
-    )
+    # No default: ConfigValidator refuses to start without a real one.
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")
+    # Access token lifetime, in seconds. There is no refresh token: the
+    # user logs in again once it expires.
+    JWT_ACCESS_TOKEN_EXPIRES = _int_env("JWT_ACCESS_TOKEN_EXPIRES", 8 * 3600)
     DATABASE_URL = os.getenv("DATABASE_URL")
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -87,9 +88,8 @@ class AppConfig(BaseConfig):
     OPERATIONAL_LOG_FILE_MAXSIZE = 100
     value = os.environ.get("OPERATIONAL_LOG_FILE_MAXSIZE", default="100")
     try:
-        value = int(value)
-        if value > 1:
-            OPERATIONAL_LOG_FILE_MAXSIZE = value
+        if int(value) > 1:
+            OPERATIONAL_LOG_FILE_MAXSIZE = int(value)
     except ValueError:
         pass
 
@@ -113,7 +113,9 @@ class AppConfig(BaseConfig):
     if isinstance(value, str) and value.strip():
         LOCAL_USER_PASSWORD = value
 
-    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/tmp/pdf")
+    # Uploaded PDFs (<bot_id>/<uuid>.pdf). Must be persistent: re-indexing a
+    # bot reads them again (docker-compose.yml mounts a volume here).
+    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "./uploads")
     MAX_PDF_SIZE_BYTES = int(os.environ.get("MAX_PDF_SIZE_BYTES", 20 * 1024 * 1024))
 
     # ===== Vector store (see services/vector_store_facade.py) =====
@@ -169,22 +171,13 @@ class AppConfig(BaseConfig):
     TOKEN_LIMIT_PER_USER_24H = 0
     value = os.environ.get("TOKEN_LIMIT_PER_USER_24H", default="0")
     try:
-        value = int(value)
-        if value > 0:
-            TOKEN_LIMIT_PER_USER_24H = value
+        if int(value) > 0:
+            TOKEN_LIMIT_PER_USER_24H = int(value)
     except ValueError:
         logger.warning(f"Invalid TOKEN_LIMIT_PER_USER_24H={value!r}, token limit disabled")
 
-    SECRET_KEY = os.environ.get(
-        "SECRET_KEY", "your-secret-key-change-this-in-production"
-    )
-
-    MISTRAL_API_KEY = os.environ.get(
-        "MISTRAL_API_KEY", "your-secret-key-change-this-in-production"
-    )
-    MISTRAL_MODEL = os.environ.get(
-            "VIBE_MODEL", "your-secret-key-change-this-in-production"
-        )
+    MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY", "")
+    MISTRAL_MODEL = os.environ.get("MISTRAL_MODEL", "mistral-medium")
 
     # OAuth client ID Google (Google Identity Services) : doit être le même
     # sur le frontend (client/src/assets/env.js) et le backend, sinon

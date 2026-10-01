@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/token-stats/* (rest_token_stats.py)."""
+"""HTTP regression tests for /api/token-stats/* (token_stats_router.py)."""
 
 from datetime import datetime, timedelta, timezone
 
@@ -131,8 +131,7 @@ def test_get_history_self_invalid_limit(http_client, api_base_url, create_user, 
     user, password = create_user(role=USER_ROLE)
     headers = login(user.mail, password)
 
-    # spectree's own TokenHistoryQuery(ge=1) validation intercepts before
-    # the handler's own manual `if limit < 1...` check is ever reached.
+    # Rejected by the query model's own ge=1 constraint.
     response = http_client.get(
         f"{api_base_url}/token-stats/history/me",
         params={"limit": 0},
@@ -213,12 +212,8 @@ def test_get_total_self_golden_path(
     response = http_client.get(f"{api_base_url}/token-stats/total/me", headers=headers)
 
     assert response.status_code == 200, response.text
-    # get_user_total_tokens() is typed -> int, but SUM() returns a Decimal
-    # and Flask's JSON encoder serializes Decimal as a string, so the wire
-    # value is actually a numeric string, not a JSON number -- worth
-    # matching exactly (not just semantically) when validating a FastAPI
-    # rewrite, since a naive `total_tokens: int` response model there would
-    # silently change the wire type.
+    # SUM() comes back as a Decimal, serialized as a numeric string:
+    # accept either form.
     assert int(response.json()["total_tokens"]) >= 17
 
 

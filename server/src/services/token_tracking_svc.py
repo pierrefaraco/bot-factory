@@ -23,13 +23,9 @@ class TokenTrackingService:
         self.logger = logger
         self.token_usage_repo = token_usage_repo
 
-    # Migrated to async: the only caller, LlmService's
-    # TokenCountingCallback.on_llm_end (llm_svc.py), is itself now an
-    # AsyncCallbackHandler -- LangChain's async callback manager awaits it
-    # directly (no thread hop, see langchain_core.callbacks.manager.
-    # _ahandle_event_for_handler's `if inspect.iscoroutinefunction(event)`
-    # branch), so it can use the async session like everything else
-    # rag_svc.py's now-fully-async chain touches.
+    # Called from TokenCountingCallback.on_llm_end (llm_svc.py), an
+    # AsyncCallbackHandler that LangChain awaits on the request's own task:
+    # the request's async DB session is available here.
     async def record_token_usage(
         self,
         user_id: int,
@@ -400,12 +396,9 @@ class TokenTrackingService:
                 since_24h, since_30d, user_id=scope_user_id
             )
 
-            # The CASE-based tokens_24h sum comes back from PyMySQL as
-            # Decimal (unlike a plain func.sum(int_column), which stays
-            # int) -- Flask's JSON encoder serializes Decimal as a string
-            # to avoid float precision loss, which would silently turn
-            # tokens_24h into "42" instead of 42 for API consumers. Cast
-            # both explicitly so the response is consistently numeric.
+            # The CASE-based tokens_24h sum comes back as a Decimal, which
+            # would be serialized as a string ("42"): cast both sums so the
+            # response is consistently numeric.
             result = {
                 "accounts": {
                     row.user_id: {

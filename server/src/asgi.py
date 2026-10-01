@@ -1,23 +1,8 @@
-"""ASGI entrypoint for ai-server.
+"""ASGI entrypoint: the FastAPI app, its routers, CORS and error handlers.
 
-Every REST endpoint that used to live in Flask blueprints under
-src/rest/*.py has been ported to a native FastAPI router in
-src/routers/*.py, registered below. There is no Flask app left
-anywhere in this process: the last two things that needed one -- DB
-session scoping (see src/database/session.py) and JWT issuing (see
-src/dependencies/auth.py's create_access_token) -- have both been
-moved onto framework-independent replacements.
-
-CORS used to be handled twice on the old Flask side (Flask-CORS's
-CORS(app, ...) plus a manual after_request adding a second, wider set of
-allowed headers). Both are merged into the single CORSMiddleware config
-below so a request gets exactly one set of CORS headers, not two
-independently-configured ones.
-
-Startup here fails fast (refuses to start serving) the same way the old
-Flask create_app() did at import time: raising inside a FastAPI lifespan
-before its `yield` stops uvicorn from ever accepting a connection, same
-as the old code raising during src.main's module import used to.
+Startup (lifespan) fails fast, before serving any request, on unsafe
+configuration (ConfigValidator), an unreachable vector store, or a
+failure to create the super admin account.
 """
 
 import os
@@ -30,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from src.config.config import AppConfig
 from src.config.constant import ADMIN_ROLE
+from src.config.validator import ConfigValidator
 from src.database.session import async_db_session_scope
 from src.dependencies.services import build_services
 from src.exceptions.api_error import ApiError
@@ -54,6 +40,7 @@ logger = BotFactoryLogger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"{AppConfig.APP_NAME} version {AppConfig.APP_VERSION} starting...")
+    ConfigValidator.validate_all(AppConfig)
 
     # Built before serving so routes' Depends(get_*_service) (see
     # dependencies/services.py) always find them, and so a broken service
@@ -71,11 +58,15 @@ async def lifespan(app: FastAPI):
         if super_admin_login and not await user_admin_svc.get_user_by_email(
             super_admin_login
         ):
+            super_admin_password = os.getenv("SUPER_ADMIN_PASSWORD", "")
+            ConfigValidator.raise_if_any(
+                ConfigValidator.super_admin_password_errors(super_admin_password)
+            )
             logger.info(f"Creating super admin user: {super_admin_login}")
             await user_admin_svc.register_user(
                 mail=super_admin_login,
                 user_name=super_admin_login,
-                password=os.getenv("SUPER_ADMIN_PASSWORD"),
+                password=super_admin_password,
                 roles=ADMIN_ROLE,
                 parent_id=-1,
                 is_active=True,
@@ -157,10 +148,8 @@ app.include_router(rag_router.router)
 
 @app.exception_handler(Exception)
 async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-    """Every migrated Flask handler ended with the same
-    `except Exception: return {"error": "Internal server error"}, 500` --
-    one catch-all here instead of repeating it in each native route.
-    Only reached for genuinely unhandled exceptions: FastAPI's own
-    HTTPException handling and the two handlers above take priority."""
+    """Generic 500 for unhandled exceptions, without leaking their text.
+    FastAPI's HTTPException handling and the two handlers above take
+    priority."""
     logger.exception(f"Unhandled error on {request.method} {request.url.path}: {exc}")
     return JSONResponse(status_code=500, content={"error": "Internal server error"})

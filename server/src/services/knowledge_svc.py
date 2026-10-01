@@ -1,3 +1,5 @@
+import os
+import shutil
 import time
 import uuid
 from src.config.config import app_config
@@ -8,12 +10,15 @@ from src.log.bot_factory_logger import BotFactoryLogger
 from src.repositories import KnowledgeRepository
 from src.services.base_service import BaseService
 from datetime import datetime, timezone
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional, Tuple
 from starlette.concurrency import run_in_threadpool
-from werkzeug.utils import secure_filename
-import os
 
 logger = BotFactoryLogger()
+
+
+class InvalidPdfError(ValueError):
+    """An upload save_pdf() refuses: not a PDF, or too large."""
+
 
 ENUMERATIONS = {"CHAPTER_DAD_ID": -1, "CHILDREN_REF_ID": uuid.uuid4(), "INDICE": 0}
 
@@ -63,44 +68,72 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             else None,
         )
 
-    def save_pdf(self, pdf_file: str, file) -> str:
+    def save_pdf(self, bot_id: int, pdf_name: str, file) -> str:
         """
-        Save PDF file to upload folder. Blocking (file I/O): callers run it
-        through run_in_threadpool.
+        Store an uploaded PDF as <UPLOAD_FOLDER>/<bot_id>/<uuid4>.pdf: the
+        name the user picked is only kept in the database (Knowledge.pdf_file),
+        so two uploads can never overwrite, or on rejection delete, each
+        other's file. Blocking (file I/O): callers run it through
+        run_in_threadpool.
 
         Args:
-            pdf_file: PDF filename
-            file: File object to save
+            bot_id: ID of the bot owning the knowledge
+            pdf_name: name of the file as uploaded
+            file: binary file object to read the PDF from
 
         Returns:
-            Path to saved file
+            Path of the stored file, relative to UPLOAD_FOLDER
 
         Raises:
-            ValueError: If file is missing, not named as a PDF, too large,
+            InvalidPdfError: If file is missing, not named as a PDF, too large,
                 or its content is not actually a PDF.
         """
-        if not file or not pdf_file or not pdf_file.lower().endswith(".pdf"):
-            raise ValueError("Le fichier doit être un PDF.")
+        if not file or not pdf_name or not pdf_name.lower().endswith(".pdf"):
+            raise InvalidPdfError("Le fichier doit être un PDF.")
 
-        safe_filename = secure_filename(pdf_file)
-        if not safe_filename or not safe_filename.lower().endswith(".pdf"):
-            raise ValueError("Nom de fichier PDF invalide.")
-
-        pdf_file_path = os.path.join(self.upload_folder, safe_filename)
-        file.save(pdf_file_path)
+        relative_path = os.path.join(str(bot_id), f"{uuid.uuid4()}.pdf")
+        pdf_file_path = os.path.join(self.upload_folder, relative_path)
+        os.makedirs(os.path.dirname(pdf_file_path), exist_ok=True)
+        file.seek(0)
+        with open(pdf_file_path, "wb") as out:
+            shutil.copyfileobj(file, out)
 
         try:
             if os.path.getsize(pdf_file_path) > self.config.MAX_PDF_SIZE_BYTES:
-                raise ValueError("Le fichier PDF dépasse la taille maximale autorisée.")
+                raise InvalidPdfError("Le fichier PDF dépasse la taille maximale autorisée.")
             with open(pdf_file_path, "rb") as saved_file:
                 if saved_file.read(5) != b"%PDF-":
-                    raise ValueError("Le contenu du fichier n'est pas un PDF valide.")
-        except ValueError:
+                    raise InvalidPdfError("Le contenu du fichier n'est pas un PDF valide.")
+        except InvalidPdfError:
             os.remove(pdf_file_path)
             raise
 
-        logger.debug(f"save_pdf: saved {safe_filename} to {pdf_file_path}")
-        return pdf_file_path
+        logger.debug(f"save_pdf: saved {pdf_name!r} to {pdf_file_path}")
+        return relative_path
+
+    def _remove_pdf(self, pdf_path: Optional[str]) -> None:
+        """Delete a stored PDF, if any. Blocking (file I/O)."""
+        if not pdf_path:
+            return
+        try:
+            os.remove(os.path.join(self.upload_folder, pdf_path))
+        except FileNotFoundError:
+            pass
+
+    def _pdf_full_path(self, knowledge: Knowledge) -> str:
+        # Knowledges uploaded before pdf_path existed have their file
+        # directly under UPLOAD_FOLDER, named after pdf_file.
+        return os.path.join(
+            self.upload_folder, knowledge.pdf_path or knowledge.pdf_file
+        )
+
+    @staticmethod
+    def _display_name(pdf_name: Optional[str]) -> str:
+        """The uploaded file's own name, without any directory part: shown
+        to the user, never used to build a path."""
+        if not pdf_name:
+            return ""
+        return os.path.basename(pdf_name.replace("\\", "/"))[:256]
 
     async def save_knowledges_dto(
         self, bot_id: int, knowledges_dto: List[KnowledgeDto]
@@ -231,10 +264,10 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         Create a new knowledge (indice -1: next free one at its level), and
         index it.
         """
+        pdf_path = None
         if file:
-            pdf_file = os.path.basename(
-                await run_in_threadpool(self.save_pdf, pdf_file, file)
-            )
+            pdf_path = await run_in_threadpool(self.save_pdf, bot_id, pdf_file, file)
+        pdf_file = self._display_name(pdf_file) if pdf_path else ""
 
         if indice == -1:
             indice = await self._compute_indice(bot_id, knowledge_dad_id)
@@ -248,6 +281,7 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             indice,
             f"{uuid.uuid4()}",
             pdf_file,
+            pdf_path,
         )
         self.knowledge_repo.add(knowledge)
         await self.knowledge_repo.commit()
@@ -305,12 +339,18 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         file=None,
     ) -> KnowledgeDto:
         """
-        Update an existing knowledge, and re-index it.
+        Update an existing knowledge, and re-index it. A new upload
+        replaces the stored PDF; an empty pdf_file drops it.
         """
+        old_pdf_path = knowledge.pdf_path
         if file:
-            pdf_file = os.path.basename(
-                await run_in_threadpool(self.save_pdf, pdf_file, file)
+            knowledge.pdf_path = await run_in_threadpool(
+                self.save_pdf, bot_id, pdf_file, file
             )
+            knowledge.pdf_file = self._display_name(pdf_file)
+        elif not pdf_file:
+            knowledge.pdf_path = None
+            knowledge.pdf_file = ""
 
         knowledge.date = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
         knowledge.updated_at = datetime.now(timezone.utc)
@@ -319,8 +359,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
         if knowledge_dad_id is not None:
             knowledge.knowledge_dad_id = knowledge_dad_id
         knowledge.indice = indice
-        knowledge.pdf_file = pdf_file
         await self.knowledge_repo.commit()
+        if old_pdf_path != knowledge.pdf_path:
+            await run_in_threadpool(self._remove_pdf, old_pdf_path)
         logger.info(
             f"update_knowledge_entity: updated knowledge_id={knowledge.id} bot_id={bot_id}"
         )
@@ -363,28 +404,31 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
             return False
 
         bot_id = knowledge.bot_id
-        deleted_ids = await self._delete_subtree(knowledge)
+        deleted = await self._delete_subtree(knowledge)
         await self._re_compute_indices(bot_id, knowledge.knowledge_dad_id)
         await self.knowledge_repo.commit()
-        for deleted_id in deleted_ids:
+        for deleted_id, pdf_path in deleted:
             await self._remove_knowledge_from_vector_db(bot_id, deleted_id)
+            await run_in_threadpool(self._remove_pdf, pdf_path)
         logger.info(
             f"delete: deleted knowledge_id={knowledge_id} bot_id={bot_id} "
-            f"({len(deleted_ids)} chapter(s) with its subtree)"
+            f"({len(deleted)} chapter(s) with its subtree)"
         )
         return True
 
-    async def _delete_subtree(self, knowledge: Knowledge) -> List[int]:
+    async def _delete_subtree(
+        self, knowledge: Knowledge
+    ) -> List[Tuple[int, Optional[str]]]:
         """Delete knowledge and, recursively, its children (same bot only).
-        Returns the deleted ids."""
-        deleted_ids = []
+        Returns the deleted (id, pdf_path) pairs."""
+        deleted = []
         for child in await self.knowledge_repo.list_children(
             knowledge.bot_id, knowledge.children_ref_id
         ):
-            deleted_ids += await self._delete_subtree(child)
-        deleted_ids.append(knowledge.id)
+            deleted += await self._delete_subtree(child)
+        deleted.append((knowledge.id, knowledge.pdf_path))
         await self.knowledge_repo.delete(knowledge)
-        return deleted_ids
+        return deleted
 
     async def _re_compute_indices(self, bot_id: int, knowledge_dad_id: str) -> None:
         """Renumber bot_id's knowledges at the knowledge_dad_id level 1..n."""
@@ -414,6 +458,11 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
 
             deleted_count = await self.knowledge_repo.delete_for_bot(bot_id)
             await self.knowledge_repo.commit()
+            await run_in_threadpool(
+                shutil.rmtree,
+                os.path.join(self.upload_folder, str(bot_id)),
+                ignore_errors=True,
+            )
             logger.info(
                 f"delete_all: deleted {deleted_count} knowledges and vector data "
                 f"for bot_id={bot_id}"
@@ -442,10 +491,9 @@ class KnowledgeSvc(BaseService[KnowledgeDto]):
                 self.vector_store.ingest_text, text, collection_name, metadata=metadata
             )
         if knowledge.pdf_file:
-            pdf_path = os.path.join(self.upload_folder, knowledge.pdf_file)
             await run_in_threadpool(
                 self.vector_store.ingest_pdf,
-                pdf_path,
+                self._pdf_full_path(knowledge),
                 collection_name=collection_name,
                 metadata=metadata,
             )

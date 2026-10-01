@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/bot-guest-assignment/* (rest_bot_assignment.py)."""
+"""HTTP regression tests for /api/bot-guest-assignment/* (bot_assignment_router.py)."""
 
 from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from src.models import BotAssignment

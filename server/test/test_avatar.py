@@ -1,4 +1,4 @@
-"""HTTP regression tests for /api/avatar/* (rest_avatar.py)."""
+"""HTTP regression tests for /api/avatar/* (avatar_router.py)."""
 
 from src.config.constant import GUEST_ROLE, USER_ROLE
 from src.models import BotAvatar
@@ -26,9 +26,7 @@ def test_create_random_golden_path(
 def test_create_random_missing_content_type(
     http_client, api_base_url, create_user, create_bot, login
 ):
-    # No before_request Content-Type hook on this blueprint either: a
-    # non-JSON Content-Type reaches spectree's own validation first (same
-    # situation as rest_bot_parameters.py).
+    # require_json_body(): a non-JSON body is treated as absent.
     user, password = create_user(role=USER_ROLE)
     create_bot(user.id)
     headers = login(user.mail, password)

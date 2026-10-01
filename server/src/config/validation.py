@@ -1,10 +1,5 @@
 """Shared Pydantic validation-error formatting for the standard
-{"error": "..."} API error shape used across every native FastAPI route.
-
-(Used to also hold the SpecTree setup for Flask's now-retired
-@api.validate(...) blueprints -- self-hosted Swagger UI and all, since
-SpecTree's Flask integration needs a real Flask app to attach routes to,
-which no longer exists anywhere in this process.)
+{"error": "..."} API error shape.
 """
 
 from pydantic import ValidationError

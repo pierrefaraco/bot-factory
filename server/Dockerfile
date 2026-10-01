@@ -39,8 +39,9 @@ RUN uv sync --frozen --no-dev
 # The embedding model cache dir is created here, owned by appuser, so the
 # fastembed_cache volume (docker-compose.yml) mounted on it inherits that
 # ownership on first use instead of being root-owned and unwritable.
+# Same for /app/uploads and the pdf_uploads volume.
 RUN useradd -m -u 1000 appuser && \
-    mkdir -p "$FASTEMBED_CACHE_PATH" && \
+    mkdir -p "$FASTEMBED_CACHE_PATH" /app/uploads && \
     chown -R appuser:appuser /app /home/appuser/.cache
 USER appuser
 
@@ -54,5 +55,9 @@ EXPOSE 8000
 # Apply pending database migrations, then run the command below
 ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
 
-# Run the ASGI application
-CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
+# One worker: each would load its own copy of the embedding model (see
+# README, "Runtime model"). --proxy-headers + --forwarded-allow-ips: the
+# client IP comes from the web nginx's X-Forwarded-For; the port is only
+# reachable through it (and the host's loopback).
+CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*"]

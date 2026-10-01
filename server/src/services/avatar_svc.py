@@ -128,6 +128,7 @@ class AvatarService(BaseService[AvatarDto]):
         self.logger.info(
             f"Avatar patched id={entity_id} fields={[k for k in data if k != 'id']}"
         )
+        return self._avatar_to_dto(avatar)
 
     async def update_and_return_datat(self, data: Dict[str, Any]) -> AvatarDto:
         """

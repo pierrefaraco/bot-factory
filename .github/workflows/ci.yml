@@ -29,6 +29,21 @@ jobs:
           cache-dependency-glob: server/uv.lock
       - run: uv run --frozen --extra dev flake8 src/ test/
 
+  server-typecheck:
+    name: Server · type check (mypy)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      # Permissive settings for now: see [tool.mypy] in pyproject.toml.
+      - run: uv run --frozen --extra dev mypy src
+
   server-unit-tests:
     name: Server · unit tests
     runs-on: ubuntu-latest
@@ -82,7 +97,7 @@ jobs:
 
   integration-tests:
     name: Server · HTTP regression suite (docker compose)
-    needs: [server-lint, server-unit-tests]
+    needs: [server-lint, server-typecheck, server-unit-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -91,8 +106,15 @@ jobs:
       # suite checks the RAG plumbing, not retrieval quality, so the light
       # model documented in .env.example is enough here.
       EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      SUPER_ADMIN_LOGIN: ci-admin@example.com
     steps:
       - uses: actions/checkout@v5
+
+      # docker-compose.yml has no default for secrets: fresh ones per run.
+      - name: Generate secrets
+        run: |
+          echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "SUPER_ADMIN_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
 
       - name: Start MySQL, ChromaDB and the mock LLM
         run: $COMPOSE up -d --wait db chromadb mock-llm

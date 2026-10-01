@@ -22,7 +22,7 @@ An AI bot creation and management platform built around a production-style FastA
 ### Advanced Features
 - **LLM Support** - Integration with Mistral AI
 - **Vector Search** - ChromaDB-powered semantic search for knowledge retrieval
-- **JWT Authentication** - Secure token-based authentication with refresh tokens
+- **JWT Authentication** - Signed, expiring access tokens (PyJWT), revocable on logout
 - **Role-Based Access Control** - Admin, User, Guest, and Iframe roles
  
 ---
@@ -214,8 +214,11 @@ MYSQL_DATABASE=botcraft
 MYSQL_USER=botcraft_user
 MYSQL_PASSWORD=123456789
 
-# JWT
-JWT_SECRET_KEY=your-secret-key-change-in-production
+# Required, no default -- compose refuses to start without them, and the
+# API refuses any value published in this repository.
+JWT_SECRET_KEY=   # python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+SUPER_ADMIN_LOGIN=admin@example.com
+SUPER_ADMIN_PASSWORD=   # 12+ characters, only read when the account is created
 
 # LLM/RAG
 CHROMA_CONTAINER=true
@@ -243,8 +246,27 @@ Full walkthrough (architecture, nginx/TLS settings, certificate lifecycle,
 operations, troubleshooting): **[deploy/README.md](deploy/README.md)**.
 
 Before going live, also:
-1. Set a strong, random `JWT_SECRET_KEY` and non-default database passwords
-2. Review CORS settings in `server/src/asgi.py`
+1. Set non-default database passwords (the JWT secret and admin password
+   have no default at all)
+2. Set `TOKEN_LIMIT_PER_USER_24H`: it caps each account's Mistral usage
+3. Review CORS settings in `server/src/asgi.py`
+
+#### Runtime model, and its limits
+
+- **One uvicorn worker.** Each worker loads its own copy of the embedding
+  model (~3 GB of RAM for the default one), so the API runs a single
+  process and scales by being async rather than by forking. Nothing depends
+  on that any more: logouts are stored in the `revoked_token` table, not in
+  process memory, so adding `--workers N` (given the RAM) is safe.
+- **Proxy headers.** Uvicorn runs with `--proxy-headers`: the client IP
+  it logs comes from `X-Forwarded-For`, which the `web` nginx overwrites
+  with the client IP it resolved itself. The API port is only published on
+  the host's loopback, so nothing else can set that header.
+- **Rate limiting** is done by the `web` nginx, per client IP
+  (`client/nginx.conf.template`): 10 logins/min on the `/api/auth/*` login
+  routes, 30 calls/min on the chat routes, answered with a JSON 429.
+- **Sessions.** Access tokens last `JWT_ACCESS_TOKEN_EXPIRES` seconds
+  (8 h by default) and there is no refresh token: the user logs in again.
 
 ---
 
@@ -255,6 +277,7 @@ Every push to `main` and every pull request runs [`.github/workflows/ci.yml`](.g
 | Job | What it checks |
 |-----|----------------|
 | Server · lint | `flake8` on `server/src` and `server/test` |
+| Server · type check | `mypy` on `server/src` (permissive settings, see `server/pyproject.toml`) |
 | Server · unit tests | `server/test/test_*_unit.py` (database, vector store and LLM mocked) |
 | Client · unit tests | Angular unit tests in headless Chrome |
 | Docker · build | the `server` and `client` production images (the latter includes `ng build`) |

@@ -1,32 +1,12 @@
-"""Knowledge base REST API -- native FastAPI port of the former
-src/rest/rest_knowledge.py Flask blueprint (Phase 6 of the
-Flask -> FastAPI migration). Same URLs, same response shapes, same role
-checks; unhandled exceptions fall through to asgi.py's catch-all 500
-handler.
+"""Knowledge base REST API.
 
-save_knowledge is the first migrated route to take a file upload
-(multipart/form-data: an optional "pdf" file field + an optional "data"
-text field holding a JSON string -- not a JSON body). FastAPI represents
-that upload as an UploadFile, which has no .save(path) method the way
-Flask's FileStorage does; knowledge_svc.save_pdf() calls file.save(...)
-directly. Rather than change that service method's file-object contract
-(a business-logic file), _FlaskFileStorageAdapter below gives the
-UploadFile a .save() of its own at the router boundary -- keeping the
-Flask-shaped API service-side and only adapting at the framework edge.
-
-ImportedChaptersRequest/KnowledgeRequest's manual `if not data` /
-`if not request.is_json` guards in the original were dead code exactly
-like in previous phases (a required `importedChapters` field means an
-absent/empty body already 400s via SpecTree's own gate first) --
-skipped here in favor of reading straight off the validated body model.
-
-Every route here is `async def`, as is every KnowledgeSvc/TemplateSvc
-method it calls; the blocking parts (ChromaDB, PDF file writes) run
-through run_in_threadpool inside knowledge_svc.py.
+save_knowledge takes multipart/form-data: an optional "pdf" file field
+plus an optional "data" text field holding a JSON string (not a JSON
+body). The blocking parts (ChromaDB, PDF file writes) run through
+run_in_threadpool inside knowledge_svc.py.
 """
 
 import json
-import shutil
 import time
 from typing import List, Optional
 
@@ -46,6 +26,7 @@ from src.dependencies.services import (
 )
 from src.exceptions.api_error import ApiError
 from src.log.bot_factory_logger import BotFactoryLogger
+from src.services.knowledge_svc import InvalidPdfError
 
 router = APIRouter(
     prefix="/api/knowledge",
@@ -77,19 +58,6 @@ class ImportedChaptersRequest(BaseModel):
     """Schema for imported knowledges validation"""
 
     importedChapters: List[dict]
-
-
-class _FlaskFileStorageAdapter:
-    """Gives a FastAPI UploadFile the .save(path) method
-    knowledge_svc.save_pdf() expects from a Flask FileStorage."""
-
-    def __init__(self, upload_file: UploadFile):
-        self._upload_file = upload_file
-
-    def save(self, dst: str) -> None:
-        self._upload_file.file.seek(0)
-        with open(dst, "wb") as out:
-            shutil.copyfileobj(self._upload_file.file, out)
 
 
 @router.post("/save/{bot_id:int}/{knowledge_dad_id}", dependencies=[Depends(admin_or_user)])
@@ -131,17 +99,20 @@ async def save_knowledge(
         f"has_pdf_file={bool(pdf)}"
     )
 
-    file = _FlaskFileStorageAdapter(pdf) if pdf is not None else None
-    knowledge = await knowledge_svc.save_knowledge(
-        validated_data.get("pdf_file"),
-        bot_id,
-        validated_data.get("id"),
-        validated_data.get("name"),
-        validated_data.get("content"),
-        knowledge_dad_id=validated_data["knowledge_dad_id"],
-        indice=validated_data["indice"],
-        file=file,
-    )
+    pdf_name = validated_data.get("pdf_file") or (pdf.filename if pdf else None)
+    try:
+        knowledge = await knowledge_svc.save_knowledge(
+            pdf_name,
+            bot_id,
+            validated_data.get("id"),
+            validated_data.get("name"),
+            validated_data.get("content"),
+            knowledge_dad_id=validated_data["knowledge_dad_id"],
+            indice=validated_data["indice"],
+            file=pdf.file if pdf is not None else None,
+        )
+    except InvalidPdfError as e:
+        raise ApiError(str(e), status_code=400) from e
     logger.info(f"save_knowledge succeeded bot_id={bot_id} knowledge_id={knowledge.id}")
     return knowledge.to_dict()
 

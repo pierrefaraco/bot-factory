@@ -1,5 +1,5 @@
 #!/bin/bash
-# This script launches the src Flask server using uv.
+# Launches the API (src/asgi.py) in dev mode, with auto-reload, using uv.
 # uv manages the virtual environment and dependencies automatically —
 # no manual activation needed (replaces z-activate.sh + venv activation).
 
@@ -17,11 +17,11 @@ if command -v docker &> /dev/null; then
 fi
 
 # Kill existing processes using the same port (safely)
-FLASK_PORT=${FLASK_PORT:-8000}
-echo "Checking for processes using port $FLASK_PORT..."
-PORT_PID=$(ss -ltnp "sport = :$FLASK_PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u || true)
+PORT=${PORT:-8000}
+echo "Checking for processes using port $PORT..."
+PORT_PID=$(ss -ltnp "sport = :$PORT" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u || true)
 if [ -n "$PORT_PID" ]; then
-    echo "Killing process(es) using port $FLASK_PORT: $PORT_PID"
+    echo "Killing process(es) using port $PORT: $PORT_PID"
     kill -TERM $PORT_PID 2>/dev/null || true
     sleep 2
     # Force kill if still running
@@ -30,7 +30,7 @@ if [ -n "$PORT_PID" ]; then
         kill -KILL $PORT_PID 2>/dev/null || true
     fi
 else
-    echo "No processes found using port $FLASK_PORT"
+    echo "No processes found using port $PORT"
 fi
 
 # Sync dependencies (creates/updates .venv from pyproject.toml + uv.lock)
@@ -47,8 +47,5 @@ source .env
 set +a
 
 # == ASGI run ==
-# Serves src/asgi.py's FastAPI app, which mounts the existing Flask
-# app for every route not yet migrated (see server/CLAUDE.md migration
-# notes) -- same port, same URLs as the previous `flask run`.
-echo "Starting ASGI server on port $FLASK_PORT..."
-uv run uvicorn src.asgi:app --host 0.0.0.0 --port $FLASK_PORT --reload
+echo "Starting ASGI server on port $PORT..."
+uv run uvicorn src.asgi:app --host 0.0.0.0 --port $PORT --reload

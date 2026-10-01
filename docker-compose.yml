@@ -58,7 +58,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@${MYSQL_HOST:-db}:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      # No defaults for secrets: compose refuses to start without them.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env (see .env.example)}
       CHROMA_CONTAINER: ${CHROMA_CONTAINER:-true}
       CHROMA_HOST: ${CHROMA_HOST:-chromadb}
       CHROMA_PORT: ${CHROMA_PORT:-8000}
@@ -70,14 +71,15 @@ services:
       RAG_RETRIEVER_K: ${RAG_RETRIEVER_K:-12}
       LOGGER_LVL: ${LOGGER_LVL:-INFO}
       OPERATIONAL_LOG_FILE: ${OPERATIONAL_LOG_FILE:-ai-server.log}
-      SUPER_ADMIN_LOGIN: ${SUPER_ADMIN_LOGIN:-pierre.faraco@gmail.com}
-      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-123}
+      SUPER_ADMIN_LOGIN: ${SUPER_ADMIN_LOGIN:?Set SUPER_ADMIN_LOGIN in .env (see .env.example)}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?Set SUPER_ADMIN_PASSWORD in .env (see .env.example)}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-a}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
       TOKEN_LIMIT_PER_USER_24H: ${TOKEN_LIMIT_PER_USER_24H:-0}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-913568537440-clfeb4jvitdh7111s1j8cv6u8gb6t3dv.apps.googleusercontent.com}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:${WEB_PORT:-8080}}
       DEMO_ACCOUNT_EMAIL: ${DEMO_ACCOUNT_EMAIL:-}
+      UPLOAD_FOLDER: /app/uploads
     ports:
       # Bound to loopback only: in prod, the "reverse-proxy" service
       # (docker-compose.prod.yml) is the sole public entry point, reaching
@@ -88,6 +90,9 @@ services:
       # on the first startup only: without this volume they would live in the
       # container's /tmp and be downloaded again on every container recreation.
       - fastembed_cache:/home/appuser/.cache/fastembed
+      # Uploaded PDFs: the knowledges reference them, and re-indexing a bot
+      # reads them again. Must outlive the container, like mysql_data.
+      - pdf_uploads:/app/uploads
     # volumes:
     #   # HOST_PROJECT_PATH: absolute path of this project as seen by the Docker
     #   # daemon. Needed when compose runs inside a dev-container whose paths
@@ -135,6 +140,7 @@ volumes:
   mysql_data:
   chroma_data:
   fastembed_cache:
+  pdf_uploads:
 
 networks:
   botfactory-network:

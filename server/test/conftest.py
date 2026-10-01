@@ -1,10 +1,8 @@
 """Shared fixtures for the HTTP regression suite.
 
-These tests talk to a running ai-server instance over real HTTP (not Flask's
-test_client), so the exact same suite can later validate the FastAPI
-rewrite by pointing TEST_API_BASE_URL at the new server. Each test creates
-its own MySQL rows via a plain SQLAlchemy session (independent of Flask's
-app-bound Flask-SQLAlchemy session) and cleans them up afterwards.
+These tests talk to a running ai-server instance over real HTTP
+(TEST_API_BASE_URL). Each test creates its own MySQL rows via a plain
+SQLAlchemy session and cleans them up afterwards.
 """
 
 import os
