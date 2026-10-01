@@ -189,3 +189,42 @@ def test_delete_not_found(http_client, api_base_url, create_user, create_bot, lo
     )
 
     assert_error(response, 404, "not found")
+
+
+def _other_users_bot(create_user, create_bot, create_bot_parameters, login):
+    owner, _owner_password = create_user(role=USER_ROLE)
+    bot = create_bot(owner.id)
+    create_bot_parameters(bot.id)
+    intruder, intruder_password = create_user(role=USER_ROLE)
+    return bot, login(intruder.mail, intruder_password)
+
+
+def test_cannot_patch_another_users_bot(
+    http_client, api_base_url, create_user, create_bot, create_bot_parameters, login
+):
+    bot, headers = _other_users_bot(create_user, create_bot, create_bot_parameters, login)
+    response = http_client.patch(
+        f"{api_base_url}/bot-parameters/{bot.id}", json={"goal": "x"}, headers=headers
+    )
+    assert_error(response, 403, "rights")
+
+
+def test_cannot_overwrite_another_users_bot(
+    http_client, api_base_url, create_user, create_bot, create_bot_parameters, login
+):
+    bot, headers = _other_users_bot(create_user, create_bot, create_bot_parameters, login)
+    response = http_client.post(
+        f"{api_base_url}/bot-parameters",
+        json={"bot_id": bot.id, "bot_name": "Hijacked"},
+        headers=headers,
+    )
+    assert_error(response, 403, "rights")
+
+
+def test_cannot_read_or_delete_another_users_bot(
+    http_client, api_base_url, create_user, create_bot, create_bot_parameters, login
+):
+    bot, headers = _other_users_bot(create_user, create_bot, create_bot_parameters, login)
+    url = f"{api_base_url}/bot-parameters/{bot.id}"
+    assert_error(http_client.get(url, headers=headers), 403, "rights")
+    assert_error(http_client.delete(url, headers=headers), 403, "rights")

@@ -20,10 +20,8 @@ from src.dependencies.content_type import require_json_content_type
 from src.dependencies.db_session import async_db_session_dependency
 from src.dependencies.services import BotServiceDep, UserAdminServiceDep
 from src.dto.bot_dto import BotDto
-from src.dto.user_dto import UserDto
 from src.exceptions.api_error import ApiError
 from src.log.bot_factory_logger import BotFactoryLogger
-from src.services.bot_svc import BotService
 
 router = APIRouter(
     prefix="/api/bot",
@@ -52,13 +50,6 @@ class BotUpdateRequest(BaseModel):
         if value is not None and not value.strip():
             raise ValueError("name must not be blank")
         return value
-
-
-async def _can_modify_bot(user: UserDto, bot_id: int, bot_svc: BotService) -> bool:
-    if user.roles == ADMIN_ROLE:
-        return True
-    bot_dto = await bot_svc.get_dto_by_id(bot_id)
-    return bot_dto is not None and bot_dto.user_account_id == user.id
 
 
 @router.post("", status_code=201, dependencies=[Depends(require_json_content_type)])
@@ -193,7 +184,7 @@ async def update_bot_admin(
         logger.warning(f"update_bot_admin({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    if not await _can_modify_bot(user, bot_id, bot_svc):
+    if not await bot_svc.can_modify(user, bot_id):
         logger.warning(f"update_bot_admin({bot_id}) forbidden for user_id={user_id}")
         raise ApiError(f"You don't have rights to update bot {bot_id}.", status_code=403)
 
@@ -222,7 +213,7 @@ async def delete_bot(
         logger.warning(f"delete_bot({bot_id}) rejected: user {user_id} not found")
         raise ApiError("User not found", status_code=401)
 
-    if not await _can_modify_bot(user, bot_id, bot_svc):
+    if not await bot_svc.can_modify(user, bot_id):
         logger.warning(f"delete_bot({bot_id}) forbidden for user_id={user_id}")
         raise ApiError(f"You don't have rights to delete bot {bot_id}", status_code=403)
 

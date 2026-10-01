@@ -4,8 +4,8 @@ BotParametersPatchRequest declares no field (extra="allow"), so
 require_json_body() rejects a wrong Content-Type with an explicit
 "Content-Type must be application/json" message.
 
-TODO: the PATCH route checks the caller's role but not that they own
-the bot.
+Writes need the bot's owner or an admin; reads also accept the guests
+the bot is assigned to (BotService.can_modify / can_read).
 """
 
 from typing import Optional
@@ -17,7 +17,12 @@ from src.config.constant import ADMIN_ROLE, GUEST_ROLE, USER_ROLE
 from src.dependencies.auth import require_roles
 from src.dependencies.content_type import require_json_body
 from src.dependencies.db_session import async_db_session_dependency
-from src.dependencies.services import BotParametersServiceDep, UserAdminServiceDep
+from src.dependencies.services import (
+    BotParametersServiceDep,
+    BotServiceDep,
+    UserAdminServiceDep,
+)
+from src.dto.user_dto import UserDto
 from src.exceptions.api_error import ApiError
 from src.log.bot_factory_logger import BotFactoryLogger
 
@@ -31,6 +36,19 @@ logger = BotFactoryLogger()
 
 admin_or_user = require_roles([ADMIN_ROLE, USER_ROLE])
 any_role = require_roles([ADMIN_ROLE, USER_ROLE, GUEST_ROLE])
+
+
+async def _authorize(
+    claims: dict, bot_id: int, user_svc, bot_svc, write: bool
+) -> UserDto:
+    user = await user_svc.get_user_dto_by_id(claims["sub"])
+    if not user:
+        raise ApiError("User not found", status_code=401)
+    allowed = bot_svc.can_modify if write else bot_svc.can_read
+    if not await allowed(user, bot_id):
+        logger.warning(f"bot-parameters: user_id={user.id} denied on bot_id={bot_id}")
+        raise ApiError(f"You don't have rights on bot {bot_id}", status_code=403)
+    return user
 
 
 class BotParametersRequest(BaseModel):
@@ -74,17 +92,14 @@ async def create_or_update_bot_parameters(
     body: BotParametersRequest,
     bot_parameters_svc: BotParametersServiceDep,
     user_svc: UserAdminServiceDep,
+    bot_svc: BotServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Create bot parameters and regenerate the bot's system prompt."""
     logger.info("POST/PUT /bot-parameters - create_or_update_bot_parameters called")
     validated_data = body.model_dump(exclude_unset=True)
-
     user_id = claims["sub"]
-    user = await user_svc.get_user_dto_by_id(user_id)
-    if not user:
-        logger.warning(f"create_or_update_bot_parameters rejected: user {user_id} not found")
-        raise ApiError("User not found", status_code=401)
+    user = await _authorize(claims, body.bot_id, user_svc, bot_svc, write=True)
 
     bot_parameters_dto = await bot_parameters_svc.create_bot_parameters(
         user.name, validated_data["bot_id"], validated_data
@@ -105,6 +120,7 @@ async def patch_bot_parameters_admin(
     body: BotParametersPatchRequest,
     bot_parameters_svc: BotParametersServiceDep,
     user_svc: UserAdminServiceDep,
+    bot_svc: BotServiceDep,
     claims: dict = Depends(admin_or_user),
 ):
     """Partially update bot parameters and regenerate the bot's system prompt.
@@ -114,11 +130,7 @@ async def patch_bot_parameters_admin(
     logger.info(f"PATCH /bot-parameters/{bot_id} - patch_bot_parameters_admin called")
     validated_data = body.model_dump()
 
-    user_id = claims["sub"]
-    user = await user_svc.get_user_dto_by_id(user_id)
-    if not user:
-        logger.warning(f"patch_bot_parameters_admin({bot_id}) rejected: user {user_id} not found")
-        raise ApiError("User not found", status_code=401)
+    user = await _authorize(claims, bot_id, user_svc, bot_svc, write=True)
 
     bot_parameters_dto = await bot_parameters_svc.patch_bot_parameters(bot_id, validated_data, user.name)
     if not bot_parameters_dto:
@@ -129,13 +141,17 @@ async def patch_bot_parameters_admin(
     return bot_parameters_dto.to_dict()
 
 
-@router.get("/{bot_id}", dependencies=[Depends(any_role)])
+@router.get("/{bot_id}")
 async def get_bot_parameters_by_bot_id(
     bot_id: int,
     bot_parameters_svc: BotParametersServiceDep,
+    user_svc: UserAdminServiceDep,
+    bot_svc: BotServiceDep,
+    claims: dict = Depends(any_role),
 ):
     """Get bot parameters by bot ID"""
     logger.info(f"GET /bot-parameters/{bot_id} - get_bot_parameters_by_bot_id called")
+    await _authorize(claims, bot_id, user_svc, bot_svc, write=False)
     bot_parameters_dto = await bot_parameters_svc.get_by_bot_id(bot_id)
     if not bot_parameters_dto:
         logger.warning(f"get_bot_parameters_by_bot_id({bot_id}) not found")
@@ -144,13 +160,17 @@ async def get_bot_parameters_by_bot_id(
     return bot_parameters_dto.to_dict()
 
 
-@router.delete("/{bot_id}", status_code=204, dependencies=[Depends(admin_or_user)])
+@router.delete("/{bot_id}", status_code=204)
 async def delete_bot_parameters(
     bot_id: int,
     bot_parameters_svc: BotParametersServiceDep,
+    user_svc: UserAdminServiceDep,
+    bot_svc: BotServiceDep,
+    claims: dict = Depends(admin_or_user),
 ):
     """Delete bot parameters by bot ID"""
     logger.info(f"DELETE /bot-parameters/{bot_id} - delete_bot_parameters called")
+    await _authorize(claims, bot_id, user_svc, bot_svc, write=True)
     if not await bot_parameters_svc.delete_by_bot_id(bot_id):
         logger.warning(f"delete_bot_parameters({bot_id}) not found")
         raise ApiError("Bot parameters not found", status_code=404)

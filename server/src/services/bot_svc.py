@@ -1,9 +1,11 @@
 from typing import Optional, List, Dict, Any
 
+from src.config.constant import ADMIN_ROLE, GUEST_ROLE
 from src.models import Bot
 from src.dto.bot_parameters_dto import BotParametersDto
 from src.dto.bot_dto import BotDto
 from src.dto.avatar_dto import AvatarDto
+from src.dto.user_dto import UserDto
 from src.log.bot_factory_logger import BotFactoryLogger
 from src.repositories import BotRepository, UserRepository
 from src.services.base_service import BaseService
@@ -76,6 +78,19 @@ class BotService(BaseService[BotDto]):
         """
         bot = await self.bot_repo.get(bot_id)
         return bot is not None and int(bot.user_account_id) == int(user_account_id)
+
+    async def can_modify(self, user: UserDto, bot_id: int) -> bool:
+        """Changing a bot or its parameters: its owner, or an admin."""
+        if user.roles == ADMIN_ROLE:
+            return True
+        return await self.is_bot_belong_to_user(bot_id, user.id)
+
+    async def can_read(self, user: UserDto, bot_id: int) -> bool:
+        """Reading a bot's settings: whoever can modify it, plus the guests
+        it is assigned to."""
+        if user.roles == GUEST_ROLE:
+            return await self.bot_assignment_svc.is_bot_assigned_to_user(bot_id, user.id)
+        return await self.can_modify(user, bot_id)
 
     async def create_random_bot(self, user_account_id) -> BotDto:
         """Create a bot for user_account_id with a random avatar, a random
