@@ -63,7 +63,7 @@ def _async_session_factory():
     return async_sessionmaker(bind=_get_async_engine(), expire_on_commit=False)()
 
 
-AsyncSessionLocal = async_scoped_session(
+AsyncSessionLocal: async_scoped_session[AsyncSession] = async_scoped_session(
     _async_session_factory, scopefunc=_async_scopefunc
 )
 

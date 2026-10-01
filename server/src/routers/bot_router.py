@@ -81,8 +81,8 @@ class BotUpdateRequest(BaseModel):
 async def _can_modify_bot(user: UserDto, bot_id: int, bot_svc: BotService) -> bool:
     if user.roles == ADMIN_ROLE:
         return True
-    bot_dto: BotDto = await bot_svc.get_dto_by_id(bot_id)
-    return bot_dto and bot_dto.user_account_id == user.id
+    bot_dto = await bot_svc.get_dto_by_id(bot_id)
+    return bot_dto is not None and bot_dto.user_account_id == user.id
 
 
 @router.post("", status_code=201, dependencies=[Depends(require_json_content_type)])

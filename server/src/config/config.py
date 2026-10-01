@@ -88,9 +88,8 @@ class AppConfig(BaseConfig):
     OPERATIONAL_LOG_FILE_MAXSIZE = 100
     value = os.environ.get("OPERATIONAL_LOG_FILE_MAXSIZE", default="100")
     try:
-        value = int(value)
-        if value > 1:
-            OPERATIONAL_LOG_FILE_MAXSIZE = value
+        if int(value) > 1:
+            OPERATIONAL_LOG_FILE_MAXSIZE = int(value)
     except ValueError:
         pass
 
@@ -170,18 +169,13 @@ class AppConfig(BaseConfig):
     TOKEN_LIMIT_PER_USER_24H = 0
     value = os.environ.get("TOKEN_LIMIT_PER_USER_24H", default="0")
     try:
-        value = int(value)
-        if value > 0:
-            TOKEN_LIMIT_PER_USER_24H = value
+        if int(value) > 0:
+            TOKEN_LIMIT_PER_USER_24H = int(value)
     except ValueError:
         logger.warning(f"Invalid TOKEN_LIMIT_PER_USER_24H={value!r}, token limit disabled")
 
-    MISTRAL_API_KEY = os.environ.get(
-        "MISTRAL_API_KEY", "your-secret-key-change-this-in-production"
-    )
-    MISTRAL_MODEL = os.environ.get(
-            "VIBE_MODEL", "your-secret-key-change-this-in-production"
-        )
+    MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY", "")
+    MISTRAL_MODEL = os.environ.get("MISTRAL_MODEL", "mistral-medium")
 
     # OAuth client ID Google (Google Identity Services) : doit être le même
     # sur le frontend (client/src/assets/env.js) et le backend, sinon

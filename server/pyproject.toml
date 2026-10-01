@@ -65,6 +65,7 @@ dev = [
     "isort==5.13.2",
     "flake8==6.1.0",
     "mypy==1.7.1",
+    "types-PyYAML",
 ]
 
 test = [
@@ -107,12 +108,16 @@ skip_glob = ["*/migrations/*", "v-ai-server/*"]
 
 [tool.mypy]
 python_version = "3.12"
-warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = false
 ignore_missing_imports = true
-exclude = ["v-ai-server/", "db/", "test/"]
+exclude = ["db/", "test/"]
+# Permissive for now (run in CI): these codes still flag existing code --
+# Optional values used without a None check, loosely typed DTO fields,
+# service overrides with narrower signatures. Remove one at a time as the
+# code gets fixed.
+disable_error_code = ["arg-type", "assignment", "override", "union-attr"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]

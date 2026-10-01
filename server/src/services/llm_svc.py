@@ -40,6 +40,24 @@ class TokenCountingCallback(AsyncCallbackHandler):
         self.user_svc = user_svc
         self.logger = BotFactoryLogger()
 
+    async def _record_usage(self) -> None:
+        """Bill the tokens counted so far; a guest's go to its parent account."""
+        user = await self.user_svc.get_user_dto_by_id(self.user_id)
+        user_guest_id = -1
+        if user.parent_id > 0:
+            self.user_id = user.parent_id
+            user_guest_id = user.id
+        await self.token_tracking_service.record_token_usage(
+            user_id=self.user_id,
+            user_guest_id=user_guest_id,
+            bot_id=self.bot_id,
+            prompt_tokens=self.prompt_tokens,
+            completion_tokens=self.completion_tokens,
+            total_tokens=self.total_tokens,
+            session_id=self.session_id,
+            model_name=self.model_name,
+        )
+
     async def on_llm_end(self, response: Any, **kwargs) -> None:
         """Appelé à la fin d'un appel LLM"""
         try:
@@ -61,24 +79,7 @@ class TokenCountingCallback(AsyncCallbackHandler):
                             response_metadata = message["response_metadata"]
                             self.model_name = response_metadata.get("model")
 
-                        user = await self.user_svc.get_user_dto_by_id(
-                            self.user_id
-                        )  # Just to ensure user exists
-                        user_guest_id = -1
-                        if user.parent_id > 0:
-                            self.user_id = user.parent_id
-                            user_guest_id = user.id
-                        # Enregistrer l'utilisation des tokens
-                        await self.token_tracking_service.record_token_usage(
-                            user_id=self.user_id,
-                            user_guest_id=user_guest_id,
-                            bot_id=self.bot_id,
-                            prompt_tokens=self.prompt_tokens,
-                            completion_tokens=self.completion_tokens,
-                            total_tokens=self.total_tokens,
-                            session_id=self.session_id,
-                            model_name=self.model_name,
-                        )
+                        await self._record_usage()
                         self.logger.info(
                             f"Token usage recorded (generations path) - user_id={self.user_id} "
                             f"bot_id={self.bot_id} session_id={self.session_id} "
@@ -95,16 +96,7 @@ class TokenCountingCallback(AsyncCallbackHandler):
                     self.total_tokens = token_usage.get("total_tokens", 0)
                     self.model_name = response.llm_output.get("model_name")
 
-                    # Enregistrer l'utilisation des tokens
-                    await self.token_tracking_service.record_token_usage(
-                        user_id=self.user_id,
-                        bot_id=self.bot_id,
-                        prompt_tokens=self.prompt_tokens,
-                        completion_tokens=self.completion_tokens,
-                        total_tokens=self.total_tokens,
-                        session_id=self.session_id,
-                        model_name=self.model_name,
-                    )
+                    await self._record_usage()
                     self.logger.info(
                         f"Token usage recorded (llm_output fallback path) - user_id={self.user_id} "
                         f"bot_id={self.bot_id} session_id={self.session_id} "
@@ -135,7 +127,7 @@ class LlmService:
         self.user_admin_svc = user_admin_svc
         # assuming you have Ollama installed and have llama3 model pulled with `ollama pull llama3 `
         # embeddings = MistralAIEmbeddings(model="mistral-embed", mistral_api_key=api_key)
-        self.llm = ChatMistralAI(mistral_api_key=app_config.MISTRAL_API_KEY, model_name=app_config.MISTRAL_MODEL)
+        self.llm = ChatMistralAI(api_key=app_config.MISTRAL_API_KEY, model_name=app_config.MISTRAL_MODEL)
 
     def get_llm(
         self,
@@ -169,8 +161,8 @@ class LlmService:
             )
             # Créer une nouvelle instance avec le callback
             return ChatMistralAI(
-                mistral_api_key=app_config.MISTRAL_API_KEY,
-                model_name="mistral-medium",
+                api_key=app_config.MISTRAL_API_KEY,
+                model_name=app_config.MISTRAL_MODEL,
                 callbacks=[callback],
             )
 

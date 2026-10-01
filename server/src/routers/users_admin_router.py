@@ -96,7 +96,7 @@ class RoleChangeRequest(BaseModel):
     # Admin account at all (the only one is the pre-seeded super-admin from
     # SUPER_ADMIN_LOGIN/PASSWORD) -- authorize_user_scope's "no admin acts
     # on another admin" rule stays in place as defense-in-depth regardless.
-    role: Literal[USER_ROLE, GUEST_ROLE]
+    role: Literal["User", "Guest"]  # USER_ROLE, GUEST_ROLE
 
 
 class PasswordChangeRequest(BaseModel):
