@@ -54,5 +54,9 @@ EXPOSE 8000
 # Apply pending database migrations, then run the command below
 ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
 
-# Run the ASGI application
-CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "8000"]
+# One worker: each would load its own copy of the embedding model (see
+# README, "Runtime model"). --proxy-headers + --forwarded-allow-ips: the
+# client IP comes from the web nginx's X-Forwarded-For; the port is only
+# reachable through it (and the host's loopback).
+CMD ["uvicorn", "src.asgi:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--proxy-headers", "--forwarded-allow-ips", "*"]

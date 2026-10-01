@@ -94,7 +94,9 @@ http {
       proxy_set_header Host $host;
       proxy_cache_bypass $http_upgrade;
       proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      # $remote_addr is already the real client IP (real_ip above): pass it
+      # alone, so the API never sees addresses a client put there itself.
+      proxy_set_header X-Forwarded-For $remote_addr;
       proxy_set_header X-Forwarded-Proto $scheme;
       # proxy_buffering defaults to "on": nginx accumulates the whole
       # upstream response in its own buffers and only flushes it to the
