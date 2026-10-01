@@ -13,7 +13,7 @@ import { AuthService } from '@app/services/auth.service';
 })
 export class LandingComponent implements OnInit {
   mobileMenuOpen = false;
-  private demoEnabled = false;
+  demoEnabled = false;
   demoLoading = false;
 
   readonly githubUrl = 'https://github.com/pierrefaraco/bot-factory';
@@ -182,6 +182,11 @@ export class LandingComponent implements OnInit {
 
   navigateToAuth() {
     this.router.navigate(['/auth']);
+  }
+
+  // Liens "Create your own account" : formulaire d'inscription directement.
+  navigateToSignup() {
+    this.router.navigate(['/auth'], { queryParams: { mode: 'signup' } });
   }
 
   navigateToPolicies() {

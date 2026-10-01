@@ -98,6 +98,10 @@ export class AuthFormComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.initializeForms();
+    // /auth?mode=signup (liens "Create your own account" de la landing).
+    if (this.route.snapshot.queryParamMap.get('mode') === 'signup') {
+      this.isLoginMode = false;
+    }
     const magicToken = this.route.snapshot.queryParamMap.get('token');
     if (magicToken) {
       this.loginWithMagicLink(magicToken);

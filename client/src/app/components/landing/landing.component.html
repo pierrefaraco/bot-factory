@@ -62,6 +62,11 @@
               <span>View Source Code</span>
             </a>
           </div>
+          <p class="account-choice">
+            <ng-container *ngIf="demoEnabled">The demo runs on a shared account: other visitors see what you build there.</ng-container>
+            Prefer a private space?
+            <a class="account-choice-link" (click)="navigateToSignup()" (keydown.enter)="navigateToSignup()" tabindex="0" role="link">Create your own account</a>
+          </p>
         </div>
         <div class="hero-image">
           <div class="bot-preview">
@@ -104,7 +109,11 @@
           [color]="'var(--text-on-accent)'" [backgroundColor]="'var(--text-accent)'" [size]="'large'"
           (buttonClickedEvent)="tryDemo()" [disabled]="false">
         </app-button>
-        <p class="meet-me-note">Your changes only apply to your own copy of the bot.</p>
+        <p class="meet-me-note account-choice">
+          <ng-container *ngIf="demoEnabled">The demo account is shared with every visitor.</ng-container>
+          Want to keep your bots to yourself?
+          <a class="account-choice-link" (click)="navigateToSignup()" (keydown.enter)="navigateToSignup()" tabindex="0" role="link">Create your own account</a>
+        </p>
       </div>
     </div>
   </section>
