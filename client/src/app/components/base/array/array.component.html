@@ -18,6 +18,8 @@
     </div>
   </div>
 
+  <!-- Défilement horizontal sur petit écran plutôt que des colonnes rognées. -->
+  <div class="table-scroll">
   <table class="custom-table">
     <thead>
       <tr>
@@ -57,6 +59,7 @@
       </tr>
     </tbody>
   </table>
+  </div>
 
   <div class="pagination-controls" *ngIf="filteredSortedRecords.length > 0">
     <app-button class="pagination-item" [icon]="'chevron_left'" [label]="'previous'" [color]="'var(--text-primary)'"

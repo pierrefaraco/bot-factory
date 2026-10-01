@@ -84,10 +84,26 @@
     .header-content {
       margin-bottom: 0.25rem; // mb-1
     }
+  }
 
-    .header-top .create-bot-btn {
-      width: 100%;
-      justify-content: center;
+  // Téléphone : titre + bouton sur la même ligne, sous-titre (bot actif)
+  // replié en dessous. Le bouton n'occupe plus toute la largeur : c'était
+  // ~50px de hauteur perdus pour le chat/panneau actif sur un écran de 667px.
+  @media (max-width: 768px) {
+    .header-top {
+      h1 {
+        flex: 1 1 auto;
+      }
+
+      .subtitle {
+        order: 3;
+        flex-basis: 100%;
+      }
+
+      .create-bot-btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+      }
     }
   }
 }
@@ -214,7 +230,10 @@ app-bot-list {
     // pour laisser un maximum de place à `.main-content` (chat, etc.)
     // sur les fenêtres à la fois étroites et peu hautes.
     height: auto;
-    max-height: 130px;
+    // Empilé au-dessus du contenu : plus de voisin à droite, donc plus
+    // d'inset latéral — les bords de la carte s'alignent sur le header et
+    // sur `.tabs-container` (cf. `.main-content` ci-dessous).
+    padding: 0 0 0.5rem 0;
   }
 }
 
@@ -247,6 +266,12 @@ app-bot-list {
   // à l'ombre de la carte active, sans changer la position finale de son
   // bord bas (qui reste alignée sur celle de `.bots-section`).
   padding-bottom: 0;
+
+  // Empilé sous `.sidebar-bots` : même repère gauche/droite que le header,
+  // l'écart vertical étant déjà porté par le padding-bottom de la sidebar.
+  @media (max-width: 1023px) {
+    padding: 0;
+  }
 }
 
 // Navigation par onglets
@@ -322,6 +347,36 @@ app-bot-list {
 
     &:focus {
       outline-offset: 2px;
+    }
+  }
+}
+
+// Téléphone : les 4 onglets sur une seule rangée (icône au-dessus du
+// libellé), au lieu de 2 rangées de 2 qui coûtaient ~110px de hauteur.
+@media (max-width: 768px) {
+  .tabs-container {
+    padding: 0.25rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .tabs-nav {
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+
+    .tab-button {
+      flex: 1 1 0;
+      min-width: 0;
+      flex-direction: column;
+      gap: 0.25rem;
+      padding: 0.5rem 0.25rem;
+      font-size: 0.75rem;
+
+      span:not(.material-icons) {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
     }
   }
 }
@@ -886,6 +941,13 @@ app-bot-list {
       ::ng-deep app-bot-draw {
         display: block;
       }
+
+      // Sur téléphone l'éditeur (aperçu + contrôles empilés) dépasse la
+      // hauteur de la carte : centré verticalement, son haut deviendrait
+      // inaccessible au défilement. On l'aligne donc en haut.
+      @media (max-width: 768px) {
+        align-items: flex-start;
+      }
     }
   }
 }
@@ -893,27 +955,53 @@ app-bot-list {
 // Responsive
 @media (max-width: 1023px) {
   .sidebar-bots {
+    // Titre et rangée d'avatars côte à côte (et non plus empilés) : la
+    // carte se limite à la hauteur d'un avatar. L'ancienne version empilée
+    // était plafonnée à 130px, ce qui rognait le bas des avatars.
     .overview-section.bots-section {
       height: auto;
-      max-height: 130px;
+      flex-direction: row;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 1rem;
 
-      // Budget vertical très contraint (130px au total, avatars compris) :
-      // la ligne de titre est resserrée au maximum.
+      // Filet vertical au lieu d'horizontal, même épaisseur/couleur.
       .bots-section-header {
-        margin-bottom: 0.25rem; // mb-1
+        padding-bottom: 0;
+        margin-bottom: 0;
+        padding-right: 0.75rem;
+        border-bottom: none;
+        border-right: 2px solid var(--border-primary);
       }
 
       .bots-list-container {
+        flex: 1 1 auto;
+        min-width: 0;
         min-height: 0;
+        overflow: hidden;
+
         ::ng-deep app-bot-list {
-          height: 100%;
+          height: auto;
 
           .container {
-            height: 100%;
+            height: auto;
             overflow-x: auto;
             overflow-y: hidden;
             display: flex;
             flex-direction: row;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0;
+            // Réserve l'anneau de sélection (box-shadow 4px) pour qu'il ne
+            // soit pas rogné par l'overflow.
+            padding: 0.25rem;
+          }
+
+          .selected,
+          .not-selected,
+          .avatar-container {
+            flex: 0 0 auto;
+            margin: 0;
           }
         }
       }
@@ -925,13 +1013,28 @@ app-bot-list {
   // suppression de .status-section), donc identique à toutes les tailles
   // d'écran.
 
+  // Arbre et éditeur empilés : le panneau défile en entier, chaque carte
+  // garde sa hauteur naturelle au lieu de se partager une hauteur déjà
+  // réduite (chacune se retrouvait avec ~100px utiles sur téléphone).
   .knowledges-panel {
     flex-direction: column;
     align-items: stretch;
+    overflow-y: auto;
 
     .knowledge-section,
     .knowledge-editor-section {
       width: 100%;
+      flex: 0 0 auto;
+      height: auto;
+      overflow: visible;
     }
+  }
+}
+
+// Téléphone : cartes un cran plus serrées (0.75rem, même échelle), pour
+// rendre la largeur au contenu (éditeur d'avatar, formulaires, chat).
+@media (max-width: 768px) {
+  .overview-section {
+    padding: 0.75rem;
   }
 }

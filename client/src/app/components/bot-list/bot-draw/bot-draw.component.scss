@@ -61,3 +61,26 @@
   border-width: 1px;
   border-color: var(--bg-tertiary);
 }
+// Téléphone / petite tablette : aperçu au-dessus des contrôles, et
+// contrôles à la largeur disponible (les 512px fixes débordaient de la
+// carte, rognant les pastilles de couleur à droite).
+@media (max-width: 768px) {
+  .main_area {
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .controls {
+    width: 100%;
+    max-width: 512px;
+    height: auto;
+    overflow: visible;
+    flex-shrink: 1;
+  }
+
+  // Chaque ligne (forme + couleurs) peut se replier sur deux rangées.
+  .palete {
+    height: auto;
+    max-height: none;
+  }
+}

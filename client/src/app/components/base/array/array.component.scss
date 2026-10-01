@@ -90,6 +90,14 @@
 
 // ========== Table structure (déclarée dans ce composant : pas de ::ng-deep
 // nécessaire pour <table>/<thead>/<th>) ==========
+// La carte (.custom-common) garde son overflow: hidden pour les coins
+// arrondis : c'est ce conteneur qui porte le défilement horizontal quand
+// les colonnes ne tiennent pas (téléphone), au lieu de les rogner.
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .custom-table {
   width: 100%;
   border-collapse: collapse;
