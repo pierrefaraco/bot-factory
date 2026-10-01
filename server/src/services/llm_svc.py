@@ -71,13 +71,13 @@ class TokenCountingCallback(AsyncCallbackHandler):
                     message = generation.message
                     if message and message.usage_metadata:
                         usage_metadata = message.usage_metadata
-                        self.prompt_tokens = usage_metadata.get("output_tokens", 0)
-                        self.completion_tokens = usage_metadata.get("input_tokens", 0)
+                        self.prompt_tokens = usage_metadata.get("input_tokens", 0)
+                        self.completion_tokens = usage_metadata.get("output_tokens", 0)
                         self.total_tokens = usage_metadata.get("total_tokens", 0)
-                        self.model_name = "mistral-medium"
-                        if message and "response_metadata" in message:
-                            response_metadata = message["response_metadata"]
-                            self.model_name = response_metadata.get("model")
+                        self.model_name = (
+                            message.response_metadata.get("model")
+                            or app_config.MISTRAL_MODEL
+                        )
 
                         await self._record_usage()
                         self.logger.info(
