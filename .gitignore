@@ -119,3 +119,6 @@ temp/
 client/e2e/.auth/
 client/playwright-report/
 client/test-results/
+
+# PDFs uploaded by a locally run API (UPLOAD_FOLDER default)
+server/uploads/

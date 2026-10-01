@@ -351,6 +351,10 @@ With `C="docker compose -f docker-compose.yml -f docker-compose.prod.yml"`:
 | Test the nginx config | `$C exec reverse-proxy nginx -t` |
 | Proxy / renewal logs | `$C logs -f reverse-proxy`, `$C logs certbot` |
 | Back up the certificates | `docker run --rm -v bot-factory_certbot-etc:/etc/letsencrypt -v "$PWD":/backup alpine tar czf /backup/letsencrypt.tgz -C /etc letsencrypt` |
+| Back up the uploaded PDFs | `docker run --rm -v bot-factory_pdf_uploads:/uploads -v "$PWD":/backup alpine tar czf /backup/pdf_uploads.tgz -C / uploads` |
+
+The `pdf_uploads` volume holds the PDFs attached to knowledges; back it up
+with `mysql_data`, since the database references its files.
 
 The `certbot-etc` volume holds the account key and the certificates. Losing
 it isn't serious (`make certbot-init` gets new ones), but it counts against

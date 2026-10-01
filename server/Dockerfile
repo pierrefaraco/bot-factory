@@ -39,8 +39,9 @@ RUN uv sync --frozen --no-dev
 # The embedding model cache dir is created here, owned by appuser, so the
 # fastembed_cache volume (docker-compose.yml) mounted on it inherits that
 # ownership on first use instead of being root-owned and unwritable.
+# Same for /app/uploads and the pdf_uploads volume.
 RUN useradd -m -u 1000 appuser && \
-    mkdir -p "$FASTEMBED_CACHE_PATH" && \
+    mkdir -p "$FASTEMBED_CACHE_PATH" /app/uploads && \
     chown -R appuser:appuser /app /home/appuser/.cache
 USER appuser
 

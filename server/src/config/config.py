@@ -113,7 +113,9 @@ class AppConfig(BaseConfig):
     if isinstance(value, str) and value.strip():
         LOCAL_USER_PASSWORD = value
 
-    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/tmp/pdf")
+    # Uploaded PDFs (<bot_id>/<uuid>.pdf). Must be persistent: re-indexing a
+    # bot reads them again (docker-compose.yml mounts a volume here).
+    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "./uploads")
     MAX_PDF_SIZE_BYTES = int(os.environ.get("MAX_PDF_SIZE_BYTES", 20 * 1024 * 1024))
 
     # ===== Vector store (see services/vector_store_facade.py) =====
