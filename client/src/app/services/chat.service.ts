@@ -179,10 +179,11 @@ export class ChatService {
     });
   }
 
-  // 429 = token limit (TOKEN_LIMIT_PER_USER_24H) reached server-side
+  // 429 = token limit (TOKEN_LIMIT_PER_USER_24H) reached server-side, or
+  // nginx's per-IP rate limit: EventSource exposes no body to tell them apart.
   private streamErrorMessage(err: any): string {
     if (err.status === 429) {
-      return "Limite de tokens atteinte pour les dernières 24h. Réessayez plus tard.";
+      return "Trop de messages envoyés, ou limite de tokens des dernières 24h atteinte. Réessayez plus tard.";
     }
     return "error " + err.status;
   }
