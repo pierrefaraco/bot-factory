@@ -20,7 +20,10 @@ class Knowledge(Base):
     knowledge_dad_id: Mapped[str] = mapped_column(String(64), index=True)
     children_ref_id: Mapped[str] = mapped_column(String(64))
     indice: Mapped[int] = mapped_column()
+    # Name of the PDF as uploaded, for display only.
     pdf_file: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    # Where it is stored, relative to UPLOAD_FOLDER: "<bot_id>/<uuid4>.pdf".
+    pdf_path: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=sqlalchemy.text("CURRENT_TIMESTAMP")
     )
@@ -44,6 +47,7 @@ class Knowledge(Base):
         indice=0,
         children_ref_id="",
         pdf_file: str = "",
+        pdf_path: Optional[str] = None,
     ):
         self.bot_id = bot_id
         self.name = name
@@ -53,3 +57,4 @@ class Knowledge(Base):
         self.children_ref_id = children_ref_id
         self.indice = indice
         self.pdf_file = pdf_file
+        self.pdf_path = pdf_path

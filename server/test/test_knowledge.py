@@ -54,9 +54,8 @@ def test_save_with_pdf_golden_path(http_client, api_base_url, create_user, creat
     bot = create_bot(user.id)
     headers = login(user.mail, password)
 
-    # knowledge_svc.save_pdf() saves under the pdf_file *string field* from
-    # the JSON data blob, not the uploaded file's own name -- both must be
-    # supplied and they must agree, or it 500s on `None.endswith(".pdf")`.
+    # pdf_file in the JSON data blob is the name shown to the user; the file
+    # itself is stored under a generated <bot_id>/<uuid4>.pdf path.
     with open(SAMPLE_PDF, "rb") as f:
         response = http_client.post(
             f"{api_base_url}/knowledge/save/{bot.id}",
