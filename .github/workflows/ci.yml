@@ -91,8 +91,15 @@ jobs:
       # suite checks the RAG plumbing, not retrieval quality, so the light
       # model documented in .env.example is enough here.
       EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      SUPER_ADMIN_LOGIN: ci-admin@example.com
     steps:
       - uses: actions/checkout@v5
+
+      # docker-compose.yml has no default for secrets: fresh ones per run.
+      - name: Generate secrets
+        run: |
+          echo "JWT_SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "SUPER_ADMIN_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
 
       - name: Start MySQL, ChromaDB and the mock LLM
         run: $COMPOSE up -d --wait db chromadb mock-llm

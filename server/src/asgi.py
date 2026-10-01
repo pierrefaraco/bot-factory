@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 
 from src.config.config import AppConfig
 from src.config.constant import ADMIN_ROLE
+from src.config.validator import ConfigValidator
 from src.database.session import async_db_session_scope
 from src.dependencies.services import build_services
 from src.exceptions.api_error import ApiError
@@ -54,6 +55,7 @@ logger = BotFactoryLogger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"{AppConfig.APP_NAME} version {AppConfig.APP_VERSION} starting...")
+    ConfigValidator.validate_all(AppConfig)
 
     # Built before serving so routes' Depends(get_*_service) (see
     # dependencies/services.py) always find them, and so a broken service
@@ -71,11 +73,15 @@ async def lifespan(app: FastAPI):
         if super_admin_login and not await user_admin_svc.get_user_by_email(
             super_admin_login
         ):
+            super_admin_password = os.getenv("SUPER_ADMIN_PASSWORD", "")
+            ConfigValidator.raise_if_any(
+                ConfigValidator.super_admin_password_errors(super_admin_password)
+            )
             logger.info(f"Creating super admin user: {super_admin_login}")
             await user_admin_svc.register_user(
                 mail=super_admin_login,
                 user_name=super_admin_login,
-                password=os.getenv("SUPER_ADMIN_PASSWORD"),
+                password=super_admin_password,
                 roles=ADMIN_ROLE,
                 parent_id=-1,
                 is_active=True,

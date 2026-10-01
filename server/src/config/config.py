@@ -31,10 +31,8 @@ def _int_env(name: str, default: int, minimum: int = 1) -> int:
 class BaseConfig:
     """Core application properties (auth, database)."""
 
-    # Application session secret key
-    JWT_SECRET_KEY = os.environ.get(
-        "JWT_SECRET_KEY", '^ZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2x")sZQjGKyBVf2xx'
-    )
+    # No default: ConfigValidator refuses to start without a real one.
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")
     DATABASE_URL = os.getenv("DATABASE_URL")
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -174,10 +172,6 @@ class AppConfig(BaseConfig):
             TOKEN_LIMIT_PER_USER_24H = value
     except ValueError:
         logger.warning(f"Invalid TOKEN_LIMIT_PER_USER_24H={value!r}, token limit disabled")
-
-    SECRET_KEY = os.environ.get(
-        "SECRET_KEY", "your-secret-key-change-this-in-production"
-    )
 
     MISTRAL_API_KEY = os.environ.get(
         "MISTRAL_API_KEY", "your-secret-key-change-this-in-production"

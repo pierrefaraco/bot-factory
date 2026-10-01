@@ -58,7 +58,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: mysql+pymysql://${MYSQL_USER:-botcraft_user}:${MYSQL_PASSWORD:-123456789}@${MYSQL_HOST:-db}:3306/${MYSQL_DATABASE:-botcraft}?charset=utf8mb4
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
+      # No defaults for secrets: compose refuses to start without them.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env (see .env.example)}
       CHROMA_CONTAINER: ${CHROMA_CONTAINER:-true}
       CHROMA_HOST: ${CHROMA_HOST:-chromadb}
       CHROMA_PORT: ${CHROMA_PORT:-8000}
@@ -70,8 +71,8 @@ services:
       RAG_RETRIEVER_K: ${RAG_RETRIEVER_K:-12}
       LOGGER_LVL: ${LOGGER_LVL:-INFO}
       OPERATIONAL_LOG_FILE: ${OPERATIONAL_LOG_FILE:-ai-server.log}
-      SUPER_ADMIN_LOGIN: ${SUPER_ADMIN_LOGIN:-pierre.faraco@gmail.com}
-      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-123}
+      SUPER_ADMIN_LOGIN: ${SUPER_ADMIN_LOGIN:?Set SUPER_ADMIN_LOGIN in .env (see .env.example)}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:?Set SUPER_ADMIN_PASSWORD in .env (see .env.example)}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-a}
       MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-medium}
       TOKEN_LIMIT_PER_USER_24H: ${TOKEN_LIMIT_PER_USER_24H:-0}

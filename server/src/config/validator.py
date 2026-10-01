@@ -1,113 +1,66 @@
-"""
-Validator pour la configuration de l'application
-Vérifie que toutes les variables d'environnement critiques sont configurées
-"""
+"""Startup checks on the security-critical configuration: the API refuses
+to start (see asgi.py's lifespan) rather than run with a guessable secret."""
 
 from src.log.bot_factory_logger import BotFactoryLogger
 
 logger = BotFactoryLogger()
 
+JWT_SECRET_MIN_LENGTH = 32
+SUPER_ADMIN_PASSWORD_MIN_LENGTH = 12
+
+# Values that have been published in this repository (.env.example files,
+# README, former defaults): anyone can sign tokens with them, whatever
+# their length. test_config_validator_unit.py checks that the .env.example
+# files' own values stay listed here.
+KNOWN_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "your-secret-key-change-in-production",
+        "your-secret-key-change-this-in-production",
+        '^ZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2x")sZQjGKyBVf2xx',
+        "change-me",
+        "123",
+    }
+)
+
 
 class ConfigValidator:
-    """Validateur de configuration pour s'assurer que l'application est correctement configurée"""
+    """Raises ValueError, listing every problem found, on unsafe settings."""
 
     @staticmethod
-    def validate_jwt_config(config) -> None:
-        """
-        Valide la configuration JWT
+    def jwt_errors(secret: str) -> list:
+        if not secret:
+            return ["JWT_SECRET_KEY is not set"]
+        if secret in KNOWN_PLACEHOLDER_SECRETS:
+            return ["JWT_SECRET_KEY is a published placeholder value"]
+        if len(secret) < JWT_SECRET_MIN_LENGTH:
+            return [f"JWT_SECRET_KEY must be at least {JWT_SECRET_MIN_LENGTH} characters"]
+        return []
 
-        Args:
-            config: L'objet de configuration Flask
+    @staticmethod
+    def super_admin_password_errors(password: str) -> list:
+        """Only checked when the super admin account gets created: the
+        variable is unused once it exists."""
+        if not password:
+            return ["SUPER_ADMIN_PASSWORD is not set"]
+        if password in KNOWN_PLACEHOLDER_SECRETS:
+            return ["SUPER_ADMIN_PASSWORD is a published placeholder value"]
+        if len(password) < SUPER_ADMIN_PASSWORD_MIN_LENGTH:
+            return [
+                f"SUPER_ADMIN_PASSWORD must be at least "
+                f"{SUPER_ADMIN_PASSWORD_MIN_LENGTH} characters"
+            ]
+        return []
 
-        Raises:
-            ValueError: Si la configuration JWT n'est pas valide
-        """
-        errors = []
-
-        # Vérifier que le JWT secret n'est pas la valeur par défaut
-        if not config.JWT_SECRET_KEY:
-            errors.append("JWT_SECRET_KEY is not configured")
-
-        # Vérifier que la clé JWT fait au moins 32 caractères
-        if config.JWT_SECRET_KEY and len(config.JWT_SECRET_KEY) < 32:
-            errors.append("JWT_SECRET_KEY should be at least 32 characters long")
-
-        # Avertissement si la clé contient des caractères peu sécurisés
-        if (
-            config.JWT_SECRET_KEY
-            and config.JWT_SECRET_KEY
-            == '^ZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2xZQjGKyBVf2x")sZQjGKyBVf2xx'
-        ):
-            errors.append(
-                "JWT_SECRET_KEY is using the default hardcoded value - CHANGE THIS IN PRODUCTION!"
-            )
-
+    @staticmethod
+    def raise_if_any(errors: list) -> None:
         if errors:
-            error_message = "JWT configuration validation failed:\n" + "\n".join(
-                f"  - {err}" for err in errors
-            )
-            logger.error(error_message)
-            raise ValueError(error_message)
-
-        logger.info("JWT configuration validated successfully")
+            message = "Unsafe configuration:\n" + "\n".join(f"  - {e}" for e in errors)
+            logger.critical(message)
+            raise ValueError(message)
 
     @staticmethod
-    def validate_database_config(config) -> None:
-        """
-        Valide la configuration de la base de données
-
-        Args:
-            config: L'objet de configuration Flask
-
-        Raises:
-            ValueError: Si la configuration de la base de données n'est pas valide
-        """
-        errors = []
-
+    def validate_all(config) -> None:
+        errors = ConfigValidator.jwt_errors(config.JWT_SECRET_KEY)
         if not config.DATABASE_URL:
-            errors.append("DATABASE_URL environment variable is not configured")
-
-        if errors:
-            error_message = "Database configuration validation failed:\n" + "\n".join(
-                f"  - {err}" for err in errors
-            )
-            logger.error(error_message)
-            raise ValueError(error_message)
-
-        logger.info("Database configuration validated successfully")
-
-    @staticmethod
-    def validate_all(config, strict_mode: bool = True) -> bool:
-        """
-        Valide toute la configuration de l'application
-
-        Args:
-            config: L'objet de configuration Flask
-            strict_mode: Si True, lève une exception en cas d'erreur. Si False, log seulement les avertissements
-
-        Returns:
-            bool: True si la validation réussit
-
-        Raises:
-            ValueError: Si strict_mode est True et que la validation échoue
-        """
-        logger.info("Starting configuration validation...")
-
-        try:
-            ConfigValidator.validate_database_config(config)
-            ConfigValidator.validate_jwt_config(config)
-
-            logger.info("All configuration validation checks passed")
-            return True
-
-        except ValueError as e:
-            if strict_mode:
-                logger.critical(
-                    f"Configuration validation failed in strict mode: {str(e)}"
-                )
-                raise
-            else:
-                logger.warning(
-                    f"Configuration validation failed (non-strict mode): {str(e)}"
-                )
-                return False
+            errors.append("DATABASE_URL is not set")
+        ConfigValidator.raise_if_any(errors)
