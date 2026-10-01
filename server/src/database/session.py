@@ -47,7 +47,15 @@ def _get_async_engine():
                 f"Got: {AppConfig.SQLALCHEMY_DATABASE_URI!r}"
             )
         async_url = AppConfig.SQLALCHEMY_DATABASE_URI.replace("+pymysql", "+asyncmy", 1)
-        _async_engine = create_async_engine(async_url, pool_pre_ping=True)
+        # MySQL closes connections idle for more than wait_timeout (8h by
+        # default): after a quiet night, the pool would hand out dead
+        # connections and the first requests of the morning fail with a
+        # 500. pool_recycle replaces any connection older than an hour
+        # before it gets there; pool_pre_ping catches the ones closed
+        # anyway (MySQL restarted, Docker network reset).
+        _async_engine = create_async_engine(
+            async_url, pool_pre_ping=True, pool_recycle=3600
+        )
     return _async_engine
 
 
