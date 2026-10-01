@@ -118,3 +118,32 @@
 
 
 
+
+// Téléphone : les colonnes Bootstrap (col-5/col-7) imposaient aux 6
+// pastilles une largeur trop étroite ; chaque groupe reprend sa largeur
+// naturelle et la rangée de couleurs passe à la ligne si besoin.
+@media (max-width: 768px) {
+  .btn-bar {
+    row-gap: 10px;
+  }
+
+  .item-name,
+  .btns {
+    flex: 0 0 auto;
+    width: auto;
+  }
+
+  // Les pastilles passent à 44px (cible tactile globale, styles.scss) :
+  // espacement resserré pour que les 6 tiennent sur une rangée dès 375px.
+  .btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding-left: 0;
+
+    .color-btn {
+      flex: 0 0 auto;
+      margin: 0;
+    }
+  }
+}
