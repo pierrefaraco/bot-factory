@@ -1,89 +1,74 @@
-"""JWT issuing/verification for native FastAPI routes -- the full
-replacement for Flask-JWT-Extended (encode side: create_access_token
-below; decode side: decode_access_token/get_current_claims/require_roles,
-originally written for role_required.py, itself now retired).
+"""JWT access tokens: issuing (issue_access_token), and the Depends()
+guards that check them (get_current_claims, require_roles,
+reject_demo_account).
 
-create_access_token() replicates Flask-JWT-Extended's own default claim
-shape exactly (HS256, JWT_IDENTITY_CLAIM="sub", JWT_ENCODE_NBF=True,
-fresh=False, type="access", a fresh uuid4 jti) so tokens this issues
-decode identically via decode_access_token() below. Flask-JWT-Extended's
-own create_access_token() needed a Flask app context (it reads
-JWT_SECRET_KEY etc. off current_app.config) -- gone now that nothing
-mounts a Flask app anymore (see src/main.py's own history/removal).
-
-Revocation is checked against authent_svc's own module-level
-REVOKED_JWT_LIST -- imported live (not copied) inside get_current_claims,
-since both this and authent_svc.py's logout() run in the same process
-(the import is deferred to call time there, not module level, since
-authent_svc.py imports create_access_token from this module -- a
-module-level import back here would be circular).
+Tokens are HS256-signed with JWT_SECRET_KEY and expire after
+JWT_ACCESS_TOKEN_EXPIRES seconds. Logout revokes a token by its jti in
+the revoked_token table (RevokedTokenRepository), which every API worker
+sees and which survives restarts.
 """
 
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import jwt
 from fastapi import Depends
-from jose import jwt
-from jose.exceptions import ExpiredSignatureError, JWTError
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.config.config import AppConfig
+from src.database.session import async_db_session_scope
 from src.exceptions.api_error import ApiError
+from src.repositories.revoked_token_repository import RevokedTokenRepository
 
 JWT_ALGORITHM = "HS256"
 
 
-def create_access_token(
-    identity, additional_claims: Optional[dict] = None, expires_delta: Optional[timedelta] = None
-) -> str:
+def issue_access_token(user_id: int, roles: str, mail: str) -> str:
     now = datetime.now(timezone.utc)
     claims = {
-        "fresh": False,
-        "iat": now,
+        "sub": str(user_id),
         "jti": str(uuid.uuid4()),
-        "type": "access",
-        "sub": identity,
+        "iat": now,
         "nbf": now,
+        "exp": now + timedelta(seconds=AppConfig.JWT_ACCESS_TOKEN_EXPIRES),
+        "roles": roles,
+        "mail": mail,
     }
-    if expires_delta:
-        claims["exp"] = now + expires_delta
-    if additional_claims:
-        claims.update(additional_claims)
     return jwt.encode(claims, AppConfig.JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-# auto_error=False: HTTPBearer's default behavior raises a 403 "Not
-# authenticated" HTTPException when the header is missing/malformed --
-# Flask-JWT-Extended's jwt_required() (and the existing test suite) both
-# expect 401 here instead, so that case is handled explicitly below.
+# auto_error=False: HTTPBearer would answer a missing header with a 403;
+# this API answers 401 (see get_current_claims).
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def decode_access_token(token: str) -> dict:
-    """Same validation flask_jwt_extended's @jwt_required() performs:
-    signature + exp. Raises ApiError(401) on failure, mirroring
-    role_required's error contract."""
+    """Checks signature, expiry and required claims. Raises ApiError(401)."""
     try:
-        return jwt.decode(token, AppConfig.JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-    except ExpiredSignatureError as exc:
+        return jwt.decode(
+            token,
+            AppConfig.JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["exp", "sub", "jti"]},
+        )
+    except jwt.ExpiredSignatureError as exc:
         raise ApiError("Token has expired", status_code=401) from exc
-    except JWTError as exc:
+    except jwt.InvalidTokenError as exc:
         raise ApiError("Invalid token", status_code=401) from exc
 
 
-def get_current_claims(
+async def get_current_claims(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
 ) -> dict:
-    """Depends() replacement for @jwt_required() + get_jwt()."""
+    """Claims of the request's valid, unrevoked bearer token."""
     if credentials is None:
         raise ApiError("Missing Authorization Header", status_code=401)
     claims = decode_access_token(credentials.credentials)
-    # Lazy import: authent_svc.py imports create_access_token from this
-    # module, so importing it back at module level here would be circular.
-    from src.services import authent_svc
-
-    if claims.get("jti") in authent_svc.REVOKED_JWT_LIST:
+    # A scope of its own: works whether or not the router opened one.
+    async with async_db_session_scope():
+        revoked = await RevokedTokenRepository().is_revoked(claims["jti"])
+    if revoked:
         raise ApiError("Token has been revoked", status_code=401)
     return claims
 

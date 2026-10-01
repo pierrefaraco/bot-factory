@@ -37,6 +37,7 @@ from src.repositories import (
     ConversationRepository,
     KnowledgeRepository,
     MagicLinkRepository,
+    RevokedTokenRepository,
     TokenUsageRepository,
     UserRepository,
 )
@@ -144,7 +145,7 @@ def build_services() -> Services:
         langchain=langchain,
         rag=rag,
         chat=chat,
-        authent=AuthenticationService(user_admin, user_repo),
+        authent=AuthenticationService(user_admin, user_repo, RevokedTokenRepository()),
         google_authent=GoogleAuthentSvc(user_admin),
         magic_link=MagicLinkService(MagicLinkRepository(), user_repo),
     )

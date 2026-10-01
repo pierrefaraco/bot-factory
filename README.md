@@ -22,7 +22,7 @@ An AI bot creation and management platform built around a production-style FastA
 ### Advanced Features
 - **LLM Support** - Integration with Mistral AI
 - **Vector Search** - ChromaDB-powered semantic search for knowledge retrieval
-- **JWT Authentication** - Secure token-based authentication with refresh tokens
+- **JWT Authentication** - Signed, expiring access tokens (PyJWT), revocable on logout
 - **Role-Based Access Control** - Admin, User, Guest, and Iframe roles
  
 ---

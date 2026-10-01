@@ -13,6 +13,7 @@ from src.repositories.bot_repository import BotRepository
 from src.repositories.conversation_repository import ConversationRepository
 from src.repositories.knowledge_repository import KnowledgeRepository
 from src.repositories.magic_link_repository import MagicLinkRepository
+from src.repositories.revoked_token_repository import RevokedTokenRepository
 from src.repositories.token_usage_repository import TokenUsageRepository
 from src.repositories.user_repository import UserRepository
 
@@ -24,6 +25,7 @@ __all__ = [
     "ConversationRepository",
     "KnowledgeRepository",
     "MagicLinkRepository",
+    "RevokedTokenRepository",
     "TokenUsageRepository",
     "UserRepository",
 ]

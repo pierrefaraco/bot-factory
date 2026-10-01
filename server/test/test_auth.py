@@ -77,26 +77,6 @@ def test_login_validation_error_bad_email(http_client, api_base_url):
     assert_error(response, 400)
 
 
-def test_refresh_golden_path(http_client, api_base_url, create_user, login):
-    user, password = create_user()
-    headers = login(user.mail, password)
-
-    # The blueprint's before_request hook requires application/json on every
-    # POST, even for body-less routes like this one, so json={} is needed to
-    # get past it and reach the actual @jwt_required() check.
-    response = http_client.post(f"{api_base_url}/auth/refresh", json={}, headers=headers)
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert isinstance(body.get("access_token"), str) and body["access_token"]
-
-
-def test_refresh_without_token(http_client, api_base_url):
-    response = http_client.post(f"{api_base_url}/auth/refresh", json={})
-
-    assert_error(response, 401)
-
-
 def test_logout_golden_path(http_client, api_base_url, create_user, login):
     user, password = create_user()
     headers = login(user.mail, password)
@@ -105,6 +85,10 @@ def test_logout_golden_path(http_client, api_base_url, create_user, login):
 
     assert response.status_code == 200, response.text
     assert response.json() == {"message": "Logged out successfully"}
+
+    # The revocation is stored in the database, not in one worker's memory.
+    response = http_client.get(f"{api_base_url}/users/me", headers=headers)
+    assert_error(response, 401)
 
 
 def test_logout_without_token(http_client, api_base_url):
@@ -180,9 +164,8 @@ def test_magic_link_golden_path(http_client, api_base_url, create_user, login):
     jwt_token = response.json()["token"]
 
     # The JWT is a regular session token for that user.
-    response = http_client.post(
-        f"{api_base_url}/auth/refresh",
-        json={},
+    response = http_client.get(
+        f"{api_base_url}/users/me",
         headers={"Authorization": f"Bearer {jwt_token}"},
     )
     assert response.status_code == 200, response.text

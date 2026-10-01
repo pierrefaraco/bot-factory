@@ -46,7 +46,7 @@ dependencies = [
     "unstructured>=0.10.0",
     # Schema Validation - Use 3.x for compatibility with current code
     # Authentication & Security
-    "python-jose==3.3.0",
+    "PyJWT>=2.10",
     "cryptography>=41.0.0",
     "google-auth>=2.0.0",
     # Utilities

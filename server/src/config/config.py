@@ -33,6 +33,9 @@ class BaseConfig:
 
     # No default: ConfigValidator refuses to start without a real one.
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")
+    # Access token lifetime, in seconds. There is no refresh token: the
+    # user logs in again once it expires.
+    JWT_ACCESS_TOKEN_EXPIRES = _int_env("JWT_ACCESS_TOKEN_EXPIRES", 8 * 3600)
     DATABASE_URL = os.getenv("DATABASE_URL")
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False

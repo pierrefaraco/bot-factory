@@ -1,11 +1,10 @@
-import datetime
 from src.exceptions.service_exceptions import AuthenticationError
 from src.services.base_service import BaseService
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from starlette.concurrency import run_in_threadpool
 from src.config.config import app_config
-from src.dependencies.auth import create_access_token
+from src.dependencies.auth import issue_access_token
 from src.services.user_admin_svc import UserAdminService
 from src.dto.user_dto import UserDto
 
@@ -41,7 +40,7 @@ class GoogleAuthentSvc(BaseService):
                 raise AuthenticationError(msg)
 
             self.logger.info(f"Google OAuth login succeeded for user_id={user_dto.id}")
-            return self.build_token(user_dto)
+            return issue_access_token(user_dto.id, user_dto.roles, user_dto.email)
         except ValueError as e:
             # Expected validation failure (invalid/expired Google token), not
             # a system error, and never log the credential/token value itself.
@@ -53,12 +52,3 @@ class GoogleAuthentSvc(BaseService):
         return await self.user_admin_svc.register_new_user(
             id_info["email"], id_info["name"], ""
         )
-
-    def build_token(self, user: UserDto):
-        expires = datetime.timedelta(minutes=3600)
-        access_token = create_access_token(
-            identity=f"{user.id}",
-            additional_claims={"roles": user.roles, "mail": user.email},
-            expires_delta=expires,
-        )
-        return access_token
