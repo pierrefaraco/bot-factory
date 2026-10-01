@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from starlette.concurrency import run_in_threadpool
-from werkzeug.security import check_password_hash
 
 from src.config.config import AppConfig
 from src.config.constant import ADMIN_ROLE
@@ -11,6 +10,7 @@ from src.dependencies.auth import issue_access_token
 from src.exceptions.service_exceptions import AuthenticationError, NotFoundError
 from src.log.bot_factory_logger import BotFactoryLogger
 from src.services.base_service import BaseService
+from src.services.passwords import hash_password, needs_rehash, verify_password
 from src.repositories import RevokedTokenRepository, UserRepository
 from src.services.user_admin_svc import UserAdminService
 
@@ -58,11 +58,14 @@ class AuthenticationService(BaseService):
             raise AuthenticationError(msg)
 
         # CPU-heavy on purpose: off the event loop.
-        if not await run_in_threadpool(
-            check_password_hash, user.password_hash, password
-        ):
+        if not await run_in_threadpool(verify_password, user.password_hash, password):
             self.logger.warning(f"Invalid password for user: {mail}")
             raise AuthenticationError("Invalid credentials")
+
+        # Upgrade hashes written by an older scheme (Werkzeug) to Argon2id.
+        if needs_rehash(user.password_hash):
+            user.password_hash = await run_in_threadpool(hash_password, password)
+            await self.user_repo.commit()
 
         self.logger.info(f"{mail} (user_id={user.id}) successfully authenticated")
 

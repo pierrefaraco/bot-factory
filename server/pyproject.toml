@@ -17,7 +17,6 @@ dependencies = [
     "setuptools>=77.0.3",
     "wheel",
     # Web Framework
-    "Werkzeug==3.0.1",
     "pydantic[email]>=2.5",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -47,6 +46,7 @@ dependencies = [
     # Schema Validation - Use 3.x for compatibility with current code
     # Authentication & Security
     "PyJWT>=2.10",
+    "argon2-cffi>=23.1",
     "cryptography>=41.0.0",
     "google-auth>=2.0.0",
     # Utilities
