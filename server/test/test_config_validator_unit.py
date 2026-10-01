@@ -23,7 +23,7 @@ def _env_values(path: Path, key: str) -> list:
     return values
 
 
-@pytest.mark.parametrize("path", ENV_EXAMPLES, ids=lambda p: str(p.relative_to(REPO_ROOT)))
+@pytest.mark.parametrize("path", ENV_EXAMPLES, ids=str)
 @pytest.mark.parametrize("key", ["JWT_SECRET_KEY", "SUPER_ADMIN_PASSWORD"])
 def test_env_example_secrets_are_rejected(path, key):
     for value in _env_values(path, key):
