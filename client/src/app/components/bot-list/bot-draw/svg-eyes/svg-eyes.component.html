@@ -115,6 +115,55 @@ c8 -13 24 -23 34 -23 18 0 17 3 -7 40 -15 22 -32 40 -39 40 -8 0 -28 -18 -45
 c-13 -35 -26 -43 -67 -43 -30 0 -32 1 -18 16 10 9 24 13 36 9 15 -5 22 0 30
 19 5 14 14 26 20 26 6 0 6 -9 -1 -27z"/>
 </g>
+<!-- Yeux 8 à 14 (cases 8-14). Dessinés à la main dans le repère du viewBox (1 case = 128
+     unités de large), sans le transform potrace des tracés existants. -->
+<g stroke="#000000" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+  <!-- Yeux 8 : cœurs -->
+  <g transform="translate(1024,0)">
+    <path d="M46 104 C33 96 36 85 42 86 C44.5 86.5 46 89 46 91 C46 89 47.5 86.5 50 86 C56 85 59 96 46 104 Z" [attr.fill]="getColor()"/>
+    <path d="M82 104 C69 96 72 85 78 86 C80.5 86.5 82 89 82 91 C82 89 83.5 86.5 86 86 C92 85 95 96 82 104 Z" [attr.fill]="getColor()"/>
+  </g>
+  <!-- Yeux 9 : étoiles -->
+  <g transform="translate(1152,0)">
+    <path d="M46.0 85.0 L48.8 92.1 L56.5 92.6 L50.6 97.5 L52.5 104.9 L46.0 100.8 L39.5 104.9 L41.4 97.5 L35.5 92.6 L43.2 92.1 Z" [attr.fill]="getColor()"/>
+    <path d="M82.0 85.0 L84.8 92.1 L92.5 92.6 L86.6 97.5 L88.5 104.9 L82.0 100.8 L75.5 104.9 L77.4 97.5 L71.5 92.6 L79.2 92.1 Z" [attr.fill]="getColor()"/>
+  </g>
+  <!-- Yeux 10 : endormis -->
+  <g transform="translate(1280,0)">
+    <path d="M36 95 A10 10 0 0 0 56 95 Z" [attr.fill]="getColor()"/>
+    <path d="M72 95 A10 10 0 0 0 92 95 Z" [attr.fill]="getColor()"/>
+    <circle cx="46" cy="99" r="3" fill="#000000" stroke="none"/>
+    <circle cx="82" cy="99" r="3" fill="#000000" stroke="none"/>
+    <path d="M33 95 H59 M69 95 H95" fill="none" stroke-width="4.5"/>
+  </g>
+  <!-- Yeux 11 : lunettes de soudeur -->
+  <g transform="translate(1408,0)">
+    <path d="M58 96 H70" fill="none" stroke-width="4"/>
+    <circle cx="46" cy="96" r="12" [attr.fill]="getColor()" stroke-width="4.5"/>
+    <circle cx="82" cy="96" r="12" [attr.fill]="getColor()" stroke-width="4.5"/>
+    <circle cx="46" cy="96" r="4" fill="#000000" stroke="none"/>
+    <circle cx="82" cy="96" r="4" fill="#000000" stroke="none"/>
+  </g>
+  <!-- Yeux 12 : clin d'œil -->
+  <g transform="translate(1536,0)">
+    <circle cx="46" cy="96" r="9" [attr.fill]="getColor()"/>
+    <circle cx="47" cy="96" r="4" fill="#000000" stroke="none"/>
+    <path d="M74 99 L82 91 L90 99" fill="none" stroke-width="4"/>
+  </g>
+  <!-- Yeux 13 : pixels -->
+  <g transform="translate(1664,0)">
+    <rect x="37" y="87" width="18" height="18" rx="2" [attr.fill]="getColor()"/>
+    <rect x="73" y="87" width="18" height="18" rx="2" [attr.fill]="getColor()"/>
+    <rect x="45" y="90" width="7" height="7" fill="#000000" stroke="none"/>
+    <rect x="81" y="90" width="7" height="7" fill="#000000" stroke="none"/>
+  </g>
+  <!-- Yeux 14 : cyclope -->
+  <g transform="translate(1792,0)">
+    <circle cx="64" cy="95" r="15" [attr.fill]="getColor()" stroke-width="4"/>
+    <circle cx="64" cy="95" r="6" fill="#000000" stroke="none"/>
+    <circle cx="67" cy="92" r="2.5" fill="#FFFFFF" stroke="none"/>
+  </g>
+</g>
 </svg> 
 
 
