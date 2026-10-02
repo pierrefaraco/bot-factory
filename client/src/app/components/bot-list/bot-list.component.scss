@@ -113,6 +113,11 @@
     height: var(--avatar-height) !important;
     overflow: hidden;
     margin: 0px 5px 0px 0px;
+    // Annule le padding tactile global de styles.scss
+    // (`@media (hover: none) and (pointer: coarse)` sur `[role="button"]`) :
+    // sur un vrai téléphone il ne laissait que 10px de large à l'avatar
+    // dans ce cadre de 44px.
+    padding: 0;
 
     border-style: solid;
     border-radius: var(--avatar-radius);
