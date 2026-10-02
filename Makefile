@@ -301,7 +301,8 @@ certbot-init:
 # One-shot first deploy on a fresh host: builds, starts every service except
 # reverse-proxy (which has no certificate yet), then bootstraps it. Requires
 # DOMAIN/LETSENCRYPT_EMAIL in .env and DNS already pointed at this host --
-# see deploy/README.md. Subsequent starts: just 'make prod-up'.
+# see deploy/README.md. Safe to re-run: certbot-init skips the request when a
+# certificate already exists. Subsequent starts: just 'make prod-up'.
 prod-deploy: prod-build
 	@echo "Starting app services (db, chromadb, api, web) and certbot..."
 	$(PROD_COMPOSE) up -d db chromadb api web certbot
