@@ -17,11 +17,11 @@ export class SvgEyesComponent implements OnInit, OnChanges {
   @Input() height:number = 64.0;
   @Input() offset:number = 0;
 
-  svgWidth:number = this.height * 10
+  svgWidth:number = this.height * 2048 / 192
   svgHeight:number = this.height;
   high = "0px"
   startLeft = 0
-  step:number = - this.svgWidth/ 15.0
+  step:number = - this.svgWidth / 16.0
   currentPosition: number = 0;// this.choosenItemIndice;
 
   hatPositions : Array<{ top: string, left: string }> = [];
@@ -38,9 +38,10 @@ export class SvgEyesComponent implements OnInit, OnChanges {
   }
 
   initPositionsArray(): void {
-    this.svgWidth = this.height * 10
+    // 16 cases de 128 unités : viewBox 2048 x 192
+    this.svgWidth = this.height * 2048 / 192
     this.svgHeight = this.height;
-    this.step = - this.svgWidth/ 15.0
+    this.step = - this.svgWidth / 16.0
     this.high = -this.offset + "px"
     this.hatPositions = [
       { top: this.high, left: this.startLeft + 'px' },

@@ -303,8 +303,10 @@
     margin-bottom: -24px;
   }
 
+  // La carte parente (.chat-section) porte déjà l'inset latéral : pas de
+  // second retrait ici, le champ prend toute la largeur.
   .input-container {
-    padding: 0.875rem 1rem;
+    padding: 0.5rem 0 0;
     min-height: 70px;
 
     .top-reset-bar {
