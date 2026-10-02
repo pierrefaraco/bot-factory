@@ -2,9 +2,9 @@
 # One-time bootstrap for HTTPS in production: obtains the first Let's
 # Encrypt certificate for $DOMAIN and gets the "reverse-proxy" service
 # serving it. Run once from the repo root on the production host -- see
-# deploy/README.md for the full walkthrough. Safe to re-run (certbot skips
-# domains that already have a certificate that isn't close to expiring,
-# unless --force-renewal below is removed).
+# deploy/README.md for the full walkthrough. Safe to re-run: it does nothing
+# if certbot already issued a certificate for $DOMAIN (set FORCE_CERT=1 to
+# request a new one anyway).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."  # repo root
@@ -23,6 +23,18 @@ STAGING_ARG=""
 if [ "${LETSENCRYPT_STAGING:-0}" = "1" ]; then
   STAGING_ARG="--staging"
   echo "### Using Let's Encrypt STAGING environment (untrusted test certs, no rate limits)."
+fi
+
+# A renewal config only exists once certbot has really issued a certificate
+# (the dummy one below never creates it). In that case there is nothing to
+# bootstrap: requesting again would burn Let's Encrypt's quota of 5
+# certificates per domain per week, and the long-running certbot service
+# already renews it. FORCE_CERT=1 overrides this (e.g. after changing DOMAIN).
+if [ "${FORCE_CERT:-0}" != "1" ] && \
+   $COMPOSE run --rm --entrypoint sh certbot -c "test -f '/etc/letsencrypt/renewal/$DOMAIN.conf'"; then
+  echo "### A Let's Encrypt certificate for $DOMAIN already exists, skipping the request."
+  $COMPOSE up -d reverse-proxy
+  exit 0
 fi
 
 echo "### Creating a dummy self-signed certificate for $DOMAIN so nginx can start ..."
@@ -73,8 +85,7 @@ $COMPOSE run --rm --entrypoint certbot certbot certonly \
   -d "$DOMAIN" \
   --rsa-key-size 2048 \
   --agree-tos \
-  --no-eff-email \
-  --force-renewal
+  --no-eff-email
 
 echo "### Reloading reverse-proxy with the real certificate ..."
 $COMPOSE exec reverse-proxy nginx -s reload

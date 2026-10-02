@@ -244,15 +244,19 @@ serve the challenge. The script solves it in 6 steps:
    Certbot doesn't mistake it for an existing certificate. The running nginx
    keeps it in memory.
 5. **Requests the real certificate**: `certbot certonly --webroot` for
-   `-d $DOMAIN`, RSA 2048, `--agree-tos --no-eff-email --force-renewal`.
+   `-d $DOMAIN`, RSA 2048, `--agree-tos --no-eff-email`.
    Let's Encrypt fetches the challenge on `:80`, which the running nginx
    serves.
 6. **`nginx -s reload`**: nginx reloads its config and now serves the real
    certificate, with no downtime.
 
-The script can be run again (to switch from a staging to a production
-certificate, or to recreate a lost one). `--force-renewal` always requests a
-new certificate, which counts against Let's Encrypt's rate limits.
+Before step 1, the script checks for `/etc/letsencrypt/renewal/$DOMAIN.conf`
+(only written once Certbot has really issued a certificate). If it exists,
+the script just starts `reverse-proxy` and exits, so `make prod-deploy` can be
+re-run on every deploy without requesting a new certificate: Let's Encrypt
+allows only 5 certificates per exact domain set per week. To request one
+anyway (to switch from a staging to a production certificate, or after
+changing `DOMAIN`), run `FORCE_CERT=1 make certbot-init`.
 
 ### 2. Renewal: the `certbot` service
 
