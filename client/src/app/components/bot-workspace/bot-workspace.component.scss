@@ -869,6 +869,11 @@ app-bot-list {
 
   &.chat-section {
 
+    // Plein écran du chat : téléphone uniquement (cf. media query plus bas).
+    .up-section .section-actions .chat-expand-btn {
+      display: none;
+    }
+
     .chat-container {
       flex: 1 1 auto;
       overflow: hidden;
@@ -1036,5 +1041,41 @@ app-bot-list {
 @media (max-width: 768px) {
   .overview-section {
     padding: 0.75rem;
+  }
+
+  // Chat en plein écran : sur 667px de haut, header, bandeau des bots,
+  // onglets et titre de carte ne laissaient que ~170px aux messages. La
+  // carte passe au-dessus de tout (navbar comprise, z-index 1000 dans
+  // app.component.scss) en gardant ses actions ; le bouton la referme.
+  .overview-section.chat-section {
+    // Trois actions à droite : le titre reste sur une ligne (tronqué au
+    // besoin) plutôt que de passer à deux lignes et rogner les messages.
+    .up-section {
+      h2 {
+        flex: 1 1 auto;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .section-actions {
+        gap: 0.25rem; // gap-1
+
+        .chat-expand-btn {
+          display: flex;
+        }
+      }
+    }
+
+    &.expanded {
+      position: fixed;
+      inset: 0;
+      z-index: 1001;
+      height: auto;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
   }
 }

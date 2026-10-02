@@ -57,6 +57,7 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
   private subscriptionBotCreating: Subscription;
   // true while POST /api/bot runs: spinner + "Create" buttons disabled.
   isCreatingBot = false;
+  isChatExpanded = false;
   @ViewChild(BotListComponent) botListComponent!: BotListComponent;
   @ViewChild(ChatComponent) chatComponent!: ChatComponent;
 
@@ -167,6 +168,21 @@ export class BotWorkspaceComponent implements OnInit, OnDestroy {
 
   resetChat(){
     this.chatComponent.resetChat()
+  }
+
+  // Phone only (the toggle is hidden above 768px, cf. .chat-expand-btn):
+  // the chat card covers the whole screen, navbar included.
+  toggleChatExpanded(): void {
+    this.isChatExpanded = !this.isChatExpanded;
+    // The message list just changed height: keep the latest message in view.
+    setTimeout(() => this.chatComponent?.scrollToBottomOfChat(), 0);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.isChatExpanded) {
+      this.toggleChatExpanded();
+    }
   }
 
   toggleBotList(): void {

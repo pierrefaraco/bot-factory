@@ -102,7 +102,7 @@
 
             <!-- Onglet Discussion -->
             <!-- <div class="tab-pane" [class.active]="activeTab === 'chat'"> -->
-            <div class="overview-section chat-section" *ngIf="hasSelectedBot">
+            <div class="overview-section chat-section" *ngIf="hasSelectedBot" [class.expanded]="isChatExpanded">
               <div class="up-section">
                 <span class="material-icons">chat</span>
                 <h2>
@@ -116,6 +116,12 @@
                      "Delete" (destructif, rare) reste dans un menu "⋮" secondaire —
                      même hiérarchie et mêmes classes qu'avant, juste relocalisées. -->
                 <div class="section-actions" *ngIf="selectedBot">
+                  <button type="button" class="quick-action-btn chat-expand-btn" (click)="toggleChatExpanded()"
+                    [attr.aria-pressed]="isChatExpanded"
+                    [attr.aria-label]="isChatExpanded ? 'Exit full screen' : 'Full screen chat'"
+                    [title]="isChatExpanded ? 'Exit full screen' : 'Full screen chat'">
+                    <span class="material-icons" aria-hidden="true">{{ isChatExpanded ? 'close_fullscreen' : 'open_in_full' }}</span>
+                  </button>
                   <button type="button" class="quick-action-btn" (click)="resetChat()"
                     aria-label="Reset conversation" title="Reset conversation">
                     <span class="material-icons">refresh</span>
