@@ -11,9 +11,9 @@
 
     <div class="controls">
         <app-color class="palete" [imgAddress]="imgHat" (colorChange)="setHatColor($event)" (previousItem)="previousHat()" (nextItem)="nextHat()" [navPos]=avatar.hat [maxNavPos]=15 [colors]="colors"></app-color>
-        <app-color class="palete" [imgAddress]="imgEyes" (colorChange)="setEyesColor($event)" (previousItem)="previousEyes()" (nextItem)="nextEyes()" [navPos]=avatar.eyes [maxNavPos]=14 [colors]="colors"></app-color>
-        <app-color class="palete" [imgAddress]="imgMouth" (colorChange)="setMouthColor($event)" (previousItem)="previousMouth()" (nextItem)="nextMouth()" [navPos]=avatar.mouth [maxNavPos]=14 [colors]="colors"></app-color>
-        <app-color class="palete" [imgAddress]="imgBot" (colorChange)="setBodyColor($event)" (previousItem)="previousBot()" (nextItem)="nextBot()" [navPos]=avatar.body [maxNavPos]=6 [colors]="colors"></app-color>
+        <app-color class="palete" [imgAddress]="imgEyes" (colorChange)="setEyesColor($event)" (previousItem)="previousEyes()" (nextItem)="nextEyes()" [navPos]=avatar.eyes [maxNavPos]=15 [colors]="colors"></app-color>
+        <app-color class="palete" [imgAddress]="imgMouth" (colorChange)="setMouthColor($event)" (previousItem)="previousMouth()" (nextItem)="nextMouth()" [navPos]=avatar.mouth [maxNavPos]=15 [colors]="colors"></app-color>
+        <app-color class="palete" [imgAddress]="imgBot" (colorChange)="setBodyColor($event)" (previousItem)="previousBot()" (nextItem)="nextBot()" [navPos]=avatar.body [maxNavPos]=15 [colors]="colors"></app-color>
     </div>
      <!-- <button type="button " class="reset-btn" (click)="resetColors()">Reset Colors</button>  -->
   </div>
